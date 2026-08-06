@@ -187,41 +187,47 @@ const EXERCISE_LIBRARY = [
   x("hiit", "HIIT-Einheit", "Cardio", "Körpergewicht", "time", "intervall"),
 ];
 
-// Beispielpläne, die beim ersten Start angelegt werden
+// Beispielplan, der beim ersten Start angelegt wird.
+// Ein Plan bündelt mehrere Trainings (z. B. Push / Pull / Beine).
 const SAMPLE_PLANS = [
   {
-    name: "Push (Brust, Schultern, Trizeps)",
-    exercises: [
-      { exerciseId: "bankdruecken-lh", sets: 4 },
-      { exerciseId: "schulterdruecken-kh", sets: 3 },
-      { exerciseId: "schraegbank-kh", sets: 3 },
-      { exerciseId: "seitheben-kh", sets: 3 },
-      { exerciseId: "trizepsdruecken-kabel", sets: 3 },
-      { exerciseId: "overhead-trizeps-kabel", sets: 3 },
-    ],
-  },
-  {
-    name: "Pull (Rücken, Bizeps)",
-    exercises: [
-      { exerciseId: "kreuzheben", sets: 3 },
-      { exerciseId: "klimmzuege", sets: 3 },
-      { exerciseId: "rudern-kabel", sets: 3 },
-      { exerciseId: "latzug-breit", sets: 3 },
-      { exerciseId: "face-pulls", sets: 3 },
-      { exerciseId: "curls-sz", sets: 3 },
-      { exerciseId: "hammer-curls", sets: 3 },
-    ],
-  },
-  {
-    name: "Beine & Bauch",
-    exercises: [
-      { exerciseId: "kniebeugen", sets: 4 },
-      { exerciseId: "rdl", sets: 3 },
-      { exerciseId: "beinpresse", sets: 3 },
-      { exerciseId: "beinbeuger-liegend", sets: 3 },
-      { exerciseId: "wadenheben-stehend", sets: 4 },
-      { exerciseId: "plank", sets: 3 },
-      { exerciseId: "cable-crunches", sets: 3 },
+    name: "Push / Pull / Beine",
+    workouts: [
+      {
+        name: "Push (Brust, Schultern, Trizeps)",
+        exercises: [
+          { exerciseId: "bankdruecken-lh", sets: 4 },
+          { exerciseId: "schulterdruecken-kh", sets: 3 },
+          { exerciseId: "schraegbank-kh", sets: 3 },
+          { exerciseId: "seitheben-kh", sets: 3 },
+          { exerciseId: "trizepsdruecken-kabel", sets: 3 },
+          { exerciseId: "overhead-trizeps-kabel", sets: 3 },
+        ],
+      },
+      {
+        name: "Pull (Rücken, Bizeps)",
+        exercises: [
+          { exerciseId: "kreuzheben", sets: 3 },
+          { exerciseId: "klimmzuege", sets: 3 },
+          { exerciseId: "rudern-kabel", sets: 3 },
+          { exerciseId: "latzug-breit", sets: 3 },
+          { exerciseId: "face-pulls", sets: 3 },
+          { exerciseId: "curls-sz", sets: 3 },
+          { exerciseId: "hammer-curls", sets: 3 },
+        ],
+      },
+      {
+        name: "Beine & Bauch",
+        exercises: [
+          { exerciseId: "kniebeugen", sets: 4 },
+          { exerciseId: "rdl", sets: 3 },
+          { exerciseId: "beinpresse", sets: 3 },
+          { exerciseId: "beinbeuger-liegend", sets: 3 },
+          { exerciseId: "wadenheben-stehend", sets: 4 },
+          { exerciseId: "plank", sets: 3 },
+          { exerciseId: "cable-crunches", sets: 3 },
+        ],
+      },
     ],
   },
 ];

@@ -97,7 +97,7 @@ const LS_ACTIVE = "eisenzeit.active.v1";
 
 function defaultDB() {
   return {
-    version: 1,
+    version: 2,
     settings: { restSecs: 90, autoRest: true },
     customExercises: [],
     plans: [],
@@ -119,10 +119,21 @@ function loadDB() {
     // Defektes JSON sichern statt still zu überschreiben
     try { localStorage.setItem(LS_DB + ".corrupt", localStorage.getItem(LS_DB) || ""); } catch (_) {}
   }
+  // Migration v1 → v2: Ein Plan war früher EIN Training.
+  // Jetzt bündelt ein Plan mehrere Trainings.
+  db.plans = (db.plans || []).map((p) =>
+    p.workouts ? p : {
+      id: p.id, name: p.name, createdAt: p.createdAt || Date.now(),
+      workouts: [{ id: uid(), name: p.name, exercises: p.exercises || [] }],
+    });
+  db.version = 2;
   if (!db.seeded) {
     db.plans = SAMPLE_PLANS.map((p) => ({
       id: uid(), name: p.name, createdAt: Date.now(),
-      exercises: p.exercises.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets })),
+      workouts: p.workouts.map((w) => ({
+        id: uid(), name: w.name,
+        exercises: w.exercises.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets })),
+      })),
     }));
     db.seeded = true;
   }
@@ -276,20 +287,29 @@ function renderHome() {
     </div>
     <button class="btn" data-action="start-empty">${icon("plus")} Leeres Workout starten</button>
     <div class="section-label" style="margin-top:24px">Meine Pläne</div>
-    ${DB.plans.length ? DB.plans.map(planRow).join("") : `<p class="hint">Noch keine Pläne – lege im Tab „Pläne" einen an.</p>`}
+    ${DB.plans.length ? DB.plans.map(planCard).join("") : `<p class="hint">Noch keine Pläne – lege im Tab „Pläne" einen an.</p>`}
     ${recent.length ? `<div class="section-label">Zuletzt trainiert</div>` + recent.map(historyRow).join("") : ""}
   `;
 }
 
-function planRow(p) {
-  const names = p.exercises.slice(0, 3).map((e) => exName(e.exerciseId)).join(", ");
+function planCard(p) {
   return `
-    <div class="row" style="cursor:default">
-      <div class="row-main" data-action="edit-plan" data-id="${p.id}" style="cursor:pointer">
-        <div class="row-title">${esc(p.name)}</div>
-        <div class="row-sub">${p.exercises.length} Übungen${names ? " · " + esc(names) : ""}</div>
+    <div class="plan-card">
+      <div class="plan-card-head">
+        <div class="ttl">${esc(p.name)}</div>
+        <button class="icon-btn plain" data-action="edit-plan" data-id="${p.id}" aria-label="Plan bearbeiten" style="width:32px;height:32px">${icon("edit")}</button>
       </div>
-      <button class="btn btn-compact" data-action="start-plan" data-id="${p.id}">Start</button>
+      ${p.workouts.length ? p.workouts.map((w) => {
+        const muscles = Array.from(new Set(w.exercises.map((e) => exById(e.exerciseId)?.muscle).filter(Boolean))).slice(0, 3).join(", ");
+        return `
+        <div class="plan-wo-row">
+          <div class="row-main">
+            <div class="row-title">${esc(w.name)}</div>
+            <div class="row-sub">${w.exercises.length} Übungen${muscles ? " · " + esc(muscles) : ""}</div>
+          </div>
+          <button class="btn btn-compact" data-action="start-plan" data-plan="${p.id}" data-wo="${w.id}">Start</button>
+        </div>`;
+      }).join("") : `<div class="plan-wo-row"><span class="hint">Noch keine Trainings in diesem Plan.</span></div>`}
     </div>`;
 }
 
@@ -301,18 +321,19 @@ function renderPlans() {
       <div class="screen-title">Pläne</div>
       <button class="icon-btn" data-action="new-plan" aria-label="Neuer Plan">${icon("plus")}</button>
     </div>
-    ${DB.plans.length ? DB.plans.map(planRow).join("") : `
+    ${DB.plans.length ? DB.plans.map(planCard).join("") : `
       <div class="empty">${icon("plans")}
         <h3>Noch keine Pläne</h3>
-        <p>Erstelle einen Trainingsplan und starte ihn mit einem Tipp.</p>
+        <p>Ein Plan bündelt mehrere Trainings – z. B. Push, Pull und Beine.</p>
       </div>`}
     <button class="btn btn-ghost" data-action="new-plan" style="margin-top:8px">${icon("plus")} Neuen Plan erstellen</button>
   `;
 }
 
-/* Plan-Editor */
+/* Plan-Editor – Ebene 1: der Plan mit seinen Trainings */
 
 let draftPlan = null;
+let draftWoIdx = -1;
 
 ACTIONS["new-plan"] = () => openPlanEditor(null);
 ACTIONS["edit-plan"] = (el) => openPlanEditor(el.dataset.id);
@@ -321,12 +342,14 @@ function openPlanEditor(planId) {
   const existing = planId ? DB.plans.find((p) => p.id === planId) : null;
   draftPlan = existing
     ? JSON.parse(JSON.stringify(existing))
-    : { id: uid(), name: "", createdAt: Date.now(), exercises: [] };
+    : { id: uid(), name: "", createdAt: Date.now(), workouts: [] };
   const ov = openOverlay("", "plan-editor-ov");
   renderPlanEditor(ov);
 }
 
 function renderPlanEditor(ov) {
+  ov = ov || $(".plan-editor-ov");
+  if (!ov) return;
   const isNew = !DB.plans.some((p) => p.id === draftPlan.id);
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
@@ -336,43 +359,47 @@ function renderPlanEditor(ov) {
     </div>
     <div class="field">
       <label for="plan-name">Name des Plans</label>
-      <input id="plan-name" data-input="plan-name" value="${esc(draftPlan.name)}" placeholder="z. B. Push Day" autocomplete="off">
+      <input id="plan-name" data-input="plan-name" value="${esc(draftPlan.name)}" placeholder="z. B. Push / Pull / Beine" autocomplete="off">
     </div>
-    <div class="section-label">Übungen &amp; Sätze</div>
-    <div class="card" style="padding:6px 14px">
-      ${draftPlan.exercises.length ? draftPlan.exercises.map((pe, i) => `
-        <div class="plan-ex-row">
-          <div class="nm">${esc(exName(pe.exerciseId))}<small>${esc(exById(pe.exerciseId)?.muscle || "")}</small></div>
-          <input type="text" inputmode="numeric" value="${pe.sets}" data-input="plan-sets" data-i="${i}" aria-label="Sätze">
-          <span class="hint">Sätze</span>
-          <button class="mini-btn" data-action="plan-ex-up" data-i="${i}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>${icon("up")}</button>
-          <button class="mini-btn danger" data-action="plan-ex-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
-        </div>`).join("") : `<p class="hint" style="padding:12px 0">Noch keine Übungen im Plan.</p>`}
-    </div>
-    <button class="btn btn-soft" data-action="plan-add-ex">${icon("plus")} Übungen hinzufügen</button>
+    <div class="section-label">Trainings in diesem Plan</div>
+    ${draftPlan.workouts.length ? draftPlan.workouts.map((w, i) => `
+      <div class="row" style="cursor:default">
+        <div class="row-main" data-action="edit-plan-wo" data-i="${i}" style="cursor:pointer">
+          <div class="row-title">${esc(w.name || "Training " + (i + 1))}</div>
+          <div class="row-sub">${w.exercises.length} Übungen · ${w.exercises.reduce((a, e) => a + (e.sets || 0), 0)} Sätze</div>
+        </div>
+        <button class="mini-btn" data-action="plan-wo-up" data-i="${i}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>${icon("up")}</button>
+        <button class="mini-btn" data-action="edit-plan-wo" data-i="${i}" aria-label="Bearbeiten">${icon("edit")}</button>
+        <button class="mini-btn danger" data-action="plan-wo-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
+      </div>`).join("") : `<p class="hint" style="padding:4px 0 12px">Noch keine Trainings – füge z. B. „Push", „Pull" und „Beine" hinzu.</p>`}
+    <button class="btn btn-soft" data-action="plan-add-wo">${icon("plus")} Training hinzufügen</button>
     ${isNew ? "" : `<button class="btn btn-danger-soft" data-action="delete-plan" style="margin-top:10px">${icon("trash")} Plan löschen</button>`}
   `;
 }
 
-ACTIONS["plan-ex-up"] = (el) => {
+ACTIONS["plan-wo-up"] = (el) => {
   const i = +el.dataset.i;
   if (i > 0) {
-    [draftPlan.exercises[i - 1], draftPlan.exercises[i]] = [draftPlan.exercises[i], draftPlan.exercises[i - 1]];
-    renderPlanEditor($(".plan-editor-ov"));
+    [draftPlan.workouts[i - 1], draftPlan.workouts[i]] = [draftPlan.workouts[i], draftPlan.workouts[i - 1]];
+    renderPlanEditor();
   }
 };
-ACTIONS["plan-ex-del"] = (el) => {
-  draftPlan.exercises.splice(+el.dataset.i, 1);
-  renderPlanEditor($(".plan-editor-ov"));
+ACTIONS["plan-wo-del"] = (el) => {
+  const i = +el.dataset.i;
+  const w = draftPlan.workouts[i];
+  if (w.exercises.length && !confirm(`Training „${w.name}" aus dem Plan entfernen?`)) return;
+  draftPlan.workouts.splice(i, 1);
+  renderPlanEditor();
 };
-ACTIONS["plan-add-ex"] = () => {
-  openExercisePicker((ids) => {
-    for (const id of ids) draftPlan.exercises.push({ exerciseId: id, sets: 3 });
-    renderPlanEditor($(".plan-editor-ov"));
-  });
+ACTIONS["plan-add-wo"] = () => {
+  draftPlan.workouts.push({ id: uid(), name: "", exercises: [] });
+  openPlanWoEditor(draftPlan.workouts.length - 1);
 };
+ACTIONS["edit-plan-wo"] = (el) => openPlanWoEditor(+el.dataset.i);
+
 ACTIONS["save-plan"] = () => {
   draftPlan.name = draftPlan.name.trim() || "Mein Plan";
+  draftPlan.workouts.forEach((w, i) => { w.name = (w.name || "").trim() || "Training " + (i + 1); });
   const idx = DB.plans.findIndex((p) => p.id === draftPlan.id);
   if (idx >= 0) DB.plans[idx] = draftPlan;
   else DB.plans.push(draftPlan);
@@ -388,6 +415,69 @@ ACTIONS["delete-plan"] = () => {
   $(".plan-editor-ov")?.remove();
   toast("Plan gelöscht");
   render();
+};
+
+/* Plan-Editor – Ebene 2: ein Training mit Übungen & Sätzen */
+
+function openPlanWoEditor(i) {
+  draftWoIdx = i;
+  const ov = openOverlay("", "plan-wo-ov");
+  renderPlanWoEditor(ov);
+}
+
+function renderPlanWoEditor(ov) {
+  ov = ov || $(".plan-wo-ov");
+  if (!ov) return;
+  const w = draftPlan.workouts[draftWoIdx];
+  $(".overlay-inner", ov).innerHTML = `
+    <div class="overlay-head">
+      <button class="icon-btn plain" data-action="plan-wo-done" aria-label="Zurück">${icon("chevL")}</button>
+      <div class="screen-title">Training bearbeiten</div>
+      <button class="btn btn-compact" data-action="plan-wo-done">Fertig</button>
+    </div>
+    <div class="field">
+      <label for="plan-wo-name">Name des Trainings</label>
+      <input id="plan-wo-name" data-input="plan-wo-name" value="${esc(w.name)}" placeholder="z. B. Push (Brust, Schultern, Trizeps)" autocomplete="off">
+    </div>
+    <div class="section-label">Übungen &amp; Sätze</div>
+    <div class="card" style="padding:6px 14px">
+      ${w.exercises.length ? w.exercises.map((pe, i) => `
+        <div class="plan-ex-row">
+          <div class="nm">${esc(exName(pe.exerciseId))}<small>${esc(exById(pe.exerciseId)?.muscle || "")}</small></div>
+          <input type="text" inputmode="numeric" value="${pe.sets}" data-input="plan-sets" data-i="${i}" aria-label="Sätze">
+          <span class="hint">Sätze</span>
+          <button class="mini-btn" data-action="plan-ex-up" data-i="${i}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>${icon("up")}</button>
+          <button class="mini-btn danger" data-action="plan-ex-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
+        </div>`).join("") : `<p class="hint" style="padding:12px 0">Noch keine Übungen in diesem Training.</p>`}
+    </div>
+    <button class="btn btn-soft" data-action="plan-add-ex">${icon("plus")} Übungen hinzufügen</button>
+  `;
+}
+
+ACTIONS["plan-ex-up"] = (el) => {
+  const i = +el.dataset.i;
+  const list = draftPlan.workouts[draftWoIdx].exercises;
+  if (i > 0) {
+    [list[i - 1], list[i]] = [list[i], list[i - 1]];
+    renderPlanWoEditor();
+  }
+};
+ACTIONS["plan-ex-del"] = (el) => {
+  draftPlan.workouts[draftWoIdx].exercises.splice(+el.dataset.i, 1);
+  renderPlanWoEditor();
+};
+ACTIONS["plan-add-ex"] = () => {
+  openExercisePicker((ids) => {
+    for (const id of ids) draftPlan.workouts[draftWoIdx].exercises.push({ exerciseId: id, sets: 3 });
+    renderPlanWoEditor();
+  });
+};
+ACTIONS["plan-wo-done"] = () => {
+  const w = draftPlan.workouts[draftWoIdx];
+  w.name = (w.name || "").trim() || "Training " + (draftWoIdx + 1);
+  $(".plan-wo-ov")?.remove();
+  draftWoIdx = -1;
+  renderPlanEditor();
 };
 
 /* ═══════════════ Übungen-Tab ═══════════════ */
@@ -654,11 +744,12 @@ ACTIONS["start-empty"] = () => {
 
 ACTIONS["start-plan"] = (el) => {
   if (activeGuard()) return;
-  const plan = DB.plans.find((p) => p.id === el.dataset.id);
-  if (!plan) return;
+  const plan = DB.plans.find((p) => p.id === el.dataset.plan);
+  const wo = plan && plan.workouts.find((w) => w.id === el.dataset.wo);
+  if (!wo) return;
   active = {
-    id: uid(), name: plan.name, startedAt: Date.now(),
-    exercises: plan.exercises.map((pe) => ({
+    id: uid(), name: wo.name, startedAt: Date.now(),
+    exercises: wo.exercises.map((pe) => ({
       exerciseId: pe.exerciseId,
       sets: Array.from({ length: Math.max(1, pe.sets || 1) }, newSet),
     })),
@@ -936,7 +1027,7 @@ function renderResumeBar() {
       <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(active.name)}</span>
       <span class="sub">Workout läuft · <span class="t">${fmtClock((Date.now() - active.startedAt) / 1000)}</span></span>
     </span>
-    <span class="badge" style="background:rgba(255,255,255,.18);color:#fff">Weiter</span>`;
+    <span class="go">Weiter</span>`;
   document.body.appendChild(bar);
 }
 ACTIONS["resume-workout"] = () => openWorkoutScreen();
@@ -1017,31 +1108,58 @@ ACTIONS["rest-skip"] = () => stopRest();
 
 /* ═══════════════ Verlauf-Tab ═══════════════ */
 
+let histRange = "week";
+const HIST_RANGES = [
+  { id: "week", label: "Woche", title: "Diese Woche" },
+  { id: "quarter", label: "Quartal", title: "Dieses Quartal" },
+  { id: "year", label: "Jahr", title: "Dieses Jahr" },
+  { id: "all", label: "Gesamt", title: "Gesamt" },
+];
+
+function rangeStart(r) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (r === "week") return weekStart(Date.now());
+  if (r === "quarter") { d.setMonth(Math.floor(d.getMonth() / 3) * 3, 1); return d.getTime(); }
+  if (r === "year") { d.setMonth(0, 1); return d.getTime(); }
+  return 0;
+}
+
+ACTIONS["hist-range"] = (el) => { histRange = el.dataset.r; renderHistory(); };
+
 function renderHistory() {
-  const ws = workoutsDesc();
-  const monday = weekStart(Date.now());
-  const week = ws.filter((w) => w.startedAt >= monday);
-  const weekVol = week.reduce((a, w) => a + workoutVolume(w), 0);
-  const weekSets = week.reduce((a, w) => a + workoutSets(w), 0);
+  const range = HIST_RANGES.find((r) => r.id === histRange);
+  const start = rangeStart(histRange);
+  const ws = workoutsDesc().filter((w) => w.startedAt >= start);
+  const vol = ws.reduce((a, w) => a + workoutVolume(w), 0);
+  const sets = ws.reduce((a, w) => a + workoutSets(w), 0);
 
   $("#screen-history").innerHTML = `
     <div class="screen-head"><div class="screen-title">Verlauf</div></div>
-    <div class="section-label">Diese Woche</div>
+    <div class="seg" role="tablist" aria-label="Zeitraum">
+      ${HIST_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === histRange}" class="${r.id === histRange ? "active" : ""}" data-action="hist-range" data-r="${r.id}">${r.label}</button>`).join("")}
+    </div>
+    <div class="section-label">${range.title}</div>
     <div class="stat-tiles">
-      <div class="stat-tile"><b>${week.length}</b><span>Workouts</span></div>
-      <div class="stat-tile"><b>${weekSets}</b><span>Sätze</span></div>
-      <div class="stat-tile"><b>${fmtVol(weekVol)}</b><span>Volumen</span></div>
+      <div class="stat-tile"><b>${ws.length}</b><span>Workouts</span></div>
+      <div class="stat-tile"><b>${sets}</b><span>Sätze</span></div>
+      <div class="stat-tile"><b>${fmtVol(vol)}</b><span>Volumen</span></div>
     </div>
     <div class="card chart-card">
-      <h3>Volumen pro Woche</h3>
-      <div class="chart-sub">Summe aus Gewicht × Wiederholungen, letzte 8 Wochen</div>
-      <div class="chart-wrap">${volumeChart()}</div>
+      <h3>Volumen</h3>
+      <div class="chart-sub">${
+        histRange === "week" ? "Gewicht × Wiederholungen pro Tag, aktuelle Woche"
+        : histRange === "quarter" ? "Gewicht × Wiederholungen pro Woche, aktuelles Quartal"
+        : histRange === "year" ? "Gewicht × Wiederholungen pro Monat, aktuelles Jahr"
+        : "Gewicht × Wiederholungen pro " + (volumeBuckets("all").length && volumeBuckets("all")[0].end - volumeBuckets("all")[0].start > 32 * 86400000 ? "Jahr" : "Monat") + ", gesamte Historie"
+      }</div>
+      <div class="chart-wrap">${volumeChart(histRange)}</div>
     </div>
-    <div class="section-label">Alle Workouts</div>
+    <div class="section-label">Workouts</div>
     ${ws.length ? ws.map(historyRow).join("") : `
       <div class="empty">${icon("history")}
-        <h3>Noch keine Workouts</h3>
-        <p>Starte dein erstes Workout über den Start-Tab.</p>
+        <h3>Nichts im Zeitraum</h3>
+        <p>${DB.workouts.length ? "In diesem Zeitraum wurde noch nicht trainiert." : "Starte dein erstes Workout über den Start-Tab."}</p>
       </div>`}
   `;
 }
@@ -1112,22 +1230,67 @@ ACTIONS["delete-workout"] = (el) => {
 
 /* ═══════════════ Charts (SVG, eine Serie, Akzentfarbe) ═══════════════ */
 
-function volumeChart() {
-  const W = 320, H = 150, padL = 4, padR = 4, padT = 20, padB = 20;
-  const weeks = [];
-  const cur = weekStart(Date.now());
-  for (let i = 7; i >= 0; i--) weeks.push(cur - i * 7 * 86400000);
-  const vols = weeks.map((ws) =>
-    DB.workouts.filter((w) => weekStart(w.startedAt) === ws).reduce((a, w) => a + workoutVolume(w), 0));
-  if (vols.filter((v) => v > 0).length < 1) {
-    return `<div class="chart-empty">Sobald du Workouts trackst, siehst du hier dein Wochenvolumen.</div>`;
+const MONTH_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+// Zeit-Buckets für die jeweilige Sicht: {start, end, label, show}
+function volumeBuckets(range) {
+  const buckets = [];
+  const now = Date.now();
+  if (range === "week") {
+    const ws = weekStart(now);
+    const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+    for (let i = 0; i < 7; i++) {
+      buckets.push({ start: ws + i * 86400000, end: ws + (i + 1) * 86400000, label: days[i], show: true });
+    }
+  } else if (range === "quarter") {
+    let i = 0;
+    for (let s = weekStart(rangeStart("quarter")); s <= now; s += 7 * 86400000) {
+      buckets.push({ start: s, end: s + 7 * 86400000, label: fmtDateShort(s), show: i % 4 === 0 });
+      i++;
+    }
+  } else if (range === "year") {
+    const y = new Date().getFullYear();
+    for (let m = 0; m < 12; m++) {
+      buckets.push({ start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime(), label: MONTH_SHORT[m], show: m % 2 === 0 });
+    }
+  } else {
+    if (!DB.workouts.length) return [];
+    const first = new Date(Math.min(...DB.workouts.map((w) => w.startedAt)));
+    const cur = new Date();
+    const months = (cur.getFullYear() - first.getFullYear()) * 12 + (cur.getMonth() - first.getMonth()) + 1;
+    if (months > 24) {
+      for (let y = first.getFullYear(); y <= cur.getFullYear(); y++) {
+        buckets.push({ start: new Date(y, 0, 1).getTime(), end: new Date(y + 1, 0, 1).getTime(), label: String(y), show: true });
+      }
+    } else {
+      let y = first.getFullYear(), m = first.getMonth();
+      while (y < cur.getFullYear() || (y === cur.getFullYear() && m <= cur.getMonth())) {
+        buckets.push({ start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime(), label: MONTH_SHORT[m] + (m === 0 ? " " + String(y).slice(2) : ""), show: buckets.length % 2 === 0 });
+        m++; if (m > 11) { m = 0; y++; }
+      }
+    }
   }
+  return buckets;
+}
+
+function volumeChart(range) {
+  const buckets = volumeBuckets(range);
+  const vols = buckets.map((b) =>
+    DB.workouts.filter((w) => w.startedAt >= b.start && w.startedAt < b.end)
+      .reduce((a, w) => a + workoutVolume(w), 0));
+  if (!buckets.length || !vols.some((v) => v > 0)) {
+    return `<div class="chart-empty">Sobald du in diesem Zeitraum Workouts trackst, siehst du hier dein Volumen.</div>`;
+  }
+  const W = 320, H = 150, padL = 4, padR = 4, padT = 20, padB = 20;
   const max = Math.max(...vols, 1);
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const slot = innerW / 8, barW = Math.min(30, slot * 0.62);
+  const n = buckets.length;
+  const slot = innerW / n, barW = Math.max(4, Math.min(30, slot * 0.62));
   const maxIdx = vols.indexOf(Math.max(...vols));
+  const nowTs = Date.now();
+  let curIdx = buckets.findIndex((b) => nowTs >= b.start && nowTs < b.end);
+  if (curIdx < 0) curIdx = n - 1;
   let out = "";
-  // Rasterlinien
   for (let g = 1; g <= 3; g++) {
     const y = padT + innerH - (innerH * g) / 3;
     out += `<line class="chart-grid-line" x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}"/>`;
@@ -1140,17 +1303,17 @@ function volumeChart() {
     const y = padT + innerH - h;
     if (v > 0) {
       const r = Math.min(4, barW / 2, h);
-      out += `<path class="bar-rect${i === 7 ? "" : " dim"}" d="M${x} ${y + r} a${r} ${r} 0 0 1 ${r} ${-r} h${barW - 2 * r} a${r} ${r} 0 0 1 ${r} ${r} v${h - r} h${-barW} z"><title>${fmtVol(v)}</title></path>`;
+      out += `<path class="bar-rect${i === curIdx ? "" : " dim"}" d="M${x} ${y + r} a${r} ${r} 0 0 1 ${r} ${-r} h${barW - 2 * r} a${r} ${r} 0 0 1 ${r} ${r} v${h - r} h${-barW} z"><title>${esc(buckets[i].label)}: ${fmtVol(v)}</title></path>`;
     }
-    // Direkte Beschriftung: Maximum und aktuelle Woche
-    if (v > 0 && (i === maxIdx || i === 7)) {
-      out += `<text class="chart-value-text" x="${cx}" y="${y - 5}" text-anchor="middle">${v >= 1000 ? Math.round(v / 1000).toLocaleString("de-DE") + "k" : Math.round(v)}</text>`;
+    // Direkte Beschriftung: Maximum und aktueller Zeitraum
+    if (v > 0 && (i === maxIdx || i === curIdx)) {
+      out += `<text class="chart-value-text" x="${cx}" y="${y - 5}" text-anchor="middle">${v >= 1000 ? (Math.round(v / 100) / 10).toLocaleString("de-DE") + "k" : Math.round(v)}</text>`;
     }
-    if (i % 2 === 1) {
-      out += `<text class="chart-axis-text" x="${cx}" y="${H - 5}" text-anchor="middle">${fmtDateShort(weeks[i])}</text>`;
+    if (buckets[i].show) {
+      out += `<text class="chart-axis-text" x="${cx}" y="${H - 5}" text-anchor="middle">${esc(buckets[i].label)}</text>`;
     }
   });
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Balkendiagramm: Trainingsvolumen pro Woche">${out}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Balkendiagramm: Trainingsvolumen">${out}</svg>`;
 }
 
 function progressChart(exId) {
@@ -1296,9 +1459,10 @@ document.addEventListener("input", (e) => {
   if (k === "ex-search") { exSearch = el.value; renderExerciseList(); }
   else if (k === "picker-search") { pickerState.search = el.value; renderPickerList(); }
   else if (k === "plan-name") { draftPlan.name = el.value; }
+  else if (k === "plan-wo-name") { draftPlan.workouts[draftWoIdx].name = el.value; }
   else if (k === "plan-sets") {
     const n = parseInt(el.value, 10);
-    draftPlan.exercises[+el.dataset.i].sets = Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 3;
+    draftPlan.workouts[draftWoIdx].exercises[+el.dataset.i].sets = Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 3;
   }
   else if (k === "wo-name") { active.name = el.value; saveActive(); }
   else if (k === "set-w" || k === "set-r" || k === "set-t") {
