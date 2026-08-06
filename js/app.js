@@ -935,10 +935,11 @@ function woExerciseBlock(ex, xi) {
         <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
         <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
       </div>
-      ${ex.sets.map((s, si) => s.done ? doneSetRow(type, s, si, xi) : "").join("")}
-      ${curIdx >= 0
-        ? currentSetCard(type, ex, xi, curIdx, prev)
-        : `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>`}
+      ${ex.sets.map((s, si) =>
+        s.done ? doneSetRow(type, s, si, xi)
+        : si === curIdx ? currentSetCard(type, ex, xi, si, prev)
+        : queuedSetRow(si, xi)).join("")}
+      ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
       <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>
     </div>`;
 }
@@ -953,6 +954,16 @@ function doneSetRow(type, s, si, xi) {
         <b>${fmtSet(type, s)}</b>
       </button>
       <button class="mini-btn danger" data-action="wo-del-set" data-xi="${xi}" data-si="${si}" aria-label="Satz löschen">${icon("x")}</button>
+    </div>`;
+}
+
+// Geplanter Satz: wartet, bis der aktuelle abgeschlossen ist
+function queuedSetRow(si, xi) {
+  return `
+    <div class="queued-set">
+      <span class="q-no">Satz ${si + 1}</span>
+      <span class="q-lbl">geplant</span>
+      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${xi}" data-si="${si}" aria-label="Geplanten Satz entfernen">${icon("x")}</button>
     </div>`;
 }
 
