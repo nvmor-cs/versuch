@@ -1,0 +1,83 @@
+name: Android Build
+
+# Baut die Android-App:
+# - Immer: app-debug.apk (direkt auf dem Handy installierbar)
+# - Wenn Signier-Secrets gesetzt sind: signierte app-release.aab (für den
+#   Play Store) und app-release.apk
+#
+# Auslösen: GitHub -> Actions -> "Android Build" -> "Run workflow"
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Web-App bauen und in das Android-Projekt synchronisieren
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+          chmod +x android/gradlew
+
+      - name: Debug-APK bauen (direkt installierbar)
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Debug-APK hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: eisenzeit-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Signier-Secrets prüfen
+        id: cfg
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "Keine Signier-Secrets gefunden – Release-Build wird übersprungen." >> "$GITHUB_STEP_SUMMARY"
+            echo "Lege KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS und KEY_PASSWORD als Repository-Secrets an (siehe store/PLAY_STORE.md)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keystore entpacken
+        if: steps.cfg.outputs.sign == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+
+      - name: Signiertes Release bauen (AAB für den Play Store + APK)
+        if: steps.cfg.outputs.sign == 'true'
+        env:
+          RELEASE_KEYSTORE_FILE: ${{ runner.temp }}/upload.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: cd android && ./gradlew bundleRelease assembleRelease --no-daemon
+
+      - name: Release-Artefakte hochladen
+        if: steps.cfg.outputs.sign == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eisenzeit-release
+          path: |
+            android/app/build/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/apk/release/app-release.apk

@@ -15,7 +15,18 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 - **Backup**: Export/Import aller Daten als JSON-Datei
 - **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz, Stahl-Kanten, Caution-Gold als einzige Akzentfarbe
 
-## Auf dem Handy installieren
+## Android-App & Play Store 🤖
+
+Die App ist als natives Android-Projekt (Capacitor) vorbereitet:
+
+- **`android/`** – das komplette Android-Studio-Projekt (App-ID `io.github.nvmorcs.eisenzeit`)
+- **GitHub Actions → „Android Build"** – baut per Klick eine installierbare `app-debug.apk` und (mit Signier-Secrets) die signierte `app-release.aab` für den Play Store
+- **`store/`** – Schritt-für-Schritt-Anleitung ([PLAY_STORE.md](store/PLAY_STORE.md)), App-Icon 512×512, Funktionsgrafik 1024×500 und fertige Screenshots (1080×1920)
+- **`privacy.html`** – Datenschutzerklärung (über GitHub Pages als Pflicht-URL für den Store nutzbar)
+
+Lokal bauen (Node + Android SDK nötig): `npm ci && npm run android:debug`
+
+## Als PWA auf dem Handy installieren
 
 Die App muss über **HTTPS** erreichbar sein. Der einfachste Weg: GitHub Pages.
 

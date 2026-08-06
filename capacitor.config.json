@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.nvmorcs.eisenzeit",
+  "appName": "Eisenzeit",
+  "webDir": "www",
+  "backgroundColor": "#0b0c0d",
+  "android": {
+    "allowMixedContent": false
+  }
+}
