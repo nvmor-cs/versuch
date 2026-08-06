@@ -1,5 +1,5 @@
 // Eisenzeit Service Worker – App-Shell offline verfügbar halten
-const CACHE = "eisenzeit-v3";
+const CACHE = "eisenzeit-v4";
 const ASSETS = [
   "./",
   "index.html",

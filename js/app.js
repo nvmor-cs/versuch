@@ -928,41 +928,73 @@ function renderWoExercises() {
 function woExerciseBlock(ex, xi) {
   const type = exType(ex.exerciseId);
   const prev = prevSetsFor(ex.exerciseId);
-  const cols = type === "weight_reps"
-    ? `<div class="set-grid-head">Satz</div><div class="set-grid-head left">Letztes Mal</div><div class="set-grid-head">kg</div><div class="set-grid-head">Wdh.</div><div class="set-grid-head">✓</div>`
-    : type === "reps"
-      ? `<div class="set-grid-head">Satz</div><div class="set-grid-head left">Letztes Mal</div><div class="set-grid-head">Wdh.</div><div class="set-grid-head">✓</div>`
-      : `<div class="set-grid-head">Satz</div><div class="set-grid-head left">Letztes Mal</div><div class="set-grid-head">Zeit</div><div class="set-grid-head">✓</div>`;
+  const curIdx = ex.sets.findIndex((s) => !s.done);
   return `
     <div class="exercise-block" data-xi="${xi}">
       <div class="exercise-block-head">
         <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
         <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
       </div>
-      <div class="set-grid ${type === "weight_reps" ? "" : "type-" + type}">
-        ${cols}
-        ${ex.sets.map((s, si) => woSetRow(type, s, si, xi, prev)).join("")}
-      </div>
+      ${ex.sets.map((s, si) => s.done ? doneSetRow(type, s, si, xi) : "").join("")}
+      ${curIdx >= 0
+        ? currentSetCard(type, ex, xi, curIdx, prev)
+        : `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>`}
       <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>
     </div>`;
 }
 
-function woSetRow(type, s, si, xi, prev) {
-  const p = prev && prev[si];
-  const prevTxt = p ? fmtSet(type, p) : "–";
-  const d = `data-xi="${xi}" data-si="${si}"`;
-  const inputs = type === "weight_reps"
-    ? `<input class="set-input" type="text" inputmode="decimal" data-input="set-w" ${d} value="${s.w != null ? String(s.w).replace(".", ",") : ""}" placeholder="${p && p.w != null ? fmtKg(p.w) : "kg"}" aria-label="Gewicht">
-       <input class="set-input" type="text" inputmode="numeric" data-input="set-r" ${d} value="${s.r ?? ""}" placeholder="${p && p.r != null ? p.r : "Wdh."}" aria-label="Wiederholungen">`
-    : type === "reps"
-      ? `<input class="set-input" type="text" inputmode="numeric" data-input="set-r" ${d} value="${s.r ?? ""}" placeholder="${p && p.r != null ? p.r : "Wdh."}" aria-label="Wiederholungen">`
-      : `<input class="set-input" type="text" inputmode="numeric" data-input="set-t" ${d} value="${s.t ? fmtClock(s.t) : ""}" placeholder="${p && p.t ? fmtClock(p.t) : "m:ss"}" aria-label="Zeit">`;
+// Abgeschlossener Satz: kompakte Zeile, antippen holt ihn zurück
+function doneSetRow(type, s, si, xi) {
   return `
-    <div class="set-row ${s.done ? "done" : ""}" data-setrow="${xi}-${si}">
-      <button class="set-no" data-action="wo-del-set" ${d} title="Satz entfernen">${si + 1}</button>
-      <div class="set-prev">${prevTxt}</div>
-      ${inputs}
-      <button class="set-check" data-action="wo-check" ${d} aria-label="Satz abhaken">${icon("check")}</button>
+    <div class="done-set">
+      <button class="done-set-main" data-action="wo-undo-set" data-xi="${xi}" data-si="${si}" title="Satz zurückholen">
+        <span class="done-check">${icon("check")}</span>
+        <span class="done-no">Satz ${si + 1}</span>
+        <b>${fmtSet(type, s)}</b>
+      </button>
+      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${xi}" data-si="${si}" aria-label="Satz löschen">${icon("x")}</button>
+    </div>`;
+}
+
+// Aktueller Satz: Karte mit Plus/Minus-Steppern und Abschließen-Button
+function currentSetCard(type, ex, xi, si, prev) {
+  const s = ex.sets[si];
+  const p = prev && prev[si];
+  // Startwerte: gleicher Satz vom letzten Mal, sonst letzter fertiger Satz, sonst Standard
+  const lastDone = ex.sets.slice(0, si).reverse().find((x) => x.done);
+  if (type === "weight_reps") {
+    if (s.w == null) s.w = p && p.w != null ? p.w : lastDone && lastDone.w != null ? lastDone.w : 20;
+    if (s.r == null) s.r = p && p.r != null ? p.r : lastDone && lastDone.r != null ? lastDone.r : 8;
+  } else if (type === "reps") {
+    if (s.r == null) s.r = p && p.r != null ? p.r : lastDone && lastDone.r != null ? lastDone.r : 10;
+  } else {
+    if (s.t == null) s.t = p && p.t ? p.t : lastDone && lastDone.t ? lastDone.t : 60;
+  }
+  saveActive();
+  const d = `data-xi="${xi}" data-si="${si}"`;
+  const stepper = (label, field, inputHtml) => `
+    <div class="stepper-group">
+      <div class="stepper-label">${label}</div>
+      <div class="stepper">
+        <button class="stepper-btn" data-action="wo-step" data-f="${field}" data-d="-1" ${d} aria-label="${label} verringern">−</button>
+        ${inputHtml}
+        <button class="stepper-btn" data-action="wo-step" data-f="${field}" data-d="1" ${d} aria-label="${label} erhöhen">+</button>
+      </div>
+    </div>`;
+  const wInput = `<input class="stepper-val" type="text" inputmode="decimal" data-input="set-w" ${d} value="${String(s.w).replace(".", ",")}" aria-label="Gewicht in kg">`;
+  const rInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-r" ${d} value="${s.r}" aria-label="Wiederholungen">`;
+  const tInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-t" ${d} value="${fmtClock(s.t)}" aria-label="Zeit">`;
+  return `
+    <div class="current-set">
+      <div class="current-set-head">
+        <span class="cs-no">Satz ${si + 1} / ${ex.sets.length}</span>
+        <span class="cs-prev">${p ? "Letztes Mal: " + fmtSet(type, p) : "Erster Eintrag"}</span>
+        <button class="mini-btn" data-action="wo-del-set" ${d} aria-label="Satz entfernen">${icon("x")}</button>
+      </div>
+      ${type === "weight_reps" ? stepper("Gewicht (kg)", "w", wInput) + stepper("Wiederholungen", "r", rInput) : ""}
+      ${type === "reps" ? stepper("Wiederholungen", "r", rInput) : ""}
+      ${type === "time" ? stepper("Zeit (Min:Sek)", "t", tInput) : ""}
+      <button class="btn" data-action="wo-complete-set" ${d}>${icon("check")} Satz abschließen</button>
     </div>`;
 }
 
@@ -1013,45 +1045,41 @@ ACTIONS["wo-del-set"] = (el) => {
   updateWoMeta();
 };
 
-ACTIONS["wo-check"] = (el) => {
+// Plus/Minus: Gewicht ±2,5 kg, Wiederholungen ±1, Zeit ±15 s
+ACTIONS["wo-step"] = (el) => {
+  const xi = +el.dataset.xi, si = +el.dataset.si;
+  const f = el.dataset.f, dir = +el.dataset.d;
+  const ex = active && active.exercises[xi];
+  const s = ex && ex.sets[si];
+  if (!s) return;
+  if (f === "w") s.w = Math.max(0, Math.round(((s.w || 0) + dir * 2.5) * 100) / 100);
+  if (f === "r") s.r = Math.max(1, (s.r || 0) + dir);
+  if (f === "t") s.t = Math.max(15, (s.t || 0) + dir * 15);
+  const inp = $(`[data-input="set-${f}"][data-xi="${xi}"][data-si="${si}"]`);
+  if (inp) inp.value = f === "w" ? String(s.w).replace(".", ",") : f === "t" ? fmtClock(s.t) : s.r;
+  saveActive();
+};
+
+ACTIONS["wo-complete-set"] = (el) => {
   const xi = +el.dataset.xi, si = +el.dataset.si;
   const ex = active.exercises[xi];
   const s = ex.sets[si];
   const type = exType(ex.exerciseId);
-  const row = $(`[data-setrow="${xi}-${si}"]`);
-
-  if (!s.done) {
-    // Leere Felder mit den Werten vom letzten Mal (Platzhalter) füllen
-    const p = (prevSetsFor(ex.exerciseId) || [])[si];
-    if (type === "weight_reps") {
-      if (s.w == null && p && p.w != null) s.w = p.w;
-      if (s.r == null && p && p.r != null) s.r = p.r;
-      if (s.r == null || s.r <= 0) { toast("Wiederholungen eintragen"); return; }
-      if (s.w == null) s.w = 0;
-    } else if (type === "reps") {
-      if (s.r == null && p && p.r != null) s.r = p.r;
-      if (s.r == null || s.r <= 0) { toast("Wiederholungen eintragen"); return; }
-    } else {
-      if (s.t == null && p && p.t != null) s.t = p.t;
-      if (s.t == null || s.t <= 0) { toast("Zeit eintragen, z. B. 1:30"); return; }
-    }
-    s.done = true;
-    // Autofill in die Inputs zurückschreiben
-    if (row) {
-      const iw = $(`[data-input="set-w"][data-xi="${xi}"][data-si="${si}"]`, row);
-      const ir = $(`[data-input="set-r"][data-xi="${xi}"][data-si="${si}"]`, row);
-      const it = $(`[data-input="set-t"][data-xi="${xi}"][data-si="${si}"]`, row);
-      if (iw && s.w != null) iw.value = String(s.w).replace(".", ",");
-      if (ir && s.r != null) ir.value = s.r;
-      if (it && s.t != null) it.value = fmtClock(s.t);
-      row.classList.add("done");
-    }
-    if (DB.settings.autoRest && exById(ex.exerciseId)?.type !== "time") startRest(DB.settings.restSecs);
-  } else {
-    s.done = false;
-    if (row) row.classList.remove("done");
-  }
+  if ((type === "weight_reps" || type === "reps") && (!s.r || s.r <= 0)) { toast("Wiederholungen eintragen"); return; }
+  if (type === "time" && (!s.t || s.t <= 0)) { toast("Zeit eintragen, z. B. 1:30"); return; }
+  if (type === "weight_reps" && s.w == null) s.w = 0;
+  s.done = true;
   saveActive();
+  renderWoExercises();
+  updateWoMeta();
+  if (DB.settings.autoRest && type !== "time") startRest(DB.settings.restSecs);
+};
+
+ACTIONS["wo-undo-set"] = (el) => {
+  const s = active.exercises[+el.dataset.xi].sets[+el.dataset.si];
+  s.done = false;
+  saveActive();
+  renderWoExercises();
   updateWoMeta();
 };
 
