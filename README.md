@@ -6,14 +6,14 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 
 - **Übungsbibliothek** mit 135 vordefinierten Übungen (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
 - **Eigene Übungen** anlegen (Gewicht × Wdh., nur Wiederholungen oder Zeit)
-- **Trainingspläne mit mehreren Trainings**: Ein Plan bündelt z. B. Push, Pull und Beine als einzelne Trainings, jedes mit einem Tipp startbar (ein Beispielplan „Push / Pull / Beine" ist vorinstalliert)
+- **Trainingspläne mit mehreren Trainings**: Ein Plan bündelt z. B. Push, Pull und Beine als einzelne Trainings, jedes mit einem Tipp startbar; der Start-Tab zeigt nur den aktiven Plan (ein Beispielplan „Push / Pull / Beine" ist vorinstalliert)
 - **Workout-Tracking** wie in Hevy: Sätze abhaken, Gewicht & Wiederholungen eintragen, Werte vom letzten Mal als Vorlage, laufende Dauer und Live-Volumen
 - **Pausen-Timer** startet automatisch nach jedem abgehakten Satz (Dauer einstellbar, mit Ton + Vibration)
 - **Rekord-Erkennung**: Neue Bestleistungen werden beim Beenden gefeiert
 - **Verlauf & Statistik** mit umschaltbarer Sicht: Woche, Quartal, Jahr und Gesamt – Kennzahlen, Volumen-Chart (Tage/Wochen/Monate/Jahre) und Workout-Liste passen sich an; dazu Entwicklungskurve pro Übung
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
 - **Backup**: Export/Import aller Daten als JSON-Datei
-- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz, Stahl-Kanten, Safety-Orange als einzige Akzentfarbe
+- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz, Stahl-Kanten, Caution-Gold als einzige Akzentfarbe
 
 ## Auf dem Handy installieren
 

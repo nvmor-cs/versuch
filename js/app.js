@@ -102,6 +102,7 @@ function defaultDB() {
     customExercises: [],
     plans: [],
     workouts: [],
+    activePlanId: null,
     seeded: false,
   };
 }
@@ -160,6 +161,10 @@ const exType = (id) => exById(id) ? exById(id).type : "weight_reps";
 
 // Sortierte Workouts (neueste zuerst)
 const workoutsDesc = () => DB.workouts.slice().sort((a, b) => b.startedAt - a.startedAt);
+
+// Der Plan, nach dem aktuell trainiert wird
+const activePlan = () =>
+  DB.plans.find((p) => p.id === DB.activePlanId) || DB.plans[0] || null;
 
 // Sätze des letzten Workouts mit dieser Übung
 function prevSetsFor(exId, excludeId) {
@@ -229,6 +234,33 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.remove(), 2200);
 }
 
+/* ═══════════════ In-App-Bestätigung ═══════════════
+   Native confirm() ist in eingebetteten Umgebungen (Sandbox-iframe)
+   blockiert und gibt dort still false zurück – deshalb ein eigener Dialog. */
+
+function appConfirm(msg, opts = {}) {
+  return new Promise((resolve) => {
+    const bd = document.createElement("div");
+    bd.className = "backdrop";
+    bd.innerHTML = `
+      <div class="sheet" role="alertdialog" aria-label="Bestätigung">
+        <div class="sheet-grip"></div>
+        <p style="font-size:15px;font-weight:600;margin:4px 2px 18px">${esc(msg)}</p>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-ghost" data-c="0" style="flex:1">Abbrechen</button>
+          <button class="btn ${opts.danger ? "btn-danger-soft" : ""}" data-c="1" style="flex:1">${esc(opts.ok || "OK")}</button>
+        </div>
+      </div>`;
+    const done = (v) => { bd.remove(); resolve(v); };
+    bd.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-c]");
+      if (b) done(b.dataset.c === "1");
+      else if (e.target === bd) done(false);
+    });
+    document.body.appendChild(bd);
+  });
+}
+
 /* ═══════════════ Sheets & Overlays ═══════════════ */
 
 function openSheet(html) {
@@ -277,6 +309,7 @@ function renderTabbar() {
 function renderHome() {
   const today = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
   const recent = workoutsDesc().slice(0, 3);
+  const ap = activePlan();
   $("#screen-home").innerHTML = `
     <div class="screen-head">
       <div>
@@ -286,11 +319,38 @@ function renderHome() {
       <button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${icon("gear")}</button>
     </div>
     <button class="btn" data-action="start-empty">${icon("plus")} Leeres Workout starten</button>
-    <div class="section-label" style="margin-top:24px">Meine Pläne</div>
-    ${DB.plans.length ? DB.plans.map(planCard).join("") : `<p class="hint">Noch keine Pläne – lege im Tab „Pläne" einen an.</p>`}
+    <div class="section-label" style="margin-top:24px">Aktueller Plan</div>
+    ${ap ? planCard(ap) : `<p class="hint">Noch kein Plan – lege im Tab „Pläne" einen an.</p>`}
+    ${DB.plans.length > 1 ? `<button class="btn btn-ghost" data-action="switch-plan">${icon("plans")} Plan wechseln</button>` : ""}
     ${recent.length ? `<div class="section-label">Zuletzt trainiert</div>` + recent.map(historyRow).join("") : ""}
   `;
 }
+
+ACTIONS["switch-plan"] = () => {
+  const ap = activePlan();
+  openSheet(`
+    <div class="sheet-title">Aktiven Plan wählen
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    </div>
+    ${DB.plans.map((p) => `
+      <button class="row ${ap && ap.id === p.id ? "picked" : ""}" data-action="set-active-plan" data-id="${p.id}">
+        <span class="pick-check">${icon("check")}</span>
+        <span class="row-main">
+          <span class="row-title">${esc(p.name)}</span>
+          <span class="row-sub">${p.workouts.length} Trainings</span>
+        </span>
+      </button>`).join("")}
+  `);
+};
+
+ACTIONS["set-active-plan"] = (el) => {
+  DB.activePlanId = el.dataset.id;
+  saveDB();
+  el.closest(".backdrop")?.remove();
+  render();
+  renderPlanDetail();
+  toast("Aktueller Plan gesetzt");
+};
 
 function planCard(p) {
   return `
@@ -316,12 +376,24 @@ function planCard(p) {
 /* ═══════════════ Pläne-Tab ═══════════════ */
 
 function renderPlans() {
+  const ap = activePlan();
   $("#screen-plans").innerHTML = `
     <div class="screen-head">
       <div class="screen-title">Pläne</div>
       <button class="icon-btn" data-action="new-plan" aria-label="Neuer Plan">${icon("plus")}</button>
     </div>
-    ${DB.plans.length ? DB.plans.map(planCard).join("") : `
+    ${DB.plans.length ? DB.plans.map((p) => {
+      const nEx = p.workouts.reduce((a, w) => a + w.exercises.length, 0);
+      return `
+      <button class="row" data-action="open-plan" data-id="${p.id}">
+        <span class="row-main">
+          <span class="row-title">${esc(p.name)}</span>
+          <span class="row-sub">${p.workouts.length} Trainings · ${nEx} Übungen</span>
+        </span>
+        ${ap && ap.id === p.id ? `<span class="badge badge-accent">Aktiv</span>` : ""}
+        <span class="chev">${icon("chevR")}</span>
+      </button>`;
+    }).join("") : `
       <div class="empty">${icon("plans")}
         <h3>Noch keine Pläne</h3>
         <p>Ein Plan bündelt mehrere Trainings – z. B. Push, Pull und Beine.</p>
@@ -329,6 +401,54 @@ function renderPlans() {
     <button class="btn btn-ghost" data-action="new-plan" style="margin-top:8px">${icon("plus")} Neuen Plan erstellen</button>
   `;
 }
+
+/* Plan-Detail: Trainings ansehen, starten, bearbeiten */
+
+ACTIONS["open-plan"] = (el) => openPlanDetail(el.dataset.id);
+
+function openPlanDetail(planId) {
+  $(".plan-detail-ov")?.remove();
+  const ov = openOverlay("", "plan-detail-ov");
+  ov.dataset.planId = planId;
+  renderPlanDetail(ov);
+}
+
+function renderPlanDetail(ov) {
+  ov = ov || $(".plan-detail-ov");
+  if (!ov) return;
+  const p = DB.plans.find((x) => x.id === ov.dataset.planId);
+  if (!p) { ov.remove(); return; }
+  const isActive = activePlan()?.id === p.id;
+  $(".overlay-inner", ov).innerHTML = `
+    <div class="overlay-head">
+      <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
+      <div class="screen-title">${esc(p.name)}</div>
+      <button class="icon-btn" data-action="edit-plan" data-id="${p.id}" aria-label="Plan bearbeiten">${icon("edit")}</button>
+    </div>
+    ${isActive
+      ? `<span class="badge badge-accent" style="margin-bottom:14px">${icon("check")} Aktiver Plan</span>`
+      : `<button class="btn btn-soft" data-action="set-active-plan" data-id="${p.id}" style="margin-bottom:14px">Als aktiven Plan setzen</button>`}
+    <div class="section-label">Trainings</div>
+    ${p.workouts.length ? p.workouts.map((w, i) => {
+      const names = w.exercises.slice(0, 3).map((e) => exName(e.exerciseId)).join(", ");
+      return `
+      <div class="row" style="cursor:default">
+        <div class="row-main" data-action="edit-plan-wo-direct" data-plan="${p.id}" data-i="${i}" style="cursor:pointer">
+          <div class="row-title">${esc(w.name)}</div>
+          <div class="row-sub">${w.exercises.length} Übungen${names ? " · " + esc(names) : ""}</div>
+        </div>
+        <button class="btn btn-compact" data-action="start-plan" data-plan="${p.id}" data-wo="${w.id}">Start</button>
+      </div>`;
+    }).join("") : `<p class="hint" style="padding:4px 0 10px">Noch keine Trainings – tippe oben auf den Stift, um welche anzulegen.</p>`}
+    <p class="hint" style="margin-top:10px">Tippe auf ein Training, um Übungen und Sätze zu bearbeiten.</p>
+  `;
+}
+
+// Öffnet den Editor direkt auf Ebene 2 (ein bestimmtes Training)
+ACTIONS["edit-plan-wo-direct"] = (el) => {
+  openPlanEditor(el.dataset.plan);
+  openPlanWoEditor(+el.dataset.i);
+};
 
 /* Plan-Editor – Ebene 1: der Plan mit seinen Trainings */
 
@@ -384,10 +504,10 @@ ACTIONS["plan-wo-up"] = (el) => {
     renderPlanEditor();
   }
 };
-ACTIONS["plan-wo-del"] = (el) => {
+ACTIONS["plan-wo-del"] = async (el) => {
   const i = +el.dataset.i;
   const w = draftPlan.workouts[i];
-  if (w.exercises.length && !confirm(`Training „${w.name}" aus dem Plan entfernen?`)) return;
+  if (w.exercises.length && !(await appConfirm(`Training „${w.name || "Training " + (i + 1)}" aus dem Plan entfernen?`, { ok: "Entfernen", danger: true }))) return;
   draftPlan.workouts.splice(i, 1);
   renderPlanEditor();
 };
@@ -407,12 +527,14 @@ ACTIONS["save-plan"] = () => {
   $(".plan-editor-ov")?.remove();
   toast("Plan gespeichert");
   render();
+  renderPlanDetail();
 };
-ACTIONS["delete-plan"] = () => {
-  if (!confirm(`Plan „${draftPlan.name}" wirklich löschen?`)) return;
+ACTIONS["delete-plan"] = async () => {
+  if (!(await appConfirm(`Plan „${draftPlan.name}" wirklich löschen?`, { ok: "Löschen", danger: true }))) return;
   DB.plans = DB.plans.filter((p) => p.id !== draftPlan.id);
   saveDB();
   $(".plan-editor-ov")?.remove();
+  $(".plan-detail-ov")?.remove();
   toast("Plan gelöscht");
   render();
 };
@@ -581,10 +703,10 @@ ACTIONS["save-exercise"] = (el) => {
   if ($(".picker-ov")) renderPickerList();
 };
 
-ACTIONS["delete-exercise"] = (el) => {
+ACTIONS["delete-exercise"] = async (el) => {
   const ex = DB.customExercises.find((e) => e.id === el.dataset.id);
   if (!ex) return;
-  if (!confirm(`„${ex.name}" löschen? Bereits getrackte Workouts bleiben erhalten.`)) return;
+  if (!(await appConfirm(`„${ex.name}" löschen? Bereits getrackte Workouts bleiben erhalten.`, { ok: "Löschen", danger: true }))) return;
   DB.customExercises = DB.customExercises.filter((e) => e.id !== ex.id);
   saveDB();
   $(".ex-detail-ov")?.remove();
@@ -868,10 +990,11 @@ ACTIONS["wo-add-ex"] = () => {
     updateWoMeta();
   });
 };
-ACTIONS["wo-del-ex"] = (el) => {
-  const ex = active.exercises[+el.dataset.xi];
-  if (ex.sets.some((s) => s.done) && !confirm(`„${exName(ex.exerciseId)}" mit abgehakten Sätzen entfernen?`)) return;
-  active.exercises.splice(+el.dataset.xi, 1);
+ACTIONS["wo-del-ex"] = async (el) => {
+  const xi = +el.dataset.xi;
+  const ex = active.exercises[xi];
+  if (ex.sets.some((s) => s.done) && !(await appConfirm(`„${exName(ex.exerciseId)}" mit abgehakten Sätzen entfernen?`, { ok: "Entfernen", danger: true }))) return;
+  active.exercises.splice(xi, 1);
   saveActive();
   renderWoExercises();
   updateWoMeta();
@@ -937,8 +1060,8 @@ ACTIONS["minimize-workout"] = () => {
   render();
 };
 
-ACTIONS["discard-workout"] = () => {
-  if (!confirm("Workout wirklich verwerfen? Alle Eingaben gehen verloren.")) return;
+ACTIONS["discard-workout"] = async () => {
+  if (!(await appConfirm("Workout wirklich verwerfen? Alle Eingaben gehen verloren.", { ok: "Verwerfen", danger: true }))) return;
   active = null;
   saveActive();
   stopRest();
@@ -947,7 +1070,7 @@ ACTIONS["discard-workout"] = () => {
   toast("Workout verworfen");
 };
 
-ACTIONS["finish-workout"] = () => {
+ACTIONS["finish-workout"] = async () => {
   if (!active) return;
   const finished = {
     id: active.id,
@@ -966,13 +1089,14 @@ ACTIONS["finish-workout"] = () => {
     if (done.length) finished.exercises.push({ exerciseId: ex.exerciseId, sets: done });
   }
   if (!finished.exercises.length) {
-    if (confirm("Keine abgehakten Sätze. Workout verwerfen?")) {
+    if (await appConfirm("Keine abgehakten Sätze. Workout verwerfen?", { ok: "Verwerfen", danger: true })) {
       active = null; saveActive(); stopRest();
       $(".workout-ov")?.remove(); render();
     }
     return;
   }
-  if (undone > 0 && !confirm(`${undone} nicht abgehakte${undone === 1 ? "r Satz wird" : " Sätze werden"} verworfen. Workout beenden?`)) return;
+  if (undone > 0 && !(await appConfirm(`${undone} nicht abgehakte${undone === 1 ? "r Satz wird" : " Sätze werden"} verworfen. Workout beenden?`, { ok: "Beenden" }))) return;
+  if (!active) return;
 
   // Rekorde ermitteln (vor dem Speichern, gegen die bisherige Historie)
   const prs = [];
@@ -1219,8 +1343,8 @@ ACTIONS["repeat-workout"] = (el) => {
   openWorkoutScreen();
 };
 
-ACTIONS["delete-workout"] = (el) => {
-  if (!confirm("Workout endgültig löschen?")) return;
+ACTIONS["delete-workout"] = async (el) => {
+  if (!(await appConfirm("Workout endgültig löschen?", { ok: "Löschen", danger: true }))) return;
   DB.workouts = DB.workouts.filter((w) => w.id !== el.dataset.id);
   saveDB();
   $(".wo-detail-ov")?.remove();
@@ -1418,12 +1542,18 @@ ACTIONS["import-data"] = () => {
     const f = inp.files && inp.files[0];
     if (!f) return;
     const rd = new FileReader();
-    rd.onload = () => {
+    rd.onload = async () => {
       try {
         const data = JSON.parse(rd.result);
         if (!Array.isArray(data.workouts) || !Array.isArray(data.plans)) throw new Error("Format");
-        if (!confirm(`Backup mit ${data.workouts.length} Workouts und ${data.plans.length} Plänen importieren? Aktuelle Daten werden ersetzt.`)) return;
+        if (!(await appConfirm(`Backup mit ${data.workouts.length} Workouts und ${data.plans.length} Plänen importieren? Aktuelle Daten werden ersetzt.`, { ok: "Importieren" }))) return;
         DB = Object.assign(defaultDB(), data, { seeded: true });
+        // Alte Backups (v1) auf die aktuelle Plan-Struktur heben
+        DB.plans = (DB.plans || []).map((p) =>
+          p.workouts ? p : {
+            id: p.id, name: p.name, createdAt: p.createdAt || Date.now(),
+            workouts: [{ id: uid(), name: p.name, exercises: p.exercises || [] }],
+          });
         saveDB();
         $$(".backdrop").forEach((b) => b.remove());
         render();
@@ -1437,9 +1567,9 @@ ACTIONS["import-data"] = () => {
   inp.click();
 };
 
-ACTIONS["wipe-data"] = () => {
-  if (!confirm("Wirklich ALLE Workouts, Pläne und Übungen löschen?")) return;
-  if (!confirm("Ganz sicher? Das kann nicht rückgängig gemacht werden.")) return;
+ACTIONS["wipe-data"] = async () => {
+  if (!(await appConfirm("Wirklich ALLE Workouts, Pläne und Übungen löschen?", { ok: "Löschen", danger: true }))) return;
+  if (!(await appConfirm("Ganz sicher? Das kann nicht rückgängig gemacht werden.", { ok: "Endgültig löschen", danger: true }))) return;
   localStorage.removeItem(LS_DB);
   localStorage.removeItem(LS_ACTIVE);
   DB = loadDB();
