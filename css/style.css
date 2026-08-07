@@ -341,21 +341,22 @@ button.row:active { background: var(--surface-2); }
 .row-side { text-align: right; }
 .row .chev { color: var(--ink-3); flex-shrink: 0; width: 18px; height: 18px; }
 
-.muscle-dot svg { width: 26px; height: 26px; }
+/* Muskel-Piktogramm: Körperteil in einer runden Kachel, der trainierte
+   Muskel in der Akzentfarbe. Die Figur ist größer als der Rahmen und wird
+   von ihm angeschnitten – deshalb overflow: hidden. */
 .muscle-dot {
-  width: 40px; height: 40px;
-  border-radius: var(--radius-xs);
+  --m-haut: #c3cad4;                    /* Silhouette */
+  --m-feld: #98a2b0;                    /* ruhende Muskeln, gibt Zeichnung */
+  --m-aktiv: var(--accent);             /* der trainierte Muskel */
+  --m-linie: rgba(17, 24, 39, 0.6);     /* Trennlinien (Bauchraster) */
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
   background: var(--surface-3);
   border: 1px solid var(--border);
-  color: var(--ink-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.03em;
   flex-shrink: 0;
 }
+.muscle-dot svg { width: 100%; height: 100%; display: block; }
 
 /* Plan-Karte mit mehreren Trainings */
 .plan-card {

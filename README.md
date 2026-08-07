@@ -6,7 +6,9 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 
 ## Features
 
-- **Übungsbibliothek** mit 135 vordefinierten Übungen, jede mit einem Piktogramm ihrer Muskelgruppe (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
+- **Übungsbibliothek** mit 150 vordefinierten Übungen (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
+- **Muskel-Piktogramme**: Jede Übung zeigt den betroffenen Körperteil mit dem trainierten Muskel in der Akzentfarbe. Dahinter stecken vier Grundfiguren – Oberkörper von vorn und hinten, Beine von vorn und hinten – mit einzeln einfärbbaren Muskelfeldern
+- **16 Muskelgruppen**: Die Beine sind aufgeteilt in Quadrizeps (vordere Oberschenkel), Beinbeuger (hintere Oberschenkel), Po, Adduktoren, Abduktoren und Waden – jede mit eigenen Übungen
 - **Wischen zum Blättern**: Durch die Muskelgruppen – im Übungen-Tab wie beim Zusammenstellen eines Trainings – und im Verlauf durch die Zeiträume. Die Leiste oben bleibt Anzeige und Sprungziel, der aktive Chip rückt beim Wischen automatisch in die Mitte
 - **Eigene Übungen** anlegen (Gewicht × Wdh., nur Wiederholungen oder Zeit)
 - **Trainingspläne mit mehreren Trainings**: Ein Plan bündelt z. B. Push, Pull und Beine als einzelne Trainings, jedes mit einem Tipp startbar; der Start-Tab zeigt nur den aktiven Plan (ein Beispielplan „Push / Pull / Beine" ist vorinstalliert)
@@ -73,7 +75,8 @@ python3 -m http.server 8000
 |---|---|
 | `index.html` | App-Gerüst, PWA-Meta, Service-Worker-Registrierung |
 | `css/style.css` | Design-Tokens und alle Komponenten |
-| `js/exercises.js` | Übungsbibliothek und Beispielpläne |
+| `js/exercises.js` | Übungsbibliothek, Muskelgruppen und Beispielpläne |
+| `js/muscle-icons.js` | Die vier Körperfiguren und ihre Muskelfelder |
 | `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
 | `sw.js` | Offline-Cache |

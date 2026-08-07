@@ -1,28 +1,15 @@
 # Verwendete Fremdinhalte
 
-## Piktogramme der Muskelgruppen
+Keine. Alle Grafiken der App sind eigene Arbeiten und stehen unter der
+Lizenz des Projekts:
 
-Neun der dreizehn Symbole stammen aus **[Game-Icons.net](https://game-icons.net)**
-und stehen unter der Lizenz **CC BY 3.0**:
+- **Muskel-Piktogramme** – vier Grundfiguren (Oberkörper vorn/hinten, Beine
+  vorn/hinten) mit einzeln einfärbbaren Muskelfeldern, als SVG-Pfade in
+  `js/muscle-icons.js`
+- **App-Icon, Launcher-Grafiken, Splashscreen und Store-Material** – erzeugt
+  aus `scripts/make-icons.py`
+- **Bedien-Symbole** – Strichzeichnungen in `js/app.js`
 
-| Muskelgruppe | Icon | Urheber |
-|---|---|---|
-| Brust | `muscular-torso` | Delapouite |
-| Bizeps | `biceps` | Delapouite |
-| Beine | `female-legs` | Delapouite |
-| Waden | `barefoot` | Lorc |
-| Bauch | `abdominal-armor` | Lorc |
-| Unterarme | `forearm` | Delapouite |
-| Ganzkörper | `strong` | Delapouite |
-| Cardio | `run` | Delapouite |
-
-Die Symbole für **Rücken, Schultern, Nacken, Po und Trizeps** sind eigene
-Zeichnungen im gleichen Stil – dafür gab es in keinem freien Set ein
-brauchbares Motiv.
-
-Der Lizenzhinweis erscheint auch in der App unter *Einstellungen*.
-
-## Übriges
-
-Alle weiteren Grafiken (App-Icon, Splashscreen, Bedien-Symbole) sind eigene
-Arbeiten und stehen unter der Lizenz des Projekts.
+Frühere Versionen nutzten Piktogramme von [Game-Icons.net](https://game-icons.net)
+(CC BY 3.0). Sie sind seit Version 2.3.0 vollständig durch eigene Zeichnungen
+ersetzt.

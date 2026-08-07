@@ -4,9 +4,13 @@
 
 "use strict";
 
+// Reihenfolge von oben nach unten durch den Körper – so liest sich auch die
+// Filterleiste, durch die man wischt. Die Beine sind bewusst aufgeteilt:
+// Vorder- und Rückseite des Oberschenkels trainiert man getrennt.
 const MUSCLES = [
-  "Brust", "Rücken", "Schultern", "Nacken", "Bizeps", "Trizeps",
-  "Beine", "Po", "Waden", "Bauch", "Unterarme", "Ganzkörper", "Cardio",
+  "Brust", "Rücken", "Schultern", "Nacken", "Bizeps", "Trizeps", "Unterarme",
+  "Bauch", "Quadrizeps", "Beinbeuger", "Po", "Adduktoren", "Abduktoren",
+  "Waden", "Ganzkörper", "Cardio",
 ];
 
 const EQUIPMENT = [
@@ -58,7 +62,6 @@ const EXERCISE_LIBRARY = [
   x("rack-pulls", "Rack Pulls", "Rücken", "Langhantel", null, "teilkreuzheben"),
   x("hyperextensions", "Hyperextensions (Rückenstrecker)", "Rücken", "Körpergewicht", null, "back extension"),
   x("straight-arm-pulldown", "Überzüge am Kabelzug", "Rücken", "Kabelzug", null, "straight arm pulldown"),
-  x("good-mornings", "Good Mornings", "Rücken", "Langhantel", null, ""),
   x("muscle-ups", "Muscle-Ups", "Rücken", "Körpergewicht", "reps", ""),
 
   // ── Nacken ─────────────────────────────────────────────
@@ -103,39 +106,55 @@ const EXERCISE_LIBRARY = [
   x("overhead-trizeps-kh", "Trizepsdrücken über Kopf (Kurzhantel)", "Trizeps", "Kurzhantel", null, "overhead extension"),
   x("trizeps-maschine", "Trizeps-Maschine (Dip-Maschine)", "Trizeps", "Maschine", null, "machine dips"),
 
-  // ── Beine ──────────────────────────────────────────────
-  x("kniebeugen", "Kniebeugen (Langhantel)", "Beine", "Langhantel", null, "squat squats"),
-  x("frontkniebeugen", "Frontkniebeugen (Langhantel)", "Beine", "Langhantel", null, "front squat"),
-  x("kniebeugen-smith", "Kniebeugen (Smith-Maschine)", "Beine", "Smith-Maschine", null, "smith squat"),
-  x("goblet-squats", "Goblet Squats", "Beine", "Kettlebell", null, ""),
-  x("beinpresse", "Beinpresse", "Beine", "Maschine", null, "leg press"),
-  x("hackenschmidt", "Hackenschmidt-Kniebeuge (Maschine)", "Beine", "Maschine", null, "hack squat"),
-  x("ausfallschritte", "Ausfallschritte (Kurzhanteln)", "Beine", "Kurzhantel", null, "lunges"),
-  x("walking-lunges", "Walking Lunges", "Beine", "Kurzhantel", null, "gehende ausfallschritte"),
-  x("bulgarian-split-squats", "Bulgarische Kniebeugen (Split Squats)", "Beine", "Kurzhantel", null, "bulgarian split squat"),
-  x("beinstrecker", "Beinstrecker (Maschine)", "Beine", "Maschine", null, "leg extension"),
-  x("beinbeuger-liegend", "Beinbeuger liegend (Maschine)", "Beine", "Maschine", null, "leg curl lying"),
-  x("beinbeuger-sitzend", "Beinbeuger sitzend (Maschine)", "Beine", "Maschine", null, "seated leg curl"),
-  x("rdl", "Rumänisches Kreuzheben (Langhantel)", "Beine", "Langhantel", null, "rdl romanian deadlift"),
-  x("rdl-kh", "Rumänisches Kreuzheben (Kurzhanteln)", "Beine", "Kurzhantel", null, "dumbbell rdl"),
-  x("sumo-kreuzheben", "Sumo-Kreuzheben", "Beine", "Langhantel", null, "sumo deadlift"),
-  x("step-ups", "Step-Ups (Kurzhanteln)", "Beine", "Kurzhantel", null, ""),
-  x("nordic-curls", "Nordic Hamstring Curls", "Beine", "Körpergewicht", "reps", ""),
-  x("adduktoren", "Adduktoren-Maschine", "Beine", "Maschine", null, "adductor innenschenkel"),
-  x("abduktoren", "Abduktoren-Maschine", "Beine", "Maschine", null, "abductor außenschenkel"),
-  x("pistol-squats", "Pistol Squats", "Beine", "Körpergewicht", "reps", "einbeinige kniebeuge"),
-  x("wandsitz", "Wandsitzen", "Beine", "Körpergewicht", "time", "wall sit"),
+  // ── Beine: Quadrizeps, Beinbeuger, Adduktoren, Abduktoren ───
+  x("kniebeugen", "Kniebeugen (Langhantel)", "Quadrizeps", "Langhantel", null, "squat squats"),
+  x("frontkniebeugen", "Frontkniebeugen (Langhantel)", "Quadrizeps", "Langhantel", null, "front squat"),
+  x("kniebeugen-smith", "Kniebeugen (Smith-Maschine)", "Quadrizeps", "Smith-Maschine", null, "smith squat"),
+  x("goblet-squats", "Goblet Squats", "Quadrizeps", "Kettlebell", null, ""),
+  x("beinpresse", "Beinpresse", "Quadrizeps", "Maschine", null, "leg press"),
+  x("hackenschmidt", "Hackenschmidt-Kniebeuge (Maschine)", "Quadrizeps", "Maschine", null, "hack squat"),
+  x("ausfallschritte", "Ausfallschritte (Kurzhanteln)", "Quadrizeps", "Kurzhantel", null, "lunges"),
+  x("walking-lunges", "Walking Lunges", "Quadrizeps", "Kurzhantel", null, "gehende ausfallschritte"),
+  x("bulgarian-split-squats", "Bulgarische Kniebeugen (Split Squats)", "Quadrizeps", "Kurzhantel", null, "bulgarian split squat"),
+  x("beinstrecker", "Beinstrecker (Maschine)", "Quadrizeps", "Maschine", null, "leg extension"),
+  x("beinbeuger-liegend", "Beinbeuger liegend (Maschine)", "Beinbeuger", "Maschine", null, "leg curl lying"),
+  x("beinbeuger-sitzend", "Beinbeuger sitzend (Maschine)", "Beinbeuger", "Maschine", null, "seated leg curl"),
+  x("rdl", "Rumänisches Kreuzheben (Langhantel)", "Beinbeuger", "Langhantel", null, "rdl romanian deadlift"),
+  x("rdl-kh", "Rumänisches Kreuzheben (Kurzhanteln)", "Beinbeuger", "Kurzhantel", null, "dumbbell rdl"),
+  x("sumo-kreuzheben", "Sumo-Kreuzheben", "Po", "Langhantel", null, "sumo deadlift"),
+  x("step-ups", "Step-Ups (Kurzhanteln)", "Quadrizeps", "Kurzhantel", null, ""),
+  x("nordic-curls", "Nordic Hamstring Curls", "Beinbeuger", "Körpergewicht", "reps", ""),
+  x("good-mornings", "Good Mornings (Langhantel)", "Beinbeuger", "Langhantel", null, "good morning"),
+  x("glute-ham-raise", "Glute-Ham Raise", "Beinbeuger", "Körpergewicht", "reps", "ghr"),
+  x("beinbeuger-stehend", "Beinbeuger stehend (Maschine)", "Beinbeuger", "Maschine", null, "standing leg curl"),
+  x("adduktoren", "Adduktoren-Maschine", "Adduktoren", "Maschine", null, "adductor innenschenkel"),
+  x("sumo-kniebeuge", "Sumo-Kniebeuge (Langhantel)", "Adduktoren", "Langhantel", null, "sumo squat breitbeinig"),
+  x("adduktion-kabel", "Adduktion am Kabelzug", "Adduktoren", "Kabelzug", null, "cable adduction innenschenkel"),
+  x("cossack-squats", "Cossack Squats", "Adduktoren", "Körpergewicht", "reps", "seitliche kniebeuge"),
+  x("seitliche-ausfallschritte", "Seitliche Ausfallschritte", "Adduktoren", "Kurzhantel", null, "lateral lunges"),
+  x("abduktoren", "Abduktoren-Maschine", "Abduktoren", "Maschine", null, "abductor außenschenkel"),
+  x("abduktion-kabel", "Abduktion am Kabelzug", "Abduktoren", "Kabelzug", null, "cable abduction außenschenkel"),
+  x("beinheben-seitlich", "Beinheben seitlich (liegend)", "Abduktoren", "Körpergewicht", "reps", "side leg raise"),
+  x("clamshells", "Clamshells (Muschel)", "Abduktoren", "Sonstiges", "reps", "muschel hüftöffner band"),
+  x("monster-walk", "Monster Walk (Miniband)", "Abduktoren", "Sonstiges", "time", "band walk seitwärts"),
+  x("pistol-squats", "Pistol Squats", "Quadrizeps", "Körpergewicht", "reps", "einbeinige kniebeuge"),
+  x("wandsitz", "Wandsitzen", "Quadrizeps", "Körpergewicht", "time", "wall sit"),
 
   // ── Po ─────────────────────────────────────────────────
   x("hip-thrusts", "Hip Thrusts (Langhantel)", "Po", "Langhantel", null, "hüftstoßen glutes"),
   x("hip-thrust-maschine", "Hip Thrust (Maschine)", "Po", "Maschine", null, "glutes"),
   x("glute-bridge", "Glute Bridge", "Po", "Körpergewicht", null, "beckenheben"),
   x("kickbacks-kabel", "Kickbacks am Kabelzug (Po)", "Po", "Kabelzug", null, "glute kickback"),
+  x("hip-thrust-einbeinig", "Hip Thrust (einbeinig)", "Po", "Körpergewicht", "reps", "single leg hip thrust"),
+  x("rdl-einbeinig", "Rumänisches Kreuzheben (einbeinig)", "Po", "Kurzhantel", null, "single leg rdl"),
+  x("rueckwaerts-ausfallschritte", "Ausfallschritte rückwärts", "Po", "Kurzhantel", null, "reverse lunges"),
 
   // ── Waden ──────────────────────────────────────────────
   x("wadenheben-stehend", "Wadenheben stehend", "Waden", "Maschine", null, "calf raise standing"),
   x("wadenheben-sitzend", "Wadenheben sitzend (Maschine)", "Waden", "Maschine", null, "seated calf raise"),
   x("wadenheben-beinpresse", "Wadenheben an der Beinpresse", "Waden", "Maschine", null, "calf press"),
+  x("wadenheben-kh", "Wadenheben (Kurzhanteln)", "Waden", "Kurzhantel", null, "dumbbell calf raise"),
+  x("eselwadenheben", "Eselwadenheben (Donkey Calf Raise)", "Waden", "Körpergewicht", "reps", "donkey calf raise"),
 
   // ── Bauch ──────────────────────────────────────────────
   x("crunches", "Crunches", "Bauch", "Körpergewicht", "reps", "bauchpressen"),
