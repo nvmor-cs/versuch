@@ -1,7 +1,7 @@
 {
-  "name": "eisenzeit",
-  "version": "1.0.0",
-  "description": "Eisenzeit – Trainingslog fürs Fitnessstudio (PWA + Android-App via Capacitor)",
+  "name": "lumora",
+  "version": "2.0.0",
+  "description": "lumora – Training, Fortschritt und Gesundheit (PWA + Android-App via Capacitor)",
   "private": true,
   "scripts": {
     "build": "node scripts/build-www.mjs",

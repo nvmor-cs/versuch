@@ -1,8 +1,8 @@
 {
   "appId": "io.github.nvmorcs.eisenzeit",
-  "appName": "Eisenzeit",
+  "appName": "lumora",
   "webDir": "www",
-  "backgroundColor": "#0b0c0d",
+  "backgroundColor": "#111827",
   "android": {
     "allowMixedContent": false
   }

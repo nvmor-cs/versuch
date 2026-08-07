@@ -42,7 +42,7 @@ jobs:
       - name: Debug-APK hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: eisenzeit-debug-apk
+          name: lumora-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Signier-Secrets prüfen
@@ -77,7 +77,7 @@ jobs:
         if: steps.cfg.outputs.sign == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: eisenzeit-release
+          name: lumora-release
           path: |
             android/app/build/outputs/bundle/release/app-release.aab
             android/app/build/outputs/apk/release/app-release.apk

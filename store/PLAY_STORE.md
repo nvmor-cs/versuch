@@ -1,4 +1,4 @@
-# Eisenzeit im Play Store veröffentlichen 🚀
+# lumora im Play Store veröffentlichen 🚀
 
 Alles ist vorbereitet: Das Android-Projekt (Capacitor) liegt unter `android/`, der Build läuft automatisch über GitHub Actions, und in diesem Ordner findest du alle Grafiken und Texte für den Store-Eintrag. Du musst nur noch die Schritte unten abarbeiten.
 
@@ -16,19 +16,19 @@ Alles ist vorbereitet: Das Android-Projekt (Capacitor) liegt unter `android/`, d
 Android-Apps müssen signiert sein. Führe auf deinem Rechner aus (Java muss installiert sein; der Befehl fragt ein Passwort und ein paar Angaben ab):
 
 ```bash
-keytool -genkeypair -v -keystore eisenzeit-upload.keystore \
-  -alias eisenzeit -keyalg RSA -keysize 2048 -validity 10000
+keytool -genkeypair -v -keystore lumora-upload.keystore \
+  -alias lumora -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-> ⚠️ **Bewahre die Datei `eisenzeit-upload.keystore` und das Passwort sicher auf** (z. B. Passwort-Manager). Committe sie NIEMALS ins Repository.
+> ⚠️ **Bewahre die Datei `lumora-upload.keystore` und das Passwort sicher auf** (z. B. Passwort-Manager). Committe sie NIEMALS ins Repository.
 
 Dann die Datei als Base64-Text kodieren:
 
 ```bash
 # Linux/macOS:
-base64 -w0 eisenzeit-upload.keystore
+base64 -w0 lumora-upload.keystore
 # Windows (PowerShell):
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("eisenzeit-upload.keystore"))
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("lumora-upload.keystore"))
 ```
 
 ## Schritt 3: GitHub-Secrets anlegen (einmalig)
@@ -39,29 +39,29 @@ Im Repository auf GitHub: **Settings → Secrets and variables → Actions → N
 |---|---|
 | `KEYSTORE_BASE64` | die Base64-Ausgabe aus Schritt 2 |
 | `KEYSTORE_PASSWORD` | das Keystore-Passwort |
-| `KEY_ALIAS` | `eisenzeit` |
+| `KEY_ALIAS` | `lumora` |
 | `KEY_PASSWORD` | das Key-Passwort (meist identisch mit dem Keystore-Passwort) |
 
 ## Schritt 4: App bauen lassen (pro Release, 1 Klick)
 
 1. Auf GitHub: **Actions → „Android Build" → „Run workflow"** (Branch auswählen).
 2. Nach ~5–10 Minuten liegen unter dem Lauf zwei Downloads („Artifacts"):
-   - **eisenzeit-release** → enthält `app-release.aab` (für den Play Store) und `app-release.apk`
-   - **eisenzeit-debug-apk** → `app-debug.apk`, die du sofort per Datei auf jedem Android-Handy installieren kannst („Unbekannte Quellen" erlauben) – perfekt zum Testen, ganz ohne Store
+   - **lumora-release** → enthält `app-release.aab` (für den Play Store) und `app-release.apk`
+   - **lumora-debug-apk** → `app-debug.apk`, die du sofort per Datei auf jedem Android-Handy installieren kannst („Unbekannte Quellen" erlauben) – perfekt zum Testen, ganz ohne Store
 
 ## Schritt 5: App in der Play Console anlegen
 
-**App erstellen:** Name `Eisenzeit – Trainingslog`, Standardsprache Deutsch, Typ **App**, **kostenlos**.
+**App erstellen:** Name `lumora – Training & Gesundheit`, Standardsprache Deutsch, Typ **App**, **kostenlos**.
 
 **Store-Eintrag** (Texte fertig zum Kopieren):
 
-- **App-Name (max. 30):** `Eisenzeit – Trainingslog`
+- **App-Name (max. 30):** `lumora – Training & Gesundheit`
 - **Kurzbeschreibung (max. 80):**
   `Workouts tracken: Pläne, Sätze, Gewichte, Rekorde. Offline & ohne Konto.`
 - **Vollständige Beschreibung:**
 
 ```
-Eisenzeit ist dein Trainingslogbuch fürs Fitnessstudio – schnörkellos, dunkel, aufs Wesentliche reduziert.
+lumora ist dein Trainingslogbuch – ruhig, dunkel, aufs Wesentliche reduziert.
 
 TRACKE DEINE WORKOUTS
 • Satz für Satz: Gewicht und Wiederholungen mit großen Plus/Minus-Tasten einstellen und abschließen
@@ -121,4 +121,4 @@ DEINE DATEN GEHÖREN DIR
 
 ## Sofort aufs eigene Handy (ohne Play Store)
 
-Du willst nicht auf Google warten? Lass den Workflow laufen (geht auch **ohne** Signier-Secrets), lade `eisenzeit-debug-apk` herunter, schick die Datei an dein Handy (z. B. per Downloads/USB) und tippe sie an. Android fragt einmal nach der Erlaubnis, Apps aus dieser Quelle zu installieren – bestätigen, fertig. Die App läuft dann als vollwertige, eigenständige Android-App.
+Du willst nicht auf Google warten? Lass den Workflow laufen (geht auch **ohne** Signier-Secrets), lade `lumora-debug-apk` herunter, schick die Datei an dein Handy (z. B. per Downloads/USB) und tippe sie an. Android fragt einmal nach der Erlaubnis, Apps aus dieser Quelle zu installieren – bestätigen, fertig. Die App läuft dann als vollwertige, eigenständige Android-App.

@@ -1,6 +1,8 @@
-# Eisenzeit – Trainingslog 🏋️
+# lumora – Training, Fortschritt, Gesundheit
 
 Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und MacroFactor Training. Komplett offline-fähig, ohne Konto, ohne Server: **Alle Daten bleiben lokal auf deinem Gerät.**
+
+Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalität, bewusst ohne Hantel-Motiv. Alle Grafiken (App-Icons, Launcher, Splash, Store-Assets) entstehen aus derselben Formdefinition per `python3 scripts/make-icons.py`.
 
 ## Features
 
@@ -17,13 +19,13 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 - **Datensicherung**: Backup als Datei teilen (Google Drive, Dateien, Mail) und jederzeit wiederherstellen – wahlweise **ersetzen** oder **zusammenführen**, sodass nichts verloren geht. Dazu sichert Android die App automatisch im Google-Konto (Auto Backup), und die App erinnert ans Sichern, wenn das letzte Backup zu lange her ist.
 - **Android-Zurücktaste** navigiert innerhalb der App: erst Dialoge, dann Vollbild-Ansichten, dann zurück zum Start-Tab – die App schließt sich erst beim zweiten Zurück
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
-- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz und Stahl-Kanten, dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Gold, Rot, Grün, Magenta oder Weiß
+- **Dunkles Design**: tiefes Nachtblau als Grund (`#111827`), Karten eine Stufe heller (`#1F2937`), dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Blau, Grün, Bernstein, Rot, Magenta oder Weiß. Erledigte Sätze sind grün, Rekorde bernsteinfarben, Löschen rot – Farbe hat immer eine Bedeutung
 
 ## Android-App & Play Store 🤖
 
 Die App ist als natives Android-Projekt (Capacitor) vorbereitet:
 
-- **`android/`** – das komplette Android-Studio-Projekt (App-ID `io.github.nvmorcs.eisenzeit`)
+- **`android/`** – das komplette Android-Studio-Projekt (App-ID `io.github.nvmorcs.eisenzeit` – bleibt bewusst unverändert, denn an ihr hängt die installierte App samt Daten)
 - **GitHub Actions → „Android Build"** – baut per Klick eine installierbare `app-debug.apk` und (mit Signier-Secrets) die signierte `app-release.aab` für den Play Store
 - **`store/`** – Schritt-für-Schritt-Anleitung ([PLAY_STORE.md](store/PLAY_STORE.md)), App-Icon 512×512, Funktionsgrafik 1024×500 und fertige Screenshots (1080×1920)
 - **`privacy.html`** – Datenschutzerklärung (über GitHub Pages als Pflicht-URL für den Store nutzbar)
@@ -46,7 +48,7 @@ Die App muss über **HTTPS** erreichbar sein. Der einfachste Weg: GitHub Pages.
 - **Android (Chrome):** URL öffnen → Menü (⋮) → **„App installieren"** bzw. „Zum Startbildschirm hinzufügen"
 - **iPhone (Safari):** URL öffnen → Teilen-Symbol → **„Zum Home-Bildschirm"**
 
-Danach startet Eisenzeit wie eine native App im Vollbild und funktioniert auch offline.
+Danach startet lumora wie eine native App im Vollbild und funktioniert auch offline.
 
 > **Wichtig:** Die Daten liegen lokal auf dem Gerät. Mach gelegentlich ein Backup über *Einstellungen → Backup erstellen* – besonders bevor du Browserdaten löschst.
 
@@ -63,12 +65,14 @@ python3 -m http.server 8000
 - Datenhaltung in `localStorage` (inkl. laufendem Workout, übersteht Reloads)
 - Service Worker cached die App-Shell für den Offline-Betrieb
 - Farbsystem über CSS-Custom-Properties; die Akzentfarbe hängt an einem `data-accent`-Attribut am Wurzelelement
+- Alle Grafiken werden aus `scripts/make-icons.py` generiert (Pillow), die Marke steckt zusätzlich als SVG-Pfad in `js/app.js`
 
 | Datei | Inhalt |
 |---|---|
 | `index.html` | App-Gerüst, PWA-Meta, Service-Worker-Registrierung |
 | `css/style.css` | Design-Tokens und alle Komponenten |
 | `js/exercises.js` | Übungsbibliothek und Beispielpläne |
-| `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup |
+| `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke |
+| `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
 | `sw.js` | Offline-Cache |
 | `manifest.webmanifest` | PWA-Manifest (Installierbarkeit) |

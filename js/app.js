@@ -1,19 +1,31 @@
-// Eisenzeit – Trainingslog
+// lumora – Training, Fortschritt, Gesundheit
 // Vanilla JS, keine Abhängigkeiten. Daten liegen in localStorage.
 
 "use strict";
 
-const APP_VERSION = "1.5.1";
+const APP_NAME = "lumora";
+const APP_VERSION = "2.0.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
+const ACCENT_DEFAULT = "blau";
 const ACCENTS = [
-  { id: "gold",  name: "Gold",  dot: "#f7b500", ink: "#0b0c0d" },
-  { id: "rot",   name: "Rot",   dot: "#ff1f1f", ink: "#ffffff" },
-  { id: "gruen", name: "Grün",  dot: "#00e35f", ink: "#06120a" },
-  { id: "magenta", name: "Magenta", dot: "#ff2bb4", ink: "#ffffff" },
-  { id: "weiss", name: "Weiß",  dot: "#ffffff", ink: "#0b0c0d" },
+  { id: "blau",       name: "Blau",      dot: "#3b82f6", ink: "#ffffff" },
+  { id: "gruen",      name: "Grün",      dot: "#22c55e", ink: "#06210f" },
+  { id: "bernstein",  name: "Bernstein", dot: "#f59e0b", ink: "#1a1200" },
+  { id: "rot",        name: "Rot",       dot: "#ef4444", ink: "#ffffff" },
+  { id: "magenta",    name: "Magenta",   dot: "#ec4899", ink: "#ffffff" },
+  { id: "weiss",      name: "Weiß",      dot: "#ffffff", ink: "#111827" },
 ];
+
+// Die Marke: eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalität.
+// Dieselbe Geometrie rendert scripts/make-icons.py zu den App-Icons.
+const LOGO_PETAL = "M50 10C78 23.6 70.56 38.4 50 44C37.44 38.4 42 23.6 50 10Z";
+const logoSvg = () =>
+  `<svg viewBox="0 0 100 100" class="logo" aria-hidden="true" fill="currentColor">` +
+  [0, 120, 240].map((a) =>
+    `<path d="${LOGO_PETAL}"${a ? ` transform="rotate(${a} 50 50)"` : ""}/>`).join("") +
+  `</svg>`;
 
 /* ═══════════════ Helpers ═══════════════ */
 
@@ -125,19 +137,41 @@ const icon = (n) =>
 
 /* ═══════════════ Datenhaltung ═══════════════ */
 
+// Die Schlüssel behalten den alten Namen: Sie sind der Anker zu den bereits
+// gespeicherten Plänen und Workouts. Umbenennen hieße Daten verlieren.
 const LS_DB = "eisenzeit.db.v1";
 const LS_ACTIVE = "eisenzeit.active.v1";
+
+// Version des Farbschemas. Steigt sie, werden alte Akzentfarben einmalig
+// auf den neuen Standard gesetzt (siehe migrateScheme).
+const SCHEME_VERSION = 2;
 
 function defaultDB() {
   return {
     version: 2,
-    settings: { restSecs: 90, autoRest: true, lastBackupAt: null, accent: "gold", restSignal: "beides" },
+    // schemeV fehlt hier bewusst: Beim Laden werden die Standardwerte mit den
+    // gespeicherten überlagert. Stünde schemeV schon drin, würde es einen
+    // Altbestand ohne diesen Schlüssel überdecken – die Migration liefe nie.
+    // migrateScheme() setzt ihn, auch für eine frische Datenbank.
+    settings: {
+      restSecs: 90, autoRest: true, lastBackupAt: null,
+      accent: ACCENT_DEFAULT, restSignal: "beides",
+    },
     customExercises: [],
     plans: [],
     workouts: [],
     activePlanId: null,
     seeded: false,
   };
+}
+
+// Das alte Schema kannte Akzentfarben wie „gold", die es nicht mehr gibt.
+// Ohne diesen Schritt bliebe ein Altbestand auf einer Farbe hängen, für die
+// es keinen Stylesheet-Block mehr gibt – die App sähe halb umgestellt aus.
+function migrateScheme(settings) {
+  if (!settings || settings.schemeV === SCHEME_VERSION) return;
+  settings.accent = ACCENT_DEFAULT;
+  settings.schemeV = SCHEME_VERSION;
 }
 
 function loadDB() {
@@ -161,6 +195,7 @@ function loadDB() {
       workouts: [{ id: uid(), name: p.name, exercises: p.exercises || [] }],
     });
   db.version = 2;
+  migrateScheme(db.settings);
   if (!db.seeded) {
     db.plans = SAMPLE_PLANS.map((p) => ({
       id: uid(), name: p.name, createdAt: Date.now(),
@@ -181,7 +216,7 @@ saveDB();
 // Akzentfarbe sofort setzen – noch bevor die Oberfläche aufgebaut wird,
 // damit nichts kurz in der Standardfarbe aufblitzt.
 function applyAccent() {
-  const id = DB.settings.accent || "gold";
+  const id = DB.settings.accent || ACCENT_DEFAULT;
   document.documentElement.setAttribute("data-accent", id);
 }
 applyAccent();
@@ -481,7 +516,7 @@ function renderHome() {
   $("#screen-home").innerHTML = `
     <div class="screen-head">
       <div>
-        <div class="wordmark">Eisen<b>zeit</b></div>
+        <div class="wordmark">${logoSvg()}lumora</div>
         <div class="screen-title">${esc(today)}</div>
       </div>
       <button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${icon("gear")}</button>
@@ -935,7 +970,7 @@ function openExerciseDetail(exId) {
     </div>
     ${rec ? `
       <div class="card" style="display:flex;gap:16px;align-items:center">
-        <span class="badge badge-gold" style="padding:8px">${icon("trophy")}</span>
+        <span class="badge badge-record" style="padding:8px">${icon("trophy")}</span>
         <div>
           <div style="font-weight:800;font-size:18px">${recLabel}</div>
           <div class="hint">Bester Satz${best1rm ? " · geschätztes 1RM: " + fmtKg(Math.round(best1rm * 2) / 2) + " kg" : ""}</div>
@@ -1396,7 +1431,7 @@ function showSummary(w, prs) {
     </div>
     ${prs.length ? `<div class="section-label">Neue Rekorde</div>` + prs.map((p) => `
       <div class="row" style="cursor:default">
-        <span class="badge badge-gold">${icon("trophy")} ${p.first ? "Erste Marke" : "Rekord"}</span>
+        <span class="badge badge-record">${icon("trophy")} ${p.first ? "Erste Marke" : "Rekord"}</span>
         <span class="row-main"><span class="row-title">${esc(p.name)}</span></span>
         <b style="font-variant-numeric:tabular-nums">${p.type === "weight_reps" ? fmtKg(p.val) + " kg" : p.type === "reps" ? p.val + " Wdh." : fmtClock(p.val)}</b>
       </div>`).join("") : ""}
@@ -1868,10 +1903,10 @@ ACTIONS["open-settings"] = () => {
       <div class="lbl">Akzentfarbe<small id="accent-name">${esc(accentName())}</small></div>
       <div class="accent-picker" role="radiogroup" aria-label="Akzentfarbe">
         ${ACCENTS.map((a) => `
-          <button class="accent-dot ${a.id === (s.accent || "gold") ? "active" : ""}"
+          <button class="accent-dot ${a.id === (s.accent || ACCENT_DEFAULT) ? "active" : ""}"
             data-action="set-accent" data-a="${a.id}"
             style="--dot:${a.dot};--dot-ink:${a.ink}"
-            role="radio" aria-checked="${a.id === (s.accent || "gold")}"
+            role="radio" aria-checked="${a.id === (s.accent || ACCENT_DEFAULT)}"
             aria-label="${a.name}">${icon("check")}</button>`).join("")}
       </div>
     </div>
@@ -1903,7 +1938,7 @@ ACTIONS["open-settings"] = () => {
       jederzeit zurückholen. Zusätzlich sichert Android die App automatisch in deinem Google-Konto.</p>
     <div class="divider"></div>
     <button class="btn btn-danger-soft" data-action="wipe-data">${icon("trash")} Alle Daten löschen</button>
-    <p class="hint" style="margin-top:16px;text-align:center">Eisenzeit ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
+    <p class="hint" style="margin-top:16px;text-align:center">${APP_NAME} ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
     <p class="hint" style="margin-top:6px;text-align:center;font-size:11.5px">
       Muskel-Symbole: <a href="https://game-icons.net" style="color:var(--ink-2)">Game-Icons.net</a> (CC BY 3.0)</p>
   `);
@@ -1918,8 +1953,8 @@ function lastBackupLabel() {
 }
 
 function accentName() {
-  const a = ACCENTS.find((x) => x.id === (DB.settings.accent || "gold"));
-  return a ? a.name : "Gold";
+  const a = ACCENTS.find((x) => x.id === (DB.settings.accent || ACCENT_DEFAULT));
+  return a ? a.name : "Blau";
 }
 
 ACTIONS["set-accent"] = (el) => {
@@ -1951,7 +1986,7 @@ ACTIONS["toggle-autorest"] = (el) => {
 const capPlugins = () => (window.Capacitor && window.Capacitor.Plugins) || {};
 
 const backupName = () =>
-  "eisenzeit-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  "lumora-backup-" + new Date().toISOString().slice(0, 10) + ".json";
 
 function markBackupDone() {
   DB.settings.lastBackupAt = Date.now();
@@ -1972,7 +2007,7 @@ ACTIONS["export-data"] = async () => {
         path: name, data: json, directory: "CACHE", encoding: "utf8",
       });
       await Share.share({
-        title: "Eisenzeit-Backup",
+        title: "lumora-Backup",
         url: uri,
         dialogTitle: "Backup speichern",
       });
@@ -2081,7 +2116,7 @@ async function restoreBackup(text) {
     data = JSON.parse(text);
     if (!Array.isArray(data.workouts) || !Array.isArray(data.plans)) throw new Error("Format");
   } catch (e) {
-    toast("Das ist kein gültiges Eisenzeit-Backup");
+    toast("Das ist kein gültiges lumora-Backup");
     return;
   }
 
@@ -2115,7 +2150,14 @@ async function restoreBackup(text) {
   } else {
     DB = Object.assign(defaultDB(), data, incoming, { seeded: true });
   }
-  if (data.settings) DB.settings = Object.assign(DB.settings, data.settings);
+  if (data.settings) {
+    // Ein Backup ohne schemeV stammt aus der Zeit vor dem neuen Farbschema.
+    // Der Schlüssel darf dann nicht aus den aktuellen Einstellungen überleben,
+    // sonst hält migrateScheme die alte Akzentfarbe für schon migriert.
+    if (data.settings.schemeV === undefined) delete DB.settings.schemeV;
+    DB.settings = Object.assign(DB.settings, data.settings);
+  }
+  migrateScheme(DB.settings);
 
   saveDB();
   applyAccent();

@@ -1,36 +1,42 @@
 /* ═══════════════════════════════════════════════════════════
-   Eisenzeit – Trainingslog
-   Industrial. Dunkel. Eine Akzentfarbe.
-   Asphalt-Schwarz, Stahl-Kanten, Caution-Gold – Gym-Keller,
-   nicht Boutique-Studio. Bewusst nur ein (dunkles) Theme.
+   lumora
+   Dunkel, ruhig, premium. Tiefes Nachtblau als Grund, eine
+   Akzentfarbe für alles Aktive, dazu drei semantische Farben
+   (Erfolg, Warnung, Fehler). Bewusst nur ein (dunkles) Theme.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
   color-scheme: dark;
-  /* Flächen: Asphalt & Stahl */
-  --bg: #0b0c0d;
-  --surface: #131416;
-  --surface-2: #1a1c1f;
-  --surface-3: #232629;
+  /* Flächen: Nachtblau, Karten eine Stufe heller */
+  --bg: #111827;
+  --surface: #1f2937;
+  --surface-2: #273244;
+  --surface-3: #374151;
   --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  /* Schrift: Kreide auf Gummiboden */
-  --ink: #ececea;
-  --ink-2: #9a9ea3;
-  --ink-3: #63676c;
-  /* DIE Akzentfarbe: Caution-Gold */
-  --accent: #f7b500;
-  --accent-ink: #0b0c0d;
-  --accent-soft: rgba(247, 181, 0, 0.13);
-  --accent-line: rgba(247, 181, 0, 0.3);
-  /* Funktional (nur destruktiv, kein zweiter Akzent) */
-  --danger: #e5484d;
-  --danger-soft: rgba(229, 72, 77, 0.12);
-  --danger-line: rgba(229, 72, 77, 0.25);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  /* Schrift */
+  --ink: #ffffff;
+  --ink-2: #9ca3af;
+  --ink-3: #6b7280;
+  /* DIE Akzentfarbe */
+  --accent: #3b82f6;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(59, 130, 246, 0.16);
+  --accent-line: rgba(59, 130, 246, 0.38);
+  /* Semantik: Erfolg, Warnung, Fehler */
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --success-line: rgba(34, 197, 94, 0.32);
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.14);
+  --warn-line: rgba(245, 158, 11, 0.32);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+  --danger-line: rgba(239, 68, 68, 0.32);
   /* Chart-Chrome */
-  --grid: #232527;
-  --axis: #303336;
-  --chart-muted: #82868b;
+  --grid: #273244;
+  --axis: #374151;
+  --chart-muted: #6b7280;
 
   /* Sicherheitsabstände zu Statusleiste, Navigationsleiste und Notch.
      env(): iOS und PWA. --android-inset-*: von der App nachgereicht, weil
@@ -39,47 +45,57 @@
   --safe-top: max(env(safe-area-inset-top, 0px), var(--android-inset-top, 0px), var(--min-safe-top, 0px));
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--android-inset-bottom, 0px));
 
-  --radius: 8px;
-  --radius-s: 6px;
+  --radius: 14px;
+  --radius-s: 10px;
+  --radius-xs: 8px;
   --tabbar-h: 62px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --hazard: repeating-linear-gradient(-45deg,
-      var(--accent) 0 7px, transparent 7px 14px);
+  /* Feine Akzentlinie über Timer und Kennzahlen */
+  --rule: linear-gradient(90deg, transparent, var(--accent) 20%,
+      var(--accent) 80%, transparent);
 }
 
 /* ── Akzentfarben (Einstellungen → Akzentfarbe) ──────────── */
-/* Gold ist der Standard oben in :root. Jede Variante liefert denselben
-   Satz Rollen: Fläche, Schrift darauf, zarte Füllung, feiner Rand. */
-
-:root[data-accent="rot"] {
-  --accent: #ff1f1f;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(255, 31, 31, 0.15);
-  --accent-line: rgba(255, 31, 31, 0.35);
-  /* Löschen bleibt unterscheidbar: gedeckteres, kühleres Rot */
-  --danger: #ff8f6b;
-  --danger-soft: rgba(255, 143, 107, 0.13);
-  --danger-line: rgba(255, 143, 107, 0.3);
-}
+/* Blau ist der Standard oben in :root. Jede Variante liefert denselben
+   Satz Rollen: Fläche, Schrift darauf, zarte Füllung, feiner Rand.
+   Alle Töne stammen aus derselben Palette wie die Semantikfarben. */
 
 :root[data-accent="gruen"] {
-  --accent: #00e35f;
-  --accent-ink: #06120a;
-  --accent-soft: rgba(0, 227, 95, 0.14);
-  --accent-line: rgba(0, 227, 95, 0.32);
+  --accent: #22c55e;
+  --accent-ink: #06210f;
+  --accent-soft: rgba(34, 197, 94, 0.16);
+  --accent-line: rgba(34, 197, 94, 0.38);
+}
+
+:root[data-accent="bernstein"] {
+  --accent: #f59e0b;
+  --accent-ink: #1a1200;
+  --accent-soft: rgba(245, 158, 11, 0.16);
+  --accent-line: rgba(245, 158, 11, 0.38);
+}
+
+:root[data-accent="rot"] {
+  --accent: #ef4444;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(239, 68, 68, 0.16);
+  --accent-line: rgba(239, 68, 68, 0.38);
+  /* Löschen bleibt unterscheidbar: wärmeres, helleres Rot */
+  --danger: #fb923c;
+  --danger-soft: rgba(251, 146, 60, 0.14);
+  --danger-line: rgba(251, 146, 60, 0.32);
 }
 
 :root[data-accent="magenta"] {
-  --accent: #ff2bb4;
+  --accent: #ec4899;
   --accent-ink: #ffffff;
-  --accent-soft: rgba(255, 43, 180, 0.15);
-  --accent-line: rgba(255, 43, 180, 0.34);
+  --accent-soft: rgba(236, 72, 153, 0.16);
+  --accent-line: rgba(236, 72, 153, 0.38);
 }
 
 :root[data-accent="weiss"] {
   --accent: #ffffff;
-  --accent-ink: #0b0c0d;
+  --accent-ink: #111827;
   --accent-soft: rgba(255, 255, 255, 0.12);
   --accent-line: rgba(255, 255, 255, 0.3);
 }
@@ -155,13 +171,21 @@ button { cursor: pointer; background: none; border: none; }
 }
 
 .wordmark {
-  font-size: 14px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
-  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  margin-bottom: 2px;
 }
-.wordmark b { color: var(--accent); }
+.wordmark .logo {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
 
 .section-label {
   display: flex;
@@ -320,7 +344,7 @@ button.row:active { background: var(--surface-2); }
 .muscle-dot svg { width: 26px; height: 26px; }
 .muscle-dot {
   width: 40px; height: 40px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--surface-3);
   border: 1px solid var(--border);
   color: var(--ink-2);
@@ -402,7 +426,7 @@ button.row:active { background: var(--surface-2); }
 .chip {
   flex-shrink: 0;
   padding: 7px 13px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--ink-2);
@@ -524,7 +548,7 @@ button.row:active { background: var(--surface-2); }
   max-width: 560px;
   max-height: 88dvh;
   background: var(--surface);
-  border-radius: 12px 12px 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
   border: 1px solid var(--border-strong);
   border-bottom: none;
   padding: 10px 16px calc(var(--safe-bottom) + 20px);
@@ -533,7 +557,7 @@ button.row:active { background: var(--surface-2); }
 }
 .sheet-grip {
   width: 42px; height: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--border-strong);
   margin: 2px auto 14px;
 }
@@ -602,15 +626,16 @@ button.row:active { background: var(--surface-2); }
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
-  border-radius: 4px;
+  background: var(--success-soft);
+  border: 1px solid var(--success-line);
+  border-radius: var(--radius-xs);
   color: var(--ink);
   text-align: left;
 }
+/* Erledigt ist grün – der Akzent bleibt dem reserviert, was als Nächstes dran ist */
 .done-set-main .done-check {
   display: inline-flex;
-  color: var(--accent);
+  color: var(--success);
   flex-shrink: 0;
 }
 .done-set-main .done-check svg { width: 17px; height: 17px; }
@@ -637,7 +662,7 @@ button.row:active { background: var(--surface-2); }
   padding: 7px 12px;
   margin-bottom: 6px;
   border: 1px dashed var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: var(--ink-3);
 }
 .queued-set .q-no {
@@ -700,7 +725,7 @@ button.row:active { background: var(--surface-2); }
 .stepper-btn {
   width: 58px;
   min-height: 54px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
   color: var(--ink);
@@ -719,7 +744,7 @@ button.row:active { background: var(--surface-2); }
   min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   text-align: center;
   font-size: 26px;
   font-weight: 900;
@@ -746,7 +771,7 @@ button.row:active { background: var(--surface-2); }
   width: 100%;
   margin-top: 10px;
   padding: 9px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--surface-2);
   border: 1px dashed var(--border-strong);
   color: var(--ink-2);
@@ -779,7 +804,7 @@ button.row:active { background: var(--surface-2); }
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 4px;
-  background: var(--hazard);
+  background: var(--rule);
   opacity: 0.9;
 }
 .rest-bar .time {
@@ -791,7 +816,7 @@ button.row:active { background: var(--surface-2); }
 .rest-bar .bar {
   flex: 1;
   height: 5px;
-  border-radius: 0;
+  border-radius: 999px;
   background: var(--surface);
   overflow: hidden;
 }
@@ -808,7 +833,7 @@ button.row:active { background: var(--surface-2); }
   letter-spacing: 0.04em;
   color: var(--accent);
   padding: 7px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--accent-soft);
   flex-shrink: 0;
 }
@@ -843,7 +868,7 @@ button.row:active { background: var(--surface-2); }
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border: 2px solid var(--accent-ink);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 5px 10px;
   flex-shrink: 0;
 }
@@ -860,7 +885,7 @@ button.row:active { background: var(--surface-2); }
   flex-shrink: 0;
   cursor: grab;
   touch-action: none;          /* sonst scrollt die Seite statt zu ziehen */
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 .drag-handle svg { width: 18px; height: 18px; }
 .drag-handle:active { cursor: grabbing; color: var(--accent); }
@@ -888,7 +913,7 @@ button.row:active { background: var(--surface-2); }
   width: 100%;
   margin: 2px 0 8px;
   padding: 6px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px dashed var(--border-strong);
   background: none;
   color: var(--ink-3);
@@ -1007,14 +1032,15 @@ button.row:active { background: var(--surface-2); }
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-size: 11.5px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .badge svg { width: 13px; height: 13px; }
-.badge-gold { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
+/* Rekorde: Gold – die einzige Stelle, an der Bernstein Auszeichnung meint */
+.badge-record { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-line); }
 .badge-accent { background: var(--accent-soft); color: var(--accent); }
 .badge-muted { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border); }
 
@@ -1044,7 +1070,7 @@ button.row:active { background: var(--surface-2); }
   color: var(--ink);
   border: 1px solid var(--border-strong);
   border-left: 3px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow);
   padding: 10px 18px;
   font-size: 14px;
@@ -1071,7 +1097,7 @@ button.row:active { background: var(--surface-2); }
   position: absolute;
   top: 0; left: 25%; right: 25%;
   height: 4px;
-  background: var(--hazard);
+  background: var(--rule);
   opacity: 0.9;
 }
 .summary-hero .big {
@@ -1104,7 +1130,7 @@ button.row:active { background: var(--surface-2); }
   text-align: center;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 8px 2px;
   font-size: 15px;
   font-weight: 700;
@@ -1114,7 +1140,7 @@ button.row:active { background: var(--surface-2); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--ink-2);
@@ -1156,7 +1182,7 @@ button.row:active { background: var(--surface-2); }
 .settings-row select {
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 8px 10px;
   font-size: 15px;
 }
@@ -1177,7 +1203,7 @@ button.row:active { background: var(--surface-2); }
   top: 2px; left: 2px;
   width: 24px; height: 24px;
   border-radius: 50%;
-  background: #d7d9db;
+  background: #e5e7eb;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s ease, background 0.15s ease;
 }
@@ -1187,7 +1213,7 @@ button.row:active { background: var(--surface-2); }
 /* Auswahl-Modus im Übungs-Picker */
 .pick-check {
   width: 24px; height: 24px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 2px solid var(--border-strong);
   flex-shrink: 0;
   display: flex;

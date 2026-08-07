@@ -1,5 +1,5 @@
-// Eisenzeit Service Worker – App-Shell offline verfügbar halten
-const CACHE = "eisenzeit-v12";
+// lumora Service Worker – App-Shell offline verfügbar halten
+const CACHE = "lumora-v13";
 const ASSETS = [
   "./",
   "index.html",
