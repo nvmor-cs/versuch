@@ -10,7 +10,7 @@ const out = join(root, "www");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-for (const entry of ["index.html", "manifest.webmanifest", "sw.js", "css", "js", "icons"]) {
+for (const entry of ["index.html", "manifest.webmanifest", "sw.js", "css", "js", "icons", "img"]) {
   cpSync(join(root, entry), join(out, entry), { recursive: true });
 }
 console.log("www/ gebaut");

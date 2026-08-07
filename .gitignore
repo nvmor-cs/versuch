@@ -8,3 +8,4 @@ www/
 # … mit einer Ausnahme: der Debug-Schlüssel. Er ist nicht geheim und muss
 # fest sein, damit sich Updates ohne Datenverlust installieren lassen.
 !android/keystore/debug.keystore
+__pycache__/

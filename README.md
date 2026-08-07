@@ -7,7 +7,7 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 ## Features
 
 - **Übungsbibliothek** mit 150 vordefinierten Übungen (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
-- **Muskel-Piktogramme**: Jede Übung zeigt den betroffenen Körperteil mit dem trainierten Muskel in der Akzentfarbe. Dahinter stecken vier Grundfiguren – Oberkörper von vorn und hinten, Beine von vorn und hinten – mit einzeln einfärbbaren Muskelfeldern
+- **Muskel-Piktogramme**: Jede Übung zeigt eine anatomische Strichzeichnung, auf der genau der trainierte Muskel in der **gewählten Akzentfarbe** leuchtet. Jede Gruppe zoomt dabei auf ihre Körperregion – bei Brust auf den Brustkorb, bei Waden auf die Unterschenkel. Die Flächen sind nicht gezeichnet, sondern aus der Vorlage ausgefüllt (`scripts/make-muscle-paths.py`), sitzen also exakt auf den Linien
 - **16 Muskelgruppen**: Die Beine sind aufgeteilt in Quadrizeps (vordere Oberschenkel), Beinbeuger (hintere Oberschenkel), Po, Adduktoren, Abduktoren und Waden – jede mit eigenen Übungen
 - **Wischen zum Blättern**: Durch die Muskelgruppen – im Übungen-Tab wie beim Zusammenstellen eines Trainings – und im Verlauf durch die Zeiträume. Die Leiste oben bleibt Anzeige und Sprungziel, der aktive Chip rückt beim Wischen automatisch in die Mitte
 - **Eigene Übungen** anlegen (Gewicht × Wdh., nur Wiederholungen oder Zeit)
@@ -70,13 +70,16 @@ python3 -m http.server 8000
 - Service Worker cached die App-Shell für den Offline-Betrieb
 - Farbsystem über CSS-Custom-Properties; die Akzentfarbe hängt an einem `data-accent`-Attribut am Wurzelelement
 - Alle Grafiken werden aus `scripts/make-icons.py` generiert (Pillow), die Marke steckt zusätzlich als SVG-Pfad in `js/app.js`
+- Die Muskel-Highlights entstehen per Flutfüllung aus den Körperzeichnungen (`scripts/make-muscle-paths.py`) – Herkunft der Zeichnungen siehe [NOTICE.md](NOTICE.md)
 
 | Datei | Inhalt |
 |---|---|
 | `index.html` | App-Gerüst, PWA-Meta, Service-Worker-Registrierung |
 | `css/style.css` | Design-Tokens und alle Komponenten |
 | `js/exercises.js` | Übungsbibliothek, Muskelgruppen und Beispielpläne |
-| `js/muscle-icons.js` | Die vier Körperfiguren und ihre Muskelfelder |
+| `js/muscle-icons.js` | Zuordnung Muskelgruppe → Figur und Bildausschnitt |
+| `js/muscle-paths.js` | Erzeugte Muskelflächen (nicht von Hand ändern) |
+| `scripts/make-muscle-paths.py` | Füllt die Muskeln aus `img/koerper-*.png` aus |
 | `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
 | `sw.js` | Offline-Cache |

@@ -341,14 +341,12 @@ button.row:active { background: var(--surface-2); }
 .row-side { text-align: right; }
 .row .chev { color: var(--ink-3); flex-shrink: 0; width: 18px; height: 18px; }
 
-/* Muskel-Piktogramm: Körperteil in einer runden Kachel, der trainierte
-   Muskel in der Akzentfarbe. Die Figur ist größer als der Rahmen und wird
-   von ihm angeschnitten – deshalb overflow: hidden. */
+/* Muskel-Piktogramm: Ausschnitt einer Körperzeichnung in einer runden
+   Kachel, der trainierte Muskel in der Akzentfarbe. Der Ausschnitt zoomt auf
+   die Körperregion – deshalb overflow: hidden. */
 .muscle-dot {
-  --m-haut: #c3cad4;                    /* Silhouette */
-  --m-feld: #98a2b0;                    /* ruhende Muskeln, gibt Zeichnung */
-  --m-aktiv: var(--accent);             /* der trainierte Muskel */
-  --m-linie: rgba(17, 24, 39, 0.6);     /* Trennlinien (Bauchraster) */
+  /* Die Fläche des trainierten Muskels folgt der gewählten Akzentfarbe */
+  --m-aktiv: var(--accent);
   width: 42px; height: 42px;
   border-radius: 50%;
   overflow: hidden;
