@@ -2,6 +2,7 @@ package io.github.nvmorcs.eisenzeit;
 
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.WebView;
 
 import androidx.core.graphics.Insets;
@@ -11,8 +12,9 @@ import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 
 /**
- * Reicht die System-Insets (Statusleiste, Navigationsleiste, Display-Notch) als
- * CSS-Custom-Properties an die WebView weiter.
+ * Zwei Dinge, die nur nativ gehen: Der Bildschirm bleibt an, solange die App
+ * im Vordergrund ist, und die System-Insets (Statusleiste, Navigationsleiste,
+ * Display-Notch) wandern als CSS-Custom-Properties in die WebView.
  *
  * Hintergrund: Seit Android 15 zeichnen Apps randlos, der Inhalt liegt also
  * unter Status- und Navigationsleiste. Das CSS-Pendant env(safe-area-inset-top)
@@ -26,6 +28,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Bildschirm bleibt an, solange die App im Vordergrund liegt – mitten
+        // im Satz will niemand erst entsperren. Das Flag hängt am Fenster:
+        // Sobald die App in den Hintergrund geht, wirkt es nicht mehr, der
+        // normale Sperr-Timeout des Handys greift also wieder von allein.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, windowInsets) -> {
             Insets insets = windowInsets.getInsets(

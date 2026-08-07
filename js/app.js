@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "lumora";
-const APP_VERSION = "2.0.0";
+const APP_VERSION = "2.1.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -1654,6 +1654,80 @@ function rangeStart(r) {
 
 ACTIONS["hist-range"] = (el) => { histRange = el.dataset.r; renderHistory(); };
 
+const histIndex = () => Math.max(0, HIST_RANGES.findIndex((r) => r.id === histRange));
+
+// Wechselt um eine Position weiter und lässt den neuen Inhalt von der
+// Seite hereinrutschen. Liefert false, wenn es in die Richtung nicht
+// weitergeht (vor „Woche" bzw. hinter „Gesamt").
+function histWechseln(richtung) {
+  const ziel = histIndex() + richtung;
+  if (ziel < 0 || ziel >= HIST_RANGES.length) return false;
+  histRange = HIST_RANGES[ziel].id;
+  renderHistory();
+  const pane = $("#hist-pane");
+  if (pane) {
+    pane.style.transition = "none";
+    pane.style.transform = `translateX(${richtung > 0 ? 40 : -40}px)`;
+    pane.style.opacity = "0";
+    void pane.offsetWidth;   // Umbruch erzwingen, sonst wird nur der Endzustand gezeichnet
+    pane.style.transition = "";
+    pane.style.transform = "";
+    pane.style.opacity = "";
+  }
+  return true;
+}
+
+/* Waagerecht wischen wechselt den Zeitraum. Der Inhalt folgt dabei dem
+   Finger und rastet beim Loslassen ein. Senkrechte Gesten bleiben
+   normales Scrollen – dafür sorgt touch-action: pan-y im Stylesheet,
+   die Achse entscheidet sich nach den ersten Pixeln. */
+function histWischenVerbinden() {
+  const screen = $("#screen-history");
+  if (!screen) return;
+  let zug = null;
+
+  const schieben = (dx, sanft) => {
+    const pane = $("#hist-pane");
+    if (!pane) return;
+    pane.style.transition = sanft ? "" : "none";
+    pane.style.transform = dx ? `translateX(${dx}px)` : "";
+  };
+
+  screen.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    zug = { id: e.pointerId, x: e.clientX, y: e.clientY, achse: null, dx: 0 };
+  });
+
+  screen.addEventListener("pointermove", (e) => {
+    if (!zug || e.pointerId !== zug.id) return;
+    const dx = e.clientX - zug.x, dy = e.clientY - zug.y;
+    if (!zug.achse) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // Nur deutlich waagerechte Gesten übernehmen
+      if (Math.abs(dx) <= Math.abs(dy) * 1.4) { zug = null; return; }
+      zug.achse = "x";
+      screen.setPointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    // An den Enden zäh werden – so merkt man, dass es nicht weitergeht
+    const kante = (dx < 0 && histIndex() === HIST_RANGES.length - 1) || (dx > 0 && histIndex() === 0);
+    zug.dx = kante ? dx * 0.25 : dx;
+    schieben(zug.dx, false);
+  });
+
+  const loslassen = () => {
+    if (!zug) return;
+    const { achse, dx } = zug;
+    zug = null;
+    if (achse !== "x") return;
+    const schwelle = Math.min(70, screen.clientWidth * 0.18);
+    if (Math.abs(dx) > schwelle && histWechseln(dx < 0 ? 1 : -1)) return;
+    schieben(0, true);   // zurückfedern
+  };
+  screen.addEventListener("pointerup", loslassen);
+  screen.addEventListener("pointercancel", loslassen);
+}
+
 function renderHistory() {
   const range = HIST_RANGES.find((r) => r.id === histRange);
   const start = rangeStart(histRange);
@@ -1666,6 +1740,7 @@ function renderHistory() {
     <div class="seg" role="tablist" aria-label="Zeitraum">
       ${HIST_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === histRange}" class="${r.id === histRange ? "active" : ""}" data-action="hist-range" data-r="${r.id}">${r.label}</button>`).join("")}
     </div>
+    <div class="swipe-pane" id="hist-pane">
     <div class="section-label">${range.title}</div>
     <div class="stat-tiles">
       <div class="stat-tile"><b>${ws.length}</b><span>Workouts</span></div>
@@ -1688,6 +1763,7 @@ function renderHistory() {
         <h3>Nichts im Zeitraum</h3>
         <p>${DB.workouts.length ? "In diesem Zeitraum wurde noch nicht trainiert." : "Starte dein erstes Workout über den Start-Tab."}</p>
       </div>`}
+    </div>
   `;
 }
 
@@ -2288,6 +2364,28 @@ function zurueckNavigieren() {
   });
 })();
 
+/* ═══════════════ Bildschirm wach halten ═══════════════
+   Solange die App offen im Vordergrund liegt, soll der Bildschirm nicht
+   zugehen – mitten im Satz will niemand erst entsperren. In der Android-App
+   erledigt das MainActivity über ein Fensterflag, hier greift zusätzlich
+   die Wake-Lock-API für Browser und PWA. Sobald die App in den Hintergrund
+   geht, gibt das System die Sperre von selbst wieder frei. */
+
+let wachSperre = null;
+
+async function bildschirmWachHalten() {
+  if (!("wakeLock" in navigator)) return;
+  if (document.visibilityState !== "visible" || wachSperre) return;
+  try {
+    wachSperre = await navigator.wakeLock.request("screen");
+    wachSperre.addEventListener("release", () => { wachSperre = null; });
+  } catch (e) {
+    // Kein Drama: Im Akkusparmodus lehnt das System die Anfrage ab
+  }
+}
+
+document.addEventListener("visibilitychange", bildschirmWachHalten);
+
 /* ═══════════════ Init ═══════════════ */
 
 // In der nativen App zeichnet Android randlos – der Inhalt läge sonst unter der
@@ -2313,3 +2411,5 @@ function render() {
 }
 
 render();
+histWischenVerbinden();
+bildschirmWachHalten();
