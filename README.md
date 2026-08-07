@@ -16,6 +16,7 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 - **Reihenfolge per Ziehen**: Übungen und Trainings am Griff greifen und frei verschieben (Finger wie Maus), mit Einfügemarke und Mitscrollen am Rand
 - **Workout-Tracking** Satz für Satz: Der aktuelle Satz ist eine Karte mit großen Plus/Minus-Steppern (Gewicht ±2,5 kg, Wiederholungen ±1), vorbelegt mit den Werten vom letzten Mal – abschließen, fertig. Abgeschlossene Sätze lassen sich antippen und zurückholen; dazu laufende Dauer und Live-Volumen
 - **Pausen-Timer** startet automatisch nach jedem abgehakten Satz (Dauer einstellbar). Am Ende gibt es Ton, Vibration oder beides – und eine Systemmeldung, sodass das Signal auch ankommt, wenn das Handy in der Tasche steckt
+- **Pause in der Benachrichtigungsleiste**: Während der Satzpause steht dort eine Meldung mit Übung, Satz und **mitlaufender Restzeit** – Android zählt sie selbst herunter, die App muss dafür nicht wach bleiben. Sie verschwindet automatisch, wenn die Pause um ist
 - **Rekord-Erkennung**: Neue Bestleistungen werden beim Beenden gefeiert
 - **Verlauf & Statistik** mit umschaltbarer Sicht: Woche, Quartal, Jahr und Gesamt – Kennzahlen, Volumen-Chart (Tage/Wochen/Monate/Jahre) und Workout-Liste passen sich an; dazu Entwicklungskurve pro Übung
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
@@ -82,5 +83,6 @@ python3 -m http.server 8000
 | `scripts/make-muscle-paths.py` | Füllt die Muskeln aus `img/koerper-*.png` aus |
 | `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
+| `android/…/PausenTimerPlugin.java` | Meldung mit mitlaufender Restzeit (eigenes Capacitor-Plugin) |
 | `sw.js` | Offline-Cache |
 | `manifest.webmanifest` | PWA-Manifest (Installierbarkeit) |

@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.5.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -1481,7 +1481,9 @@ ACTIONS["wo-complete-set"] = (el) => {
     toast("Weiter mit " + exName(active.exercises[weiter].exerciseId));
     return;
   }
-  if (DB.settings.autoRest && type !== "time") startRest(DB.settings.restSecs);
+  if (DB.settings.autoRest && type !== "time") {
+    startRest(DB.settings.restSecs, pausenInfo(ex, si));
+  }
 };
 
 // Nächste Übung derselben Supersatz-Gruppe, die noch offene Sätze hat.
@@ -1644,14 +1646,16 @@ setInterval(() => {
 let rest = null; // { endsAt, total, interval }
 let audioCtx = null;
 
-function startRest(secs) {
+// info: { titel, text } für die Meldung in der Benachrichtigungsleiste
+function startRest(secs, info) {
   stopRest();
   entsperreTon();
   const endet = Date.now() + secs * 1000;
   // Benachrichtigung planen: Der Timer im Bildschirm läuft nicht weiter,
   // wenn das Handy in der Tasche steckt – die Meldung kommt trotzdem.
   planeErinnerung(endet);
-  rest = { endsAt: endet, total: secs };
+  rest = { endsAt: endet, total: secs, info: info || null };
+  pausenMeldungZeigen();
   const bar = document.createElement("div");
   bar.id = "rest-bar";
   bar.className = "rest-bar";
@@ -1735,19 +1739,66 @@ function vibrieren() {
   try { navigator.vibrate && navigator.vibrate(muster); } catch (e) {}
 }
 
+/* ── Laufende Pause in der Benachrichtigungsleiste ──────── */
+
+// Die Restzeit zählt Android selbst herunter (siehe PausenTimerPlugin) –
+// die App muss dafür nichts nachschreiben und darf schlafen.
+function pausenMeldungZeigen() {
+  const { PausenTimer } = capPlugins();
+  if (!PausenTimer || !rest) return;
+  meldungErlauben().then((ok) => {
+    if (!ok || !rest) return;
+    const restMs = rest.endsAt - Date.now();
+    if (restMs <= 0) return;
+    PausenTimer.start({
+      restMs: Math.round(restMs),
+      titel: (rest.info && rest.info.titel) || "Satzpause",
+      text: (rest.info && rest.info.text) || "",
+    }).catch(() => {});
+  });
+}
+
+function pausenMeldungWeg() {
+  const { PausenTimer } = capPlugins();
+  if (PausenTimer) PausenTimer.stop().catch(() => {});
+}
+
+// Zeile unter dem Übungsnamen, im Stil der Satzkarte
+function pausenInfo(ex, si) {
+  const s = ex.sets[si];
+  const typ = exType(ex.exerciseId);
+  const wert = typ === "time" ? fmtClock(s.t || 0)
+    : typ === "reps" ? `${s.r} Wdh.`
+    : `${fmtKg(s.w || 0)} kg × ${s.r} Wdh.`;
+  return {
+    titel: exName(ex.exerciseId),
+    text: `Satz ${si + 1}/${ex.sets.length} · ${wert}`,
+  };
+}
+
 /* ── Erinnerung, wenn die App nicht im Vordergrund ist ──── */
 
 const REST_MELDUNG_ID = 4711;
+
+// Ohne erteilte Berechtigung bleibt die Leiste leer – einmal nachfragen
+async function meldungErlauben() {
+  const { LocalNotifications } = capPlugins();
+  if (!LocalNotifications) return false;
+  try {
+    const status = await LocalNotifications.checkPermissions();
+    if (status.display === "granted") return true;
+    const neu = await LocalNotifications.requestPermissions();
+    return neu.display === "granted";
+  } catch (e) {
+    return false;
+  }
+}
 
 async function planeErinnerung(endetUm) {
   const { LocalNotifications } = capPlugins();
   if (!LocalNotifications || DB.settings.restSignal === "aus") return;
   try {
-    const status = await LocalNotifications.checkPermissions();
-    if (status.display !== "granted") {
-      const neu = await LocalNotifications.requestPermissions();
-      if (neu.display !== "granted") return;
-    }
+    if (!(await meldungErlauben())) return;
     await LocalNotifications.cancel({ notifications: [{ id: REST_MELDUNG_ID }] });
     await LocalNotifications.schedule({
       notifications: [{
@@ -1771,6 +1822,8 @@ function stopRest(opt) {
   if (rest) clearInterval(rest.interval);
   rest = null;
   $("#rest-bar")?.remove();
+  // Die laufende Anzeige geht immer weg – sie zählt sonst ins Minus
+  pausenMeldungWeg();
   // Beim vorzeitigen Abbrechen auch die geplante Meldung zurücknehmen
   if (!opt || !opt.meldungBehalten) loescheErinnerung();
 }
@@ -1780,6 +1833,7 @@ ACTIONS["rest-plus"] = () => {
   rest.endsAt += 15000;
   rest.total += 15;
   planeErinnerung(rest.endsAt);
+  pausenMeldungZeigen();   // schreibt die Meldung mit neuem Ziel neu
   tickRest();
 };
 ACTIONS["rest-skip"] = () => stopRest();

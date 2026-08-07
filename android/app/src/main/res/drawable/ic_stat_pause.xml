@@ -1,0 +1,16 @@
+<!-- Symbol in der Statusleiste. Android färbt es einfarbig ein und wertet
+     nur die Deckkraft aus – deshalb eine reine Silhouette ohne Farben:
+     eine Stoppuhr mit Zeiger. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.5,1h5v2h-5z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18.9,6.7l1.4,-1.4l-1.4,-1.4l-1.5,1.5C15.9,4.2 14,3.5 12,3.5c-4.7,0 -8.5,3.8 -8.5,8.5s3.8,8.5 8.5,8.5s8.5,-3.8 8.5,-8.5C20.5,10 19.9,8.2 18.9,6.7zM13,13h-2V7h2V13z" />
+</vector>
