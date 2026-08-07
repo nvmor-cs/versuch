@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.2.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -662,7 +662,6 @@ function renderPlans() {
   $("#screen-plans").innerHTML = `
     <div class="screen-head">
       <div class="screen-title">Pläne</div>
-      <button class="icon-btn" data-action="new-plan" aria-label="Neuer Plan">${icon("plus")}</button>
     </div>
     ${DB.plans.length ? DB.plans.map((p) => {
       const nEx = p.workouts.reduce((a, w) => a + w.exercises.length, 0);
@@ -921,13 +920,24 @@ function chipsHtml(aktiv, action) {
     `<button class="chip ${m === aktiv ? "active" : ""}" data-action="${action}" data-m="${esc(m)}">${esc(m)}</button>`).join("");
 }
 
-// Den aktiven Chip mittig in die Leiste holen – sonst wischt man an
-// Muskelgruppen vorbei, die man gar nicht sieht.
-function chipInSicht(leiste) {
+// Nur die Markierung umsetzen, ohne die Leiste neu zu bauen. Wichtig: Ein
+// Neuaufbau setzt die Scroll-Position auf 0 zurück – man sähe dann alle
+// Muskelgruppen einmal durchrollen, bevor der Chip wieder da steht.
+function chipsMarkieren(leiste, aktiv) {
+  if (!leiste) return;
+  leiste.querySelectorAll(".chip").forEach((c) =>
+    c.classList.toggle("active", c.dataset.m === aktiv));
+}
+
+// Den aktiven Chip in Sicht holen – aber nur, wenn er wirklich außerhalb
+// liegt. Sonst ruckelt die Leiste bei jedem Tipp ohne Grund.
+function chipInSicht(leiste, sanft) {
   const chip = leiste && leiste.querySelector(".chip.active");
   if (!chip) return;
-  const ziel = chip.offsetLeft - (leiste.clientWidth - chip.offsetWidth) / 2;
-  leiste.scrollTo({ left: Math.max(0, ziel), behavior: "smooth" });
+  const c = chip.getBoundingClientRect(), l = leiste.getBoundingClientRect();
+  if (c.left >= l.left && c.right <= l.right) return;
+  const ziel = leiste.scrollLeft + (c.left - l.left) - (l.width - c.width) / 2;
+  leiste.scrollTo({ left: Math.max(0, ziel), behavior: sanft ? "smooth" : "auto" });
 }
 
 function renderExercises() {
@@ -974,19 +984,24 @@ function renderExerciseList() {
     : `<div class="empty">${icon("search")}<h3>Nichts gefunden</h3><p>Lege die Übung über das Plus oben rechts selbst an.</p></div>`;
 }
 
-ACTIONS["ex-filter"] = (el) => {
-  exFilter = el.dataset.m;
-  renderExercises();
-};
+ACTIONS["ex-filter"] = (el) => setExFilter(el.dataset.m);
+
+// Filter wechseln: Nur Markierung und Liste anfassen, nicht den ganzen
+// Screen – so bleibt die Chip-Leiste stehen, wo sie ist.
+function setExFilter(m, richtung) {
+  if (m === exFilter) return false;
+  exFilter = m;
+  chipsMarkieren($("#ex-chips"), m);
+  renderExerciseList();
+  chipInSicht($("#ex-chips"), true);
+  if (richtung) paneEinblenden($("#ex-list"), richtung);
+  return true;
+}
 
 // Wischen blättert eine Muskelgruppe weiter
 function exFilterBlaettern(richtung) {
   const ziel = filterNachbar(exFilter, richtung);
-  if (!ziel) return false;
-  exFilter = ziel;
-  renderExercises();
-  paneEinblenden($("#ex-list"), richtung);
-  return true;
+  return ziel ? setExFilter(ziel, richtung) : false;
 }
 
 function exWischenVerbinden() {
@@ -1178,17 +1193,22 @@ function updatePickerDone() {
   btn.textContent = n === 0 ? "Übungen hinzufügen" : n === 1 ? "1 Übung hinzufügen" : `${n} Übungen hinzufügen`;
 }
 
-ACTIONS["picker-filter"] = (el) => { pickerState.filter = el.dataset.m; renderPickerChips(); renderPickerList(); };
+ACTIONS["picker-filter"] = (el) => setPickerFilter(el.dataset.m);
+
+function setPickerFilter(m, richtung) {
+  if (!pickerState || m === pickerState.filter) return false;
+  pickerState.filter = m;
+  chipsMarkieren($("#picker-chips"), m);
+  renderPickerList();
+  chipInSicht($("#picker-chips"), true);
+  if (richtung) paneEinblenden($("#picker-list"), richtung);
+  return true;
+}
 
 function pickerFilterBlaettern(richtung) {
   if (!pickerState) return false;
   const ziel = filterNachbar(pickerState.filter, richtung);
-  if (!ziel) return false;
-  pickerState.filter = ziel;
-  renderPickerChips();
-  renderPickerList();
-  paneEinblenden($("#picker-list"), richtung);
-  return true;
+  return ziel ? setPickerFilter(ziel, richtung) : false;
 }
 ACTIONS["picker-toggle"] = (el) => {
   const id = el.dataset.id;
