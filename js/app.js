@@ -789,7 +789,7 @@ function openExercisePicker(onDone) {
     </div>
     <div class="chips" id="picker-chips"></div>
     <div id="picker-list"></div>
-    <div style="position:fixed;left:0;right:0;bottom:0;z-index:65;padding:12px 16px calc(env(safe-area-inset-bottom,0px) + 14px);background:linear-gradient(transparent, var(--bg) 40%)">
+    <div style="position:fixed;left:0;right:0;bottom:0;z-index:65;padding:12px 16px calc(var(--safe-bottom) + 14px);background:linear-gradient(transparent, var(--bg) 40%)">
       <div style="max-width:560px;margin:0 auto">
         <button class="btn" data-action="picker-done" id="picker-done" disabled>Übungen hinzufügen</button>
       </div>
@@ -1650,6 +1650,19 @@ document.addEventListener("change", (e) => {
 });
 
 /* ═══════════════ Init ═══════════════ */
+
+// In der nativen App zeichnet Android randlos – der Inhalt läge sonst unter der
+// Statusleiste. MainActivity reicht die echten Insets nach; falls das nicht
+// greift, sichert dieser Mindestabstand den Kopfbereich ab.
+function safeAreaFallback() {
+  if (!window.Capacitor) return;
+  const root = document.documentElement;
+  if (!root.style.getPropertyValue("--android-inset-top")) {
+    root.style.setProperty("--min-safe-top", "28px");
+  }
+}
+safeAreaFallback();
+setTimeout(safeAreaFallback, 800);
 
 function render() {
   renderTabbar();

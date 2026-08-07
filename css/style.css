@@ -30,6 +30,13 @@
   --axis: #303336;
   --chart-muted: #82868b;
 
+  /* Sicherheitsabstände zu Statusleiste, Navigationsleiste und Notch.
+     env(): iOS und PWA. --android-inset-*: von der App nachgereicht, weil
+     Android env(safe-area-inset-top) nur Display-Cutouts meldet, nicht die
+     Statusleiste. --min-safe-top greift, falls beides ausfällt (App-Modus). */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--android-inset-top, 0px), var(--min-safe-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--android-inset-bottom, 0px));
+
   --radius: 8px;
   --radius-s: 6px;
   --tabbar-h: 62px;
@@ -83,7 +90,7 @@ button { cursor: pointer; background: none; border: none; }
 
 .screen {
   display: none;
-  padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 88px);
+  padding: calc(var(--safe-top) + 16px) 16px calc(var(--tabbar-h) + var(--safe-bottom) + 88px);
   animation: fadein 0.16s ease;
 }
 .screen.active { display: block; }
@@ -148,7 +155,7 @@ button { cursor: pointer; background: none; border: none; }
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--border);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--safe-bottom);
 }
 
 .tabbar-inner {
@@ -431,7 +438,9 @@ button.row:active { background: var(--surface-2); }
 .overlay-inner {
   max-width: 560px;
   margin: 0 auto;
-  padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 110px);
+  /* Der Abstand nach oben sitzt im sticky Kopf, damit dessen Hintergrund die
+     Statusleiste auch beim Scrollen abdeckt. */
+  padding: 0 16px calc(var(--safe-bottom) + 110px);
   min-height: 100%;
 }
 @keyframes slideup {
@@ -443,7 +452,7 @@ button.row:active { background: var(--surface-2); }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 0 14px;
+  padding: calc(var(--safe-top) + 10px) 0 14px;
   position: sticky;
   top: 0;
   background: var(--bg);
@@ -479,7 +488,7 @@ button.row:active { background: var(--surface-2); }
   border-radius: 12px 12px 0 0;
   border: 1px solid var(--border-strong);
   border-bottom: none;
-  padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  padding: 10px 16px calc(var(--safe-bottom) + 20px);
   overflow-y: auto;
   animation: slideup 0.2s ease;
 }
@@ -713,7 +722,7 @@ button.row:active { background: var(--surface-2); }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  bottom: calc(var(--safe-bottom) + 84px);
   z-index: 65;
   width: min(92%, 520px);
   background: var(--surface-3);
@@ -770,7 +779,7 @@ button.row:active { background: var(--surface-2); }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 10px);
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 10px);
   z-index: 45;
   width: min(92%, 520px);
   background: var(--accent);
@@ -904,7 +913,7 @@ button.row:active { background: var(--surface-2); }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 16px);
   z-index: 90;
   background: var(--surface-3);
   color: var(--ink);
