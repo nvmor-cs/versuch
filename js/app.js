@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -97,6 +97,9 @@ const I = {
   trophy: '<path d="M8 21h8M12 17v4M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3"/>',
   download: '<path d="M12 4v10M7 10l5 5 5-5M5 20h14"/>',
   upload: '<path d="M12 14V4M7 8l5-5 5 5M5 20h14"/>',
+  grip: '<path d="M5 9h14M5 15h14"/>',
+  link: '<path d="M10 14 14 10"/><path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/>',
+  unlink: '<path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/><path d="M4 4l16 16"/>',
 };
 const icon = (n) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
@@ -251,6 +254,132 @@ function toast(msg) {
   document.body.appendChild(el);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.remove(), 2200);
+}
+
+/* ═══════════════ Ziehen zum Umsortieren ═══════════════
+   Macht Listeneinträge per Griff verschiebbar – mit Finger wie mit Maus.
+   Das gezogene Element folgt dem Zeiger, ein Strich zeigt die Zielposition.
+   Umsortiert wird erst beim Loslassen. */
+
+function makeSortable(container, itemSel, handleSel, onDrop) {
+  let drag = null;
+  const items = () => Array.from(container.querySelectorAll(itemSel));
+
+  const clearMarks = () =>
+    items().forEach((n) => n.classList.remove("drop-before", "drop-after"));
+
+  container.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest(handleSel);
+    if (!handle || !container.contains(handle)) return;
+    const el = handle.closest(itemSel);
+    if (!el) return;
+    e.preventDefault();
+
+    // Nächstes scrollendes Elternelement finden (Overlay oder Seite)
+    let sc = el.parentElement;
+    while (sc && sc !== document.body) {
+      const ov = getComputedStyle(sc).overflowY;
+      if (ov === "auto" || ov === "scroll") break;
+      sc = sc.parentElement;
+    }
+    const scroller = sc && sc !== document.body ? sc : document.scrollingElement;
+
+    drag = {
+      el, handle, scroller,
+      from: items().indexOf(el),
+      to: items().indexOf(el),
+      startY: e.clientY,
+      startScroll: scroller.scrollTop,
+    };
+    el.classList.add("dragging");
+    handle.setPointerCapture(e.pointerId);
+  });
+
+  container.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    e.preventDefault();
+
+    // Am Rand mitscrollen, damit auch längere Listen erreichbar bleiben
+    const r = drag.scroller.getBoundingClientRect
+      ? drag.scroller.getBoundingClientRect()
+      : { top: 0, bottom: window.innerHeight };
+    const rand = 90;
+    if (e.clientY < r.top + rand) drag.scroller.scrollTop -= 14;
+    else if (e.clientY > r.bottom - rand) drag.scroller.scrollTop += 14;
+
+    const versatz = drag.scroller.scrollTop - drag.startScroll;
+    drag.el.style.transform = `translateY(${e.clientY - drag.startY + versatz}px)`;
+
+    // Zielposition: wie viele der übrigen Einträge liegen oberhalb des Zeigers
+    const andere = items().filter((n) => n !== drag.el);
+    drag.to = andere.filter((n) => {
+      const b = n.getBoundingClientRect();
+      return b.top + b.height / 2 < e.clientY;
+    }).length;
+
+    clearMarks();
+    if (andere.length) {
+      if (drag.to < andere.length) andere[drag.to].classList.add("drop-before");
+      else andere[andere.length - 1].classList.add("drop-after");
+    }
+  });
+
+  const ende = () => {
+    if (!drag) return;
+    const { el, from, to } = drag;
+    el.classList.remove("dragging");
+    el.style.transform = "";
+    clearMarks();
+    drag = null;
+    if (from !== to) onDrop(from, to);
+  };
+  container.addEventListener("pointerup", ende);
+  container.addEventListener("pointercancel", ende);
+}
+
+/* ═══════════════ Supersätze ═══════════════
+   Zusammengehörige Übungen tragen dieselbe superset-Kennung. Eine Gruppe
+   sind nur direkt aufeinanderfolgende Übungen – nach dem Umsortieren
+   räumt normalizeSupersets zerrissene Gruppen auf. */
+
+function normalizeSupersets(list) {
+  let i = 0;
+  while (i < list.length) {
+    const id = list[i].superset;
+    if (!id) { i++; continue; }
+    let j = i;
+    while (j + 1 < list.length && list[j + 1].superset === id) j++;
+    if (j === i) delete list[i].superset;  // allein übrig – keine Gruppe mehr
+    i = j + 1;
+  }
+}
+
+// Liefert pro Eintrag { letter, pos, size } oder null
+function supersetInfo(list) {
+  const info = list.map(() => null);
+  let buchstabe = -1, letzteId = null, pos = 0;
+  list.forEach((e, i) => {
+    if (!e.superset) { letzteId = null; return; }
+    if (e.superset !== letzteId) { buchstabe++; pos = 0; letzteId = e.superset; }
+    info[i] = { letter: String.fromCharCode(65 + buchstabe), pos: ++pos, id: e.superset };
+  });
+  const groesse = {};
+  list.forEach((e) => { if (e.superset) groesse[e.superset] = (groesse[e.superset] || 0) + 1; });
+  info.forEach((x) => { if (x) x.size = groesse[x.id]; });
+  return info;
+}
+
+// Verbindet Eintrag i mit dem folgenden – oder trennt die Verbindung
+function toggleSuperset(list, i) {
+  const cur = list[i], next = list[i + 1];
+  if (!next) return;
+  if (cur.superset && cur.superset === next.superset) {
+    delete next.superset;                     // Verbindung nach unten lösen
+  } else {
+    cur.superset = cur.superset || next.superset || "ss" + uid();
+    next.superset = cur.superset;
+  }
+  normalizeSupersets(list);
 }
 
 /* ═══════════════ In-App-Bestätigung ═══════════════
@@ -501,28 +630,30 @@ function renderPlanEditor(ov) {
       <input id="plan-name" data-input="plan-name" value="${esc(draftPlan.name)}" placeholder="z. B. Push / Pull / Beine" autocomplete="off">
     </div>
     <div class="section-label">Trainings in diesem Plan</div>
+    <div id="plan-wo-liste">
     ${draftPlan.workouts.length ? draftPlan.workouts.map((w, i) => `
-      <div class="row" style="cursor:default">
+      <div class="row" style="cursor:default" data-i="${i}">
+        <button class="drag-handle" aria-label="Training verschieben">${icon("grip")}</button>
         <div class="row-main" data-action="edit-plan-wo" data-i="${i}" style="cursor:pointer">
           <div class="row-title">${esc(w.name || "Training " + (i + 1))}</div>
           <div class="row-sub">${w.exercises.length} Übungen · ${w.exercises.reduce((a, e) => a + (e.sets || 0), 0)} Sätze</div>
         </div>
-        <button class="mini-btn" data-action="plan-wo-up" data-i="${i}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>${icon("up")}</button>
         <button class="mini-btn" data-action="edit-plan-wo" data-i="${i}" aria-label="Bearbeiten">${icon("edit")}</button>
         <button class="mini-btn danger" data-action="plan-wo-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
       </div>`).join("") : `<p class="hint" style="padding:4px 0 12px">Noch keine Trainings – füge z. B. „Push", „Pull" und „Beine" hinzu.</p>`}
+    </div>
     <button class="btn btn-soft" data-action="plan-add-wo">${icon("plus")} Training hinzufügen</button>
     ${isNew ? "" : `<button class="btn btn-danger-soft" data-action="delete-plan" style="margin-top:10px">${icon("trash")} Plan löschen</button>`}
   `;
-}
-
-ACTIONS["plan-wo-up"] = (el) => {
-  const i = +el.dataset.i;
-  if (i > 0) {
-    [draftPlan.workouts[i - 1], draftPlan.workouts[i]] = [draftPlan.workouts[i], draftPlan.workouts[i - 1]];
-    renderPlanEditor();
+  const liste = $("#plan-wo-liste", ov);
+  if (liste) {
+    makeSortable(liste, ".row", ".drag-handle", (von, nach) => {
+      const ws = draftPlan.workouts;
+      ws.splice(nach, 0, ws.splice(von, 1)[0]);
+      renderPlanEditor();
+    });
   }
-};
+}
 ACTIONS["plan-wo-del"] = async (el) => {
   const i = +el.dataset.i;
   const w = draftPlan.workouts[i];
@@ -570,6 +701,9 @@ function renderPlanWoEditor(ov) {
   ov = ov || $(".plan-wo-ov");
   if (!ov) return;
   const w = draftPlan.workouts[draftWoIdx];
+  const ssInfo = supersetInfo(w.exercises);
+  const verbunden = (i) =>
+    !!w.exercises[i].superset && w.exercises[i].superset === (w.exercises[i + 1] || {}).superset;
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
       <button class="icon-btn plain" data-action="plan-wo-done" aria-label="Zurück">${icon("chevL")}</button>
@@ -583,28 +717,40 @@ function renderPlanWoEditor(ov) {
     <div class="section-label">Übungen &amp; Sätze</div>
     <div class="card" style="padding:6px 14px">
       ${w.exercises.length ? w.exercises.map((pe, i) => `
-        <div class="plan-ex-row">
-          <div class="nm">${esc(exName(pe.exerciseId))}<small>${esc(exById(pe.exerciseId)?.muscle || "")}</small></div>
+        <div class="plan-ex-row" data-i="${i}">
+          <button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>
+          <div class="nm">${ssInfo[i] ? `<span class="ss-tag">${ssInfo[i].letter}${ssInfo[i].pos}</span>` : ""}${esc(exName(pe.exerciseId))}<small>${esc(exById(pe.exerciseId)?.muscle || "")}</small></div>
           <input type="text" inputmode="numeric" value="${pe.sets}" data-input="plan-sets" data-i="${i}" aria-label="Sätze">
           <span class="hint">Sätze</span>
-          <button class="mini-btn" data-action="plan-ex-up" data-i="${i}" aria-label="Nach oben" ${i === 0 ? "disabled" : ""}>${icon("up")}</button>
           <button class="mini-btn danger" data-action="plan-ex-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
-        </div>`).join("") : `<p class="hint" style="padding:12px 0">Noch keine Übungen in diesem Training.</p>`}
+        </div>
+        ${i < w.exercises.length - 1 ? `
+        <button class="ss-link ${verbunden(i) ? "on" : ""}" data-action="plan-ex-superset" data-i="${i}">
+          ${icon(verbunden(i) ? "unlink" : "link")}
+          ${verbunden(i) ? "Supersatz – trennen" : "Zum Supersatz verbinden"}
+        </button>` : ""}`).join("") : `<p class="hint" style="padding:12px 0">Noch keine Übungen in diesem Training.</p>`}
     </div>
     <button class="btn btn-soft" data-action="plan-add-ex">${icon("plus")} Übungen hinzufügen</button>
   `;
+  const liste = $(".card", ov);
+  if (liste) {
+    makeSortable(liste, ".plan-ex-row", ".drag-handle", (von, nach) => {
+      const ex = draftPlan.workouts[draftWoIdx].exercises;
+      ex.splice(nach, 0, ex.splice(von, 1)[0]);
+      normalizeSupersets(ex);
+      renderPlanWoEditor();
+    });
+  }
 }
 
-ACTIONS["plan-ex-up"] = (el) => {
-  const i = +el.dataset.i;
-  const list = draftPlan.workouts[draftWoIdx].exercises;
-  if (i > 0) {
-    [list[i - 1], list[i]] = [list[i], list[i - 1]];
-    renderPlanWoEditor();
-  }
+ACTIONS["plan-ex-superset"] = (el) => {
+  toggleSuperset(draftPlan.workouts[draftWoIdx].exercises, +el.dataset.i);
+  renderPlanWoEditor();
 };
 ACTIONS["plan-ex-del"] = (el) => {
-  draftPlan.workouts[draftWoIdx].exercises.splice(+el.dataset.i, 1);
+  const ex = draftPlan.workouts[draftWoIdx].exercises;
+  ex.splice(+el.dataset.i, 1);
+  normalizeSupersets(ex);
   renderPlanWoEditor();
 };
 ACTIONS["plan-add-ex"] = () => {
@@ -892,6 +1038,7 @@ ACTIONS["start-plan"] = (el) => {
     id: uid(), name: wo.name, startedAt: Date.now(),
     exercises: wo.exercises.map((pe) => ({
       exerciseId: pe.exerciseId,
+      superset: pe.superset,
       sets: Array.from({ length: Math.max(1, pe.sets || 1) }, newSet),
     })),
   };
@@ -948,8 +1095,12 @@ function woExerciseBlock(ex, xi) {
   const type = exType(ex.exerciseId);
   const prev = prevSetsFor(ex.exerciseId);
   const curIdx = ex.sets.findIndex((s) => !s.done);
+  const ss = supersetInfo(active.exercises)[xi];
+  const nächste = active.exercises[xi + 1];
+  const verbunden = !!ex.superset && ex.superset === (nächste || {}).superset;
   return `
-    <div class="exercise-block" data-xi="${xi}">
+    <div class="exercise-block ${ss ? "in-superset" : ""}" data-xi="${xi}">
+      ${ss ? `<div class="ss-head">${icon("link")} Supersatz ${ss.letter} · Übung ${ss.pos} von ${ss.size}</div>` : ""}
       <div class="exercise-block-head">
         <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
         <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
@@ -960,8 +1111,19 @@ function woExerciseBlock(ex, xi) {
         : queuedSetRow(si, xi)).join("")}
       ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
       <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>
-    </div>`;
+    </div>
+    ${nächste ? `
+    <button class="ss-link ${verbunden ? "on" : ""}" data-action="wo-superset" data-xi="${xi}">
+      ${icon(verbunden ? "unlink" : "link")}
+      ${verbunden ? "Supersatz – trennen" : "Mit nächster Übung verbinden"}
+    </button>` : ""}`;
 }
+
+ACTIONS["wo-superset"] = (el) => {
+  toggleSuperset(active.exercises, +el.dataset.xi);
+  saveActive();
+  renderWoExercises();
+};
 
 // Abgeschlossener Satz: kompakte Zeile, antippen holt ihn zurück
 function doneSetRow(type, s, si, xi) {
@@ -1057,6 +1219,7 @@ ACTIONS["wo-del-ex"] = async (el) => {
   const ex = active.exercises[xi];
   if (ex.sets.some((s) => s.done) && !(await appConfirm(`„${exName(ex.exerciseId)}" mit abgehakten Sätzen entfernen?`, { ok: "Entfernen", danger: true }))) return;
   active.exercises.splice(xi, 1);
+  normalizeSupersets(active.exercises);
   saveActive();
   renderWoExercises();
   updateWoMeta();
@@ -1102,8 +1265,33 @@ ACTIONS["wo-complete-set"] = (el) => {
   saveActive();
   renderWoExercises();
   updateWoMeta();
+
+  // Im Supersatz geht es ohne Pause direkt zur nächsten Übung der Runde.
+  // Erst wenn die Runde durch ist, läuft der Pausen-Timer.
+  const weiter = naechsteImSupersatz(xi);
+  if (weiter >= 0) {
+    const block = $(`.exercise-block[data-xi="${weiter}"]`);
+    if (block) block.scrollIntoView({ behavior: "smooth", block: "center" });
+    toast("Weiter mit " + exName(active.exercises[weiter].exerciseId));
+    return;
+  }
   if (DB.settings.autoRest && type !== "time") startRest(DB.settings.restSecs);
 };
+
+// Nächste Übung derselben Supersatz-Gruppe, die noch offene Sätze hat.
+// -1, wenn die Runde komplett ist oder es kein Supersatz ist.
+function naechsteImSupersatz(xi) {
+  const gruppe = active.exercises[xi].superset;
+  if (!gruppe) return -1;
+  const idx = active.exercises
+    .map((e, i) => (e.superset === gruppe ? i : -1))
+    .filter((i) => i >= 0);
+  const pos = idx.indexOf(xi);
+  for (let k = pos + 1; k < idx.length; k++) {
+    if (active.exercises[idx[k]].sets.some((x) => !x.done)) return idx[k];
+  }
+  return -1;
+}
 
 ACTIONS["wo-undo-set"] = (el) => {
   const s = active.exercises[+el.dataset.xi].sets[+el.dataset.si];
@@ -1144,7 +1332,8 @@ ACTIONS["finish-workout"] = async () => {
       w: s.w ?? 0, r: s.r ?? 0, t: s.t ?? 0,
     }));
     undone += ex.sets.length - done.length;
-    if (done.length) finished.exercises.push({ exerciseId: ex.exerciseId, sets: done });
+    if (done.length) finished.exercises.push(
+      { exerciseId: ex.exerciseId, superset: ex.superset, sets: done });
   }
   if (!finished.exercises.length) {
     if (await appConfirm("Keine abgehakten Sätze. Workout verwerfen?", { ok: "Verwerfen", danger: true })) {
@@ -1412,6 +1601,7 @@ ACTIONS["repeat-workout"] = (el) => {
     id: uid(), name: w.name, startedAt: Date.now(),
     exercises: w.exercises.map((ex) => ({
       exerciseId: ex.exerciseId,
+      superset: ex.superset,
       sets: ex.sets.map(() => newSet()),
     })),
   };

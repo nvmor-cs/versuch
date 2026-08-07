@@ -7,6 +7,8 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 - **Übungsbibliothek** mit 135 vordefinierten Übungen (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
 - **Eigene Übungen** anlegen (Gewicht × Wdh., nur Wiederholungen oder Zeit)
 - **Trainingspläne mit mehreren Trainings**: Ein Plan bündelt z. B. Push, Pull und Beine als einzelne Trainings, jedes mit einem Tipp startbar; der Start-Tab zeigt nur den aktiven Plan (ein Beispielplan „Push / Pull / Beine" ist vorinstalliert)
+- **Supersätze**: Übungen im Trainings-Editor oder direkt im Workout zu einer Gruppe verbinden (A1, A2 …). Im Supersatz läuft nach dem Satz kein Pausen-Timer – die App weist auf die nächste Übung der Runde hin und pausiert erst, wenn die Runde durch ist
+- **Reihenfolge per Ziehen**: Übungen und Trainings am Griff greifen und frei verschieben (Finger wie Maus), mit Einfügemarke und Mitscrollen am Rand
 - **Workout-Tracking** Satz für Satz: Der aktuelle Satz ist eine Karte mit großen Plus/Minus-Steppern (Gewicht ±2,5 kg, Wiederholungen ±1), vorbelegt mit den Werten vom letzten Mal – abschließen, fertig. Abgeschlossene Sätze lassen sich antippen und zurückholen; dazu laufende Dauer und Live-Volumen
 - **Pausen-Timer** startet automatisch nach jedem abgehakten Satz (Dauer einstellbar, mit Ton + Vibration)
 - **Rekord-Erkennung**: Neue Bestleistungen werden beim Beenden gefeiert
