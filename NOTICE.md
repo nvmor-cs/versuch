@@ -1,16 +1,28 @@
 # Verwendete Fremdinhalte
 
-Die Piktogramme der Muskelgruppen (Einstellungen: Übungsliste, Übungsauswahl)
-stammen aus frei lizenzierten Icon-Sets:
+## Piktogramme der Muskelgruppen
 
-| Icon-Set | Lizenz | Verwendet für |
+Neun der dreizehn Symbole stammen aus **[Game-Icons.net](https://game-icons.net)**
+und stehen unter der Lizenz **CC BY 3.0**:
+
+| Muskelgruppe | Icon | Urheber |
 |---|---|---|
-| [Huge Icons](https://hugeicons.com) | MIT | Rücken, Nacken, Bizeps, Beine, Po, Bauch, Ganzkörper, Cardio |
-| [IconPark](https://github.com/bytedance/IconPark) | Apache 2.0 | Brust, Trizeps, Waden |
-| [Lucide](https://lucide.dev) | ISC | Unterarme |
+| Brust | `muscular-torso` | Delapouite |
+| Bizeps | `biceps` | Delapouite |
+| Beine | `female-legs` | Delapouite |
+| Waden | `barefoot` | Lorc |
+| Bauch | `abdominal-armor` | Lorc |
+| Unterarme | `forearm` | Delapouite |
+| Ganzkörper | `strong` | Delapouite |
+| Cardio | `run` | Delapouite |
 
-Das Symbol für „Schultern" ist eine eigene Zeichnung – in keinem der Sets gab
-es dafür ein brauchbares Motiv.
+Die Symbole für **Rücken, Schultern, Nacken, Po und Trizeps** sind eigene
+Zeichnungen im gleichen Stil – dafür gab es in keinem freien Set ein
+brauchbares Motiv.
 
-Alle übrigen Grafiken (App-Icon, Splashscreen, Oberflächen-Symbole) sind
-eigene Arbeiten und stehen unter der Lizenz des Projekts.
+Der Lizenzhinweis erscheint auch in der App unter *Einstellungen*.
+
+## Übriges
+
+Alle weiteren Grafiken (App-Icon, Splashscreen, Bedien-Symbole) sind eigene
+Arbeiten und stehen unter der Lizenz des Projekts.

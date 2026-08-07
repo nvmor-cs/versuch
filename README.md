@@ -10,13 +10,13 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 - **Supersätze**: Übungen im Trainings-Editor oder direkt im Workout zu einer Gruppe verbinden (A1, A2 …). Im Supersatz läuft nach dem Satz kein Pausen-Timer – die App weist auf die nächste Übung der Runde hin und pausiert erst, wenn die Runde durch ist
 - **Reihenfolge per Ziehen**: Übungen und Trainings am Griff greifen und frei verschieben (Finger wie Maus), mit Einfügemarke und Mitscrollen am Rand
 - **Workout-Tracking** Satz für Satz: Der aktuelle Satz ist eine Karte mit großen Plus/Minus-Steppern (Gewicht ±2,5 kg, Wiederholungen ±1), vorbelegt mit den Werten vom letzten Mal – abschließen, fertig. Abgeschlossene Sätze lassen sich antippen und zurückholen; dazu laufende Dauer und Live-Volumen
-- **Pausen-Timer** startet automatisch nach jedem abgehakten Satz (Dauer einstellbar, mit Ton + Vibration)
+- **Pausen-Timer** startet automatisch nach jedem abgehakten Satz (Dauer einstellbar). Am Ende gibt es Ton, Vibration oder beides – und eine Systemmeldung, sodass das Signal auch ankommt, wenn das Handy in der Tasche steckt
 - **Rekord-Erkennung**: Neue Bestleistungen werden beim Beenden gefeiert
 - **Verlauf & Statistik** mit umschaltbarer Sicht: Woche, Quartal, Jahr und Gesamt – Kennzahlen, Volumen-Chart (Tage/Wochen/Monate/Jahre) und Workout-Liste passen sich an; dazu Entwicklungskurve pro Übung
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
 - **Datensicherung**: Backup als Datei teilen (Google Drive, Dateien, Mail) und jederzeit wiederherstellen – wahlweise **ersetzen** oder **zusammenführen**, sodass nichts verloren geht. Dazu sichert Android die App automatisch im Google-Konto (Auto Backup), und die App erinnert ans Sichern, wenn das letzte Backup zu lange her ist.
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
-- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz und Stahl-Kanten, dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Gold, Rot, Grün oder Weiß
+- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz und Stahl-Kanten, dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Gold, Rot, Grün, Magenta oder Weiß
 
 ## Android-App & Play Store 🤖
 

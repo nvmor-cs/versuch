@@ -70,6 +70,13 @@
   --accent-line: rgba(0, 227, 95, 0.32);
 }
 
+:root[data-accent="magenta"] {
+  --accent: #ff2bb4;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(255, 43, 180, 0.15);
+  --accent-line: rgba(255, 43, 180, 0.34);
+}
+
 :root[data-accent="weiss"] {
   --accent: #ffffff;
   --accent-ink: #0b0c0d;
