@@ -310,6 +310,7 @@ button.row:active { background: var(--surface-2); }
 .row-side { text-align: right; }
 .row .chev { color: var(--ink-3); flex-shrink: 0; width: 18px; height: 18px; }
 
+.muscle-dot svg { width: 26px; height: 26px; }
 .muscle-dot {
   width: 40px; height: 40px;
   border-radius: 4px;

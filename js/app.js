@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -68,10 +68,28 @@ const weekStart = (ts) => {
   return d.getTime();
 };
 
-const MUSCLE_ABBR = {
-  Brust: "BR", "Rücken": "RÜ", Schultern: "SC", Nacken: "NA", Bizeps: "BI",
-  Trizeps: "TR", Beine: "BE", Po: "PO", Waden: "WA", Bauch: "BA",
-  Unterarme: "UA", "Ganzkörper": "GK", Cardio: "CA",
+// Piktogramme der Muskelgruppen im Linienstil.
+// Quellen: Huge Icons (MIT), IconPark (Apache 2.0), Lucide (ISC) – siehe NOTICE.md.
+// „Schultern“ ist selbst gezeichnet, dafür gab es kein passendes Icon.
+const MUSCLE_ICONS = {
+  "Brust": { vb: "0 0 48 48", body: `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"><path d="M16.997 3.5v5.149c0 1.75-.964 2.425-4.595 3.358c-3.63.932-4.706 1.482-5.554 3.093Q6 16.71 6 20.072V37.5"/><path stroke-linejoin="round" d="M34.942 21.509q.356 4.314-1.463 7.537t-6.422 3.926M13.059 21.509q-.359 4.314 1.469 7.537q1.827 3.222 6.474 3.926"/><path d="M13 43.512q2-2.333 2-5.072v-8.364m20 13.436q-2-2.333-2-5.072v-8.364M31 3.5v5.149c0 1.75.964 2.425 4.595 3.358c3.63.932 4.706 1.482 5.554 3.093q.848 1.61.848 4.972V37.5"/></g>` },
+  "Rücken": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M15.5 10A1.5 1.5 0 0 1 14 8.5M8.5 10A1.5 1.5 0 0 0 10 8.5M14 2v.643c0 .587 0 .88.065 1.13a2 2 0 0 0 1.16 1.336c.237.1.527.141 1.108.224c1.162.166 1.743.25 2.218.45a4 4 0 0 1 2.318 2.672C21 8.954 21 9.54 21 10.714V22M10 2v.643c0 .587 0 .88-.065 1.13a2 2 0 0 1-1.16 1.336c-.237.1-.527.141-1.108.224c-1.162.166-1.743.25-2.218.45A4 4 0 0 0 3.13 8.454C3 8.954 3 9.54 3 10.714V22m9-9v9"/><path d="M18 11.5s-.545 2.864-.497 5.727C17.535 19.127 18 22 18 22M6 11.5s.545 2.864.497 5.727C6.465 19.127 6 22 6 22"/></g>` },
+  "Schultern": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.1 4.2h3.8v3.4h-3.8z"/><path d="M9.5 7.8h5c.7 0 1.2.6 1.2 1.3v10.7H8.3V9.1c0-.7.5-1.3 1.2-1.3z"/><path d="M9.4 8.1c-3 .7-5.3 3.3-5.6 6.5-.1 1 .7 1.9 1.7 1.9h2.8"/><path d="M14.6 8.1c3 .7 5.3 3.3 5.6 6.5.1 1-.7 1.9-1.7 1.9h-2.8"/><path d="M6.3 11.6c1 .9 1.7 2.1 1.9 3.4M17.7 11.6c-1 .9-1.7 2.1-1.9 3.4"/></g>` },
+  "Nacken": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="m6.962 13.06l-2.394 7.16c-.139.417-.209.625-.38.72c-.364.2-1.859-.132-2.117-.515c-.109-.162-.076-.377-.012-.807L3.616 9.192c.265-1.775.683-2.325 2.319-3.067L9 4.517V3.01c0-.832.175-1.005 1.008-1.005L13.992 2C14.825 2 15 2.173 15 3.005v1.507l3.065 1.613c1.636.742 2.054 1.292 2.32 3.067l1.556 10.426c.064.43.097.646-.012.807c-.258.383-1.753.715-2.116.515c-.172-.095-.242-.303-.381-.72l-2.394-7.16"/><path d="M6.5 10c.166.997.376 1.996.46 3.003c.19 2.312.04 4.68.04 6.997c0 1.655.345 2 2 2h6c1.655 0 2-.345 2-2c0-2.317-.15-4.685.04-6.997c.084-1.007.294-2.006.46-3.003M9 5a5 5 0 0 0 6 0"/></g>` },
+  "Bizeps": { vb: "0 0 24 24", body: `<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.018 20.305c1.129 1.615 6.041 2.882 8.362-.14c2.51 1.2 6.649.828 10.02-1.052c.468-.26.911-.59 1.183-1.054c.613-1.045.627-2.495-.491-4.634c-1.865-4.654-5.218-8.74-6.572-10.383c-.278-.253-2.051-.613-3.133-.96c-.478-.147-1.367-.245-2.43 1.157c-.505.664-2.796 2.297.11 3.394c.451.115.782.326 2.837-.049c.267-.046.935 0 1.406.826l.984 1.407a.96.96 0 0 1 .169.44c.172 1.499.166 3.375 1.002 4.326c-1.29-.934-4.664-2.042-7.206 1.112M2.002 12.94a6.714 6.714 0 0 1 8.416-.418"/>` },
+  "Trizeps": { vb: "0 0 48 48", body: `<g fill="none"><path d="M21.37 36c1.45-5.25 6.52-9 12.36-8.38c5.56.59 9.98 5.28 10.26 10.86c.07 1.47-.13 2.88-.56 4.19c-.26.8-1.04 1.33-1.89 1.33H11.758c-5.048 0-8.834-4.619-7.844-9.569L10 4h12l4 7l-8.57 6.13L15 14"/><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="2" stroke-width="4" d="M21.37 36c1.45-5.25 6.52-9 12.36-8.38c5.56.59 9.98 5.28 10.26 10.86c.07 1.47-.13 2.88-.56 4.19c-.26.8-1.04 1.33-1.89 1.33H11.758c-5.048 0-8.834-4.619-7.844-9.569L10 4h12l4 7l-8.57 6.13L15 14m2.44 3.13L22 34"/></g>` },
+  "Beine": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M5.002 2c2.691.314 8.897 1.896 11.64 5.746c.337.47.69.804 1.27.95c.724.18 1.324.666 1.542 1.4c.232.798.66 1.64.524 2.494c-.052.327-.212.628-.532 1.23L15.099 22"/><path d="M4.002 12c1 1.726 4.164 2.596 8 1.726a10.1 10.1 0 0 0-2.685 2.225c-.559.646-.797 1.544-.836 2.452c-.052 1.212-.232 2.53-.854 3.597M5.002 7s1.959.29 3.5 1.5c1 .786 2.916 1.31 3.5 1.5"/></g>` },
+  "Po": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 4.5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="m10.948 21l1.13-3.41c.404-1.215.606-1.823.304-2.244c-.301-.42-.94-.42-2.215-.42H8.933m0 0H7.925c-.948 0-1.423 0-1.725-.373c-.302-.374-.216-.793-.043-1.633c.29-1.406.872-3.153 1.935-4.341c.294-.328.44-.492.763-.56s.581.05 1.097.286l1.862.85l.783.358c.92.42 1.38.63 1.865.608s.924-.275 1.802-.779L18 8.345m-9.067 6.58c.241-1.315 1.155-4.312 2.88-5.77"/></g>` },
+  "Waden": { vb: "0 0 48 48", body: `<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M19 8c1.766 7.879 2.783 24.837-5.693 28.618c-.481.316-2.15.851-5.618.473c-2.006-.219-4.284 2.263-1.123 5.673c.776.838 2.504 1.702 6.741.945h7.705c1.926 0 5.105-2.363 8.186-8.036c1.124-1.576 4.334-4.822 8.187-5.2c2.408-.158 6.838-2.08 5.297-8.51C39.926 15.506 33.54 9.296 32 4"/>` },
+  "Bauch": { vb: "0 0 24 24", body: `<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M22 6c0 1-1 3-5 3s-5-2-5-3c0 1-1 3-5 3S2 7 2 6m8-2.5C9.667 3 8.5 2 7 2m7 1.5C14.333 3 15.5 2 17 2M4 9v1c0 1.32.266 2.62.56 3.9c.54 2.346.81 5.68-.56 8.1M20 9v1c0 1.32-.266 2.62-.56 3.9c-.54 2.346-.81 5.68.56 8.1m-4-3c-1.485 1.179-2.356 1.369-3.677.282a.54.54 0 0 0-.664-.021C10.264 20.28 9.4 20.29 8 19m8-5c-1.485 1.179-2.356 1.369-3.677.282a.54.54 0 0 0-.664-.021C10.264 15.28 9.4 15.29 8 14m4 0v-2"/>` },
+  "Unterarme": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12.035 17.012a3 3 0 0 0-3-3l-.311-.002a.72.72 0 0 1-.505-1.229l1.195-1.195A2 2 0 0 1 10.828 11H12a2 2 0 0 0 0-4H9.243a3 3 0 0 0-2.122.879l-2.707 2.707A4.83 4.83 0 0 0 3 14a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8V7a2 2 0 1 0-4 0v2a2 2 0 1 0 4 0"/><path d="M13.888 9.662A2 2 0 0 0 17 8V5a2 2 0 1 0-4 0M9 5a2 2 0 1 0-4 0v5m4-3V4a2 2 0 1 1 4 0v3.268"/></g>` },
+  "Ganzkörper": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.5 4.5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="m19 21l-.456-3.47c-.254-1.928-.38-2.892-1.053-3.4c-.672-.509-1.619-.357-3.513-.054l-1.838.295l-.507.081c-1.386.222-2.08.333-2.441-.081c-.362-.415-.169-1.099.217-2.467l.668-2.372c.222-.788.333-1.182.638-1.388c.304-.206.705-.158 1.508-.062l1.755.21L19 8.89m-5.022-.6l-1.838 6.08M10 17l-.553 1.106a3 3 0 0 1-1.341 1.341L5 21"/></g>` },
+  "Cardio": { vb: "0 0 24 24", body: `<g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 4.5a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="m15 21l-.664-2.615a4.9 4.9 0 0 0-1.315-2.288L11.5 14.6M20 8.2c-2.037 2.292-3.845 1.943-5 1.077a2.3 2.3 0 0 1-.352-.352c-.412-.492-.619-.739-.82-.833s-.453-.094-.958-.094c-.326 0-.651 0-.87.003c-3.462.041-5 1.183-6 3.152m6-3.152L10.73 9.96c-.697 1.076-1.046 1.614-1.06 2.18a2 2 0 0 0 .123.738c.195.531.7.928 1.707 1.722M15 9.277L11.5 14.6M4 17.73l.678.162C6.407 18.302 8.203 17.516 9 16"/></g>` },
+};
+
+const muscleIcon = (m) => {
+  const ic = MUSCLE_ICONS[m] || MUSCLE_ICONS["Ganzkörper"];
+  return `<svg viewBox="${ic.vb}" aria-hidden="true">${ic.body}</svg>`;
 };
 
 /* ═══════════════ Icons ═══════════════ */
@@ -802,7 +820,7 @@ function exerciseRow(e, extra) {
   return `
     <button class="row" data-action="${extra ? extra.action : "open-exercise"}" data-id="${e.id}">
       ${extra && extra.pick ? `<span class="pick-check">${icon("check")}</span>` : ""}
-      <span class="muscle-dot">${MUSCLE_ABBR[e.muscle] || "?"}</span>
+      <span class="muscle-dot">${muscleIcon(e.muscle)}</span>
       <span class="row-main">
         <span class="row-title">${esc(e.name)}</span>
         <span class="row-sub">${esc(e.muscle)} · ${esc(e.equipment)}${e.custom ? " · Eigene" : ""}</span>
@@ -979,7 +997,7 @@ function renderPickerList() {
   $("#picker-list").innerHTML = list.map((e) => `
     <button class="row ${pickerState.selected.has(e.id) ? "picked" : ""}" data-action="picker-toggle" data-id="${e.id}">
       <span class="pick-check">${icon("check")}</span>
-      <span class="muscle-dot">${MUSCLE_ABBR[e.muscle] || "?"}</span>
+      <span class="muscle-dot">${muscleIcon(e.muscle)}</span>
       <span class="row-main">
         <span class="row-title">${esc(e.name)}</span>
         <span class="row-sub">${esc(e.muscle)} · ${esc(e.equipment)}</span>
