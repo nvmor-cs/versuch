@@ -1,4 +1,4 @@
-// lumora – Übungsbibliothek
+// Lumora – Übungsbibliothek
 // Jede Übung: id, name, muscle (Muskelgruppe), equipment (Gerät), type, alias (Suchbegriffe)
 // Typen: "weight_reps" (Gewicht × Wdh.), "reps" (nur Wdh.), "time" (Dauer)
 

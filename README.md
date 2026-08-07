@@ -1,4 +1,4 @@
-# lumora – Training, Fortschritt, Gesundheit
+# Lumora – Training, Fortschritt, Gesundheit
 
 Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und MacroFactor Training. Komplett offline-fähig, ohne Konto, ohne Server: **Alle Daten bleiben lokal auf deinem Gerät.**
 
@@ -7,6 +7,7 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 ## Features
 
 - **Übungsbibliothek** mit 135 vordefinierten Übungen, jede mit einem Piktogramm ihrer Muskelgruppe (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
+- **Wischen zum Blättern**: Durch die Muskelgruppen – im Übungen-Tab wie beim Zusammenstellen eines Trainings – und im Verlauf durch die Zeiträume. Die Leiste oben bleibt Anzeige und Sprungziel, der aktive Chip rückt beim Wischen automatisch in die Mitte
 - **Eigene Übungen** anlegen (Gewicht × Wdh., nur Wiederholungen oder Zeit)
 - **Trainingspläne mit mehreren Trainings**: Ein Plan bündelt z. B. Push, Pull und Beine als einzelne Trainings, jedes mit einem Tipp startbar; der Start-Tab zeigt nur den aktiven Plan (ein Beispielplan „Push / Pull / Beine" ist vorinstalliert)
 - **Supersätze**: Übungen im Trainings-Editor oder direkt im Workout zu einer Gruppe verbinden (A1, A2 …). Im Supersatz läuft nach dem Satz kein Pausen-Timer – die App weist auf die nächste Übung der Runde hin und pausiert erst, wenn die Runde durch ist
@@ -14,7 +15,7 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 - **Workout-Tracking** Satz für Satz: Der aktuelle Satz ist eine Karte mit großen Plus/Minus-Steppern (Gewicht ±2,5 kg, Wiederholungen ±1), vorbelegt mit den Werten vom letzten Mal – abschließen, fertig. Abgeschlossene Sätze lassen sich antippen und zurückholen; dazu laufende Dauer und Live-Volumen
 - **Pausen-Timer** startet automatisch nach jedem abgehakten Satz (Dauer einstellbar). Am Ende gibt es Ton, Vibration oder beides – und eine Systemmeldung, sodass das Signal auch ankommt, wenn das Handy in der Tasche steckt
 - **Rekord-Erkennung**: Neue Bestleistungen werden beim Beenden gefeiert
-- **Verlauf & Statistik** mit umschaltbarer Sicht: Woche, Quartal, Jahr und Gesamt – Kennzahlen, Volumen-Chart (Tage/Wochen/Monate/Jahre) und Workout-Liste passen sich an; dazu Entwicklungskurve pro Übung. Zwischen den Zeiträumen wechselt man per Tipp auf die Leiste **oder mit einem waagerechten Wisch**; senkrecht wird wie gewohnt gescrollt
+- **Verlauf & Statistik** mit umschaltbarer Sicht: Woche, Quartal, Jahr und Gesamt – Kennzahlen, Volumen-Chart (Tage/Wochen/Monate/Jahre) und Workout-Liste passen sich an; dazu Entwicklungskurve pro Übung
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
 - **Datensicherung**: Backup als Datei teilen (Google Drive, Dateien, Mail) und jederzeit wiederherstellen – wahlweise **ersetzen** oder **zusammenführen**, sodass nichts verloren geht. Dazu sichert Android die App automatisch im Google-Konto (Auto Backup), und die App erinnert ans Sichern, wenn das letzte Backup zu lange her ist.
 - **Bildschirm bleibt an**, solange die App im Vordergrund liegt – mitten im Satz muss niemand erst entsperren. Geht die App in den Hintergrund, gilt wieder der normale Sperr-Timeout des Handys
@@ -49,7 +50,7 @@ Die App muss über **HTTPS** erreichbar sein. Der einfachste Weg: GitHub Pages.
 - **Android (Chrome):** URL öffnen → Menü (⋮) → **„App installieren"** bzw. „Zum Startbildschirm hinzufügen"
 - **iPhone (Safari):** URL öffnen → Teilen-Symbol → **„Zum Home-Bildschirm"**
 
-Danach startet lumora wie eine native App im Vollbild und funktioniert auch offline.
+Danach startet Lumora wie eine native App im Vollbild und funktioniert auch offline.
 
 > **Wichtig:** Die Daten liegen lokal auf dem Gerät. Mach gelegentlich ein Backup über *Einstellungen → Backup erstellen* – besonders bevor du Browserdaten löschst.
 

@@ -1,10 +1,10 @@
-// lumora – Training, Fortschritt, Gesundheit
+// Lumora – Training, Fortschritt, Gesundheit
 // Vanilla JS, keine Abhängigkeiten. Daten liegen in localStorage.
 
 "use strict";
 
-const APP_NAME = "lumora";
-const APP_VERSION = "2.1.0";
+const APP_NAME = "Lumora";
+const APP_VERSION = "2.2.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -391,6 +391,85 @@ function makeSortable(container, itemSel, handleSel, onDrop) {
   container.addEventListener("pointercancel", ende);
 }
 
+/* ═══════════════ Wischen zum Umschalten ═══════════════
+   Verbindet einen Bereich mit einer Reihe von Ansichten: Waagerecht wischen
+   blättert eine Position weiter, der Inhalt folgt dabei dem Finger und rastet
+   beim Loslassen ein. Senkrechte Gesten bleiben normales Scrollen – dafür
+   sorgt touch-action: pan-y auf .swipe-pane; alles außerhalb der Pane
+   (etwa die Chip-Leiste) behält seine eigene waagerechte Geste. */
+
+// Liegt der Punkt in etwas, das selbst waagerecht scrollt? Dann gehört
+// die Geste diesem Element und nicht uns.
+function waagerechtScrollbar(el) {
+  for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 4) {
+      const ov = getComputedStyle(n).overflowX;
+      if (ov === "auto" || ov === "scroll") return true;
+    }
+  }
+  return false;
+}
+
+// Lässt neuen Inhalt von der Seite hereinrutschen (richtung: 1 = von rechts)
+function paneEinblenden(pane, richtung) {
+  if (!pane) return;
+  pane.style.transition = "none";
+  pane.style.transform = `translateX(${richtung > 0 ? 40 : -40}px)`;
+  pane.style.opacity = "0";
+  void pane.offsetWidth;   // Umbruch erzwingen, sonst wird nur der Endzustand gezeichnet
+  pane.style.transition = "";
+  pane.style.transform = "";
+  pane.style.opacity = "";
+}
+
+// opts: pane() – das mitwandernde Element, amRand(r) – geht es weiter?,
+//       blaettern(r) – schaltet um (r: 1 = nächste, -1 = vorige)
+function wischenVerbinden(bereich, opts) {
+  let zug = null;
+
+  const schieben = (dx, sanft) => {
+    const pane = opts.pane();
+    if (!pane) return;
+    pane.style.transition = sanft ? "" : "none";
+    pane.style.transform = dx ? `translateX(${dx}px)` : "";
+  };
+
+  bereich.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const pane = opts.pane();
+    if (!pane || !pane.contains(e.target) || waagerechtScrollbar(e.target)) return;
+    zug = { id: e.pointerId, x: e.clientX, y: e.clientY, achse: null, dx: 0 };
+  });
+
+  bereich.addEventListener("pointermove", (e) => {
+    if (!zug || e.pointerId !== zug.id) return;
+    const dx = e.clientX - zug.x, dy = e.clientY - zug.y;
+    if (!zug.achse) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // Nur deutlich waagerechte Gesten übernehmen
+      if (Math.abs(dx) <= Math.abs(dy) * 1.4) { zug = null; return; }
+      zug.achse = "x";
+      bereich.setPointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    // An den Enden zäh werden – so merkt man, dass es nicht weitergeht
+    zug.dx = opts.amRand(dx < 0 ? 1 : -1) ? dx * 0.25 : dx;
+    schieben(zug.dx, false);
+  });
+
+  const loslassen = () => {
+    if (!zug) return;
+    const { achse, dx } = zug;
+    zug = null;
+    if (achse !== "x") return;
+    const schwelle = Math.min(70, bereich.clientWidth * 0.18);
+    if (Math.abs(dx) > schwelle && opts.blaettern(dx < 0 ? 1 : -1)) return;
+    schieben(0, true);   // zurückfedern
+  };
+  bereich.addEventListener("pointerup", loslassen);
+  bereich.addEventListener("pointercancel", loslassen);
+}
+
 /* ═══════════════ Supersätze ═══════════════
    Zusammengehörige Übungen tragen dieselbe superset-Kennung. Eine Gruppe
    sind nur direkt aufeinanderfolgende Übungen – nach dem Umsortieren
@@ -516,7 +595,7 @@ function renderHome() {
   $("#screen-home").innerHTML = `
     <div class="screen-head">
       <div>
-        <div class="wordmark">${logoSvg()}lumora</div>
+        <div class="wordmark">${logoSvg()}Lumora</div>
         <div class="screen-title">${esc(today)}</div>
       </div>
       <button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${icon("gear")}</button>
@@ -827,6 +906,30 @@ ACTIONS["plan-wo-done"] = () => {
 let exSearch = "";
 let exFilter = "Alle";
 
+// Die Filterreihe der Übungslisten – „Alle" vorweg, dann die Muskelgruppen.
+// Sie ist zugleich die Reihenfolge, durch die man wischen kann.
+const MUSCLE_FILTER = ["Alle"].concat(MUSCLES);
+
+// Nachbar-Filter in der Reihe oder null, wenn dort Schluss ist
+function filterNachbar(aktuell, richtung) {
+  const ziel = MUSCLE_FILTER.indexOf(aktuell) + richtung;
+  return ziel >= 0 && ziel < MUSCLE_FILTER.length ? MUSCLE_FILTER[ziel] : null;
+}
+
+function chipsHtml(aktiv, action) {
+  return MUSCLE_FILTER.map((m) =>
+    `<button class="chip ${m === aktiv ? "active" : ""}" data-action="${action}" data-m="${esc(m)}">${esc(m)}</button>`).join("");
+}
+
+// Den aktiven Chip mittig in die Leiste holen – sonst wischt man an
+// Muskelgruppen vorbei, die man gar nicht sieht.
+function chipInSicht(leiste) {
+  const chip = leiste && leiste.querySelector(".chip.active");
+  if (!chip) return;
+  const ziel = chip.offsetLeft - (leiste.clientWidth - chip.offsetWidth) / 2;
+  leiste.scrollTo({ left: Math.max(0, ziel), behavior: "smooth" });
+}
+
 function renderExercises() {
   $("#screen-exercises").innerHTML = `
     <div class="screen-head">
@@ -836,13 +939,11 @@ function renderExercises() {
     <div class="search-wrap">${icon("search")}
       <input class="search-input" data-input="ex-search" value="${esc(exSearch)}" placeholder="Übung suchen …" autocomplete="off">
     </div>
-    <div class="chips">
-      ${["Alle"].concat(MUSCLES).map((m) =>
-        `<button class="chip ${m === exFilter ? "active" : ""}" data-action="ex-filter" data-m="${esc(m)}">${esc(m)}</button>`).join("")}
-    </div>
-    <div id="ex-list"></div>
+    <div class="chips" id="ex-chips">${chipsHtml(exFilter, "ex-filter")}</div>
+    <div class="swipe-pane" id="ex-list"></div>
   `;
   renderExerciseList();
+  chipInSicht($("#ex-chips"));
 }
 
 function filteredExercises() {
@@ -877,6 +978,26 @@ ACTIONS["ex-filter"] = (el) => {
   exFilter = el.dataset.m;
   renderExercises();
 };
+
+// Wischen blättert eine Muskelgruppe weiter
+function exFilterBlaettern(richtung) {
+  const ziel = filterNachbar(exFilter, richtung);
+  if (!ziel) return false;
+  exFilter = ziel;
+  renderExercises();
+  paneEinblenden($("#ex-list"), richtung);
+  return true;
+}
+
+function exWischenVerbinden() {
+  const screen = $("#screen-exercises");
+  if (!screen) return;
+  wischenVerbinden(screen, {
+    pane: () => $("#ex-list"),
+    amRand: (r) => !filterNachbar(exFilter, r),
+    blaettern: exFilterBlaettern,
+  });
+}
 
 /* Eigene Übung anlegen / bearbeiten */
 
@@ -1008,7 +1129,7 @@ function openExercisePicker(onDone) {
       <input class="search-input" data-input="picker-search" placeholder="Übung suchen …" autocomplete="off">
     </div>
     <div class="chips" id="picker-chips"></div>
-    <div id="picker-list"></div>
+    <div class="swipe-pane" id="picker-list"></div>
     <div style="position:fixed;left:0;right:0;bottom:0;z-index:65;padding:12px 16px calc(var(--safe-bottom) + 14px);background:linear-gradient(transparent, var(--bg) 40%)">
       <div style="max-width:560px;margin:0 auto">
         <button class="btn" data-action="picker-done" id="picker-done" disabled>Übungen hinzufügen</button>
@@ -1017,12 +1138,18 @@ function openExercisePicker(onDone) {
   `, "picker-ov");
   renderPickerChips();
   renderPickerList();
+  // Wischen blättert hier durch dieselbe Reihe wie im Übungen-Tab
+  wischenVerbinden(ov, {
+    pane: () => $("#picker-list"),
+    amRand: (r) => !pickerState || !filterNachbar(pickerState.filter, r),
+    blaettern: pickerFilterBlaettern,
+  });
   return ov;
 }
 
 function renderPickerChips() {
-  $("#picker-chips").innerHTML = ["Alle"].concat(MUSCLES).map((m) =>
-    `<button class="chip ${m === pickerState.filter ? "active" : ""}" data-action="picker-filter" data-m="${esc(m)}">${esc(m)}</button>`).join("");
+  $("#picker-chips").innerHTML = chipsHtml(pickerState.filter, "picker-filter");
+  chipInSicht($("#picker-chips"));
 }
 
 function renderPickerList() {
@@ -1052,6 +1179,17 @@ function updatePickerDone() {
 }
 
 ACTIONS["picker-filter"] = (el) => { pickerState.filter = el.dataset.m; renderPickerChips(); renderPickerList(); };
+
+function pickerFilterBlaettern(richtung) {
+  if (!pickerState) return false;
+  const ziel = filterNachbar(pickerState.filter, richtung);
+  if (!ziel) return false;
+  pickerState.filter = ziel;
+  renderPickerChips();
+  renderPickerList();
+  paneEinblenden($("#picker-list"), richtung);
+  return true;
+}
 ACTIONS["picker-toggle"] = (el) => {
   const id = el.dataset.id;
   if (pickerState.selected.has(id)) pickerState.selected.delete(id);
@@ -1656,76 +1794,25 @@ ACTIONS["hist-range"] = (el) => { histRange = el.dataset.r; renderHistory(); };
 
 const histIndex = () => Math.max(0, HIST_RANGES.findIndex((r) => r.id === histRange));
 
-// Wechselt um eine Position weiter und lässt den neuen Inhalt von der
-// Seite hereinrutschen. Liefert false, wenn es in die Richtung nicht
-// weitergeht (vor „Woche" bzw. hinter „Gesamt").
+// Wechselt um eine Position weiter. Liefert false, wenn es in die
+// Richtung nicht weitergeht (vor „Woche" bzw. hinter „Gesamt").
 function histWechseln(richtung) {
   const ziel = histIndex() + richtung;
   if (ziel < 0 || ziel >= HIST_RANGES.length) return false;
   histRange = HIST_RANGES[ziel].id;
   renderHistory();
-  const pane = $("#hist-pane");
-  if (pane) {
-    pane.style.transition = "none";
-    pane.style.transform = `translateX(${richtung > 0 ? 40 : -40}px)`;
-    pane.style.opacity = "0";
-    void pane.offsetWidth;   // Umbruch erzwingen, sonst wird nur der Endzustand gezeichnet
-    pane.style.transition = "";
-    pane.style.transform = "";
-    pane.style.opacity = "";
-  }
+  paneEinblenden($("#hist-pane"), richtung);
   return true;
 }
 
-/* Waagerecht wischen wechselt den Zeitraum. Der Inhalt folgt dabei dem
-   Finger und rastet beim Loslassen ein. Senkrechte Gesten bleiben
-   normales Scrollen – dafür sorgt touch-action: pan-y im Stylesheet,
-   die Achse entscheidet sich nach den ersten Pixeln. */
 function histWischenVerbinden() {
   const screen = $("#screen-history");
   if (!screen) return;
-  let zug = null;
-
-  const schieben = (dx, sanft) => {
-    const pane = $("#hist-pane");
-    if (!pane) return;
-    pane.style.transition = sanft ? "" : "none";
-    pane.style.transform = dx ? `translateX(${dx}px)` : "";
-  };
-
-  screen.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    zug = { id: e.pointerId, x: e.clientX, y: e.clientY, achse: null, dx: 0 };
+  wischenVerbinden(screen, {
+    pane: () => $("#hist-pane"),
+    amRand: (r) => histIndex() + r < 0 || histIndex() + r >= HIST_RANGES.length,
+    blaettern: histWechseln,
   });
-
-  screen.addEventListener("pointermove", (e) => {
-    if (!zug || e.pointerId !== zug.id) return;
-    const dx = e.clientX - zug.x, dy = e.clientY - zug.y;
-    if (!zug.achse) {
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-      // Nur deutlich waagerechte Gesten übernehmen
-      if (Math.abs(dx) <= Math.abs(dy) * 1.4) { zug = null; return; }
-      zug.achse = "x";
-      screen.setPointerCapture(e.pointerId);
-    }
-    e.preventDefault();
-    // An den Enden zäh werden – so merkt man, dass es nicht weitergeht
-    const kante = (dx < 0 && histIndex() === HIST_RANGES.length - 1) || (dx > 0 && histIndex() === 0);
-    zug.dx = kante ? dx * 0.25 : dx;
-    schieben(zug.dx, false);
-  });
-
-  const loslassen = () => {
-    if (!zug) return;
-    const { achse, dx } = zug;
-    zug = null;
-    if (achse !== "x") return;
-    const schwelle = Math.min(70, screen.clientWidth * 0.18);
-    if (Math.abs(dx) > schwelle && histWechseln(dx < 0 ? 1 : -1)) return;
-    schieben(0, true);   // zurückfedern
-  };
-  screen.addEventListener("pointerup", loslassen);
-  screen.addEventListener("pointercancel", loslassen);
 }
 
 function renderHistory() {
@@ -2062,7 +2149,7 @@ ACTIONS["toggle-autorest"] = (el) => {
 const capPlugins = () => (window.Capacitor && window.Capacitor.Plugins) || {};
 
 const backupName = () =>
-  "lumora-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  "Lumora-Backup-" + new Date().toISOString().slice(0, 10) + ".json";
 
 function markBackupDone() {
   DB.settings.lastBackupAt = Date.now();
@@ -2083,7 +2170,7 @@ ACTIONS["export-data"] = async () => {
         path: name, data: json, directory: "CACHE", encoding: "utf8",
       });
       await Share.share({
-        title: "lumora-Backup",
+        title: "Lumora-Backup",
         url: uri,
         dialogTitle: "Backup speichern",
       });
@@ -2192,7 +2279,7 @@ async function restoreBackup(text) {
     data = JSON.parse(text);
     if (!Array.isArray(data.workouts) || !Array.isArray(data.plans)) throw new Error("Format");
   } catch (e) {
-    toast("Das ist kein gültiges lumora-Backup");
+    toast("Das ist kein gültiges Lumora-Backup");
     return;
   }
 
@@ -2412,4 +2499,5 @@ function render() {
 
 render();
 histWischenVerbinden();
+exWischenVerbinden();
 bildschirmWachHalten();

@@ -1,4 +1,4 @@
-# lumora im Play Store veröffentlichen 🚀
+# Lumora im Play Store veröffentlichen 🚀
 
 Alles ist vorbereitet: Das Android-Projekt (Capacitor) liegt unter `android/`, der Build läuft automatisch über GitHub Actions, und in diesem Ordner findest du alle Grafiken und Texte für den Store-Eintrag. Du musst nur noch die Schritte unten abarbeiten.
 
@@ -51,17 +51,17 @@ Im Repository auf GitHub: **Settings → Secrets and variables → Actions → N
 
 ## Schritt 5: App in der Play Console anlegen
 
-**App erstellen:** Name `lumora – Training & Gesundheit`, Standardsprache Deutsch, Typ **App**, **kostenlos**.
+**App erstellen:** Name `Lumora – Training & Gesundheit`, Standardsprache Deutsch, Typ **App**, **kostenlos**.
 
 **Store-Eintrag** (Texte fertig zum Kopieren):
 
-- **App-Name (max. 30):** `lumora – Training & Gesundheit`
+- **App-Name (max. 30):** `Lumora – Training & Gesundheit`
 - **Kurzbeschreibung (max. 80):**
   `Workouts tracken: Pläne, Sätze, Gewichte, Rekorde. Offline & ohne Konto.`
 - **Vollständige Beschreibung:**
 
 ```
-lumora ist dein Trainingslogbuch – ruhig, dunkel, aufs Wesentliche reduziert.
+Lumora ist dein Trainingslogbuch – ruhig, dunkel, aufs Wesentliche reduziert.
 
 TRACKE DEINE WORKOUTS
 • Satz für Satz: Gewicht und Wiederholungen mit großen Plus/Minus-Tasten einstellen und abschließen
