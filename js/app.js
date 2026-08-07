@@ -3,6 +3,8 @@
 
 "use strict";
 
+const APP_VERSION = "1.1.0";
+
 /* ═══════════════ Helpers ═══════════════ */
 
 const $ = (sel, root) => (root || document).querySelector(sel);
@@ -98,7 +100,7 @@ const LS_ACTIVE = "eisenzeit.active.v1";
 function defaultDB() {
   return {
     version: 2,
-    settings: { restSecs: 90, autoRest: true },
+    settings: { restSecs: 90, autoRest: true, lastBackupAt: null },
     customExercises: [],
     plans: [],
     workouts: [],
@@ -1172,8 +1174,27 @@ function showSummary(w, prs) {
         <span class="row-main"><span class="row-title">${esc(p.name)}</span></span>
         <b style="font-variant-numeric:tabular-nums">${p.type === "weight_reps" ? fmtKg(p.val) + " kg" : p.type === "reps" ? p.val + " Wdh." : fmtClock(p.val)}</b>
       </div>`).join("") : ""}
+    ${backupReminder()}
     <button class="btn" data-action="close-sheet" style="margin-top:14px">Fertig</button>
   `);
+}
+
+// Erinnert nach dem Workout ans Sichern – aber erst, wenn es etwas zu
+// verlieren gibt, und nur wenn das letzte Backup länger her ist.
+function backupReminder() {
+  const last = DB.settings.lastBackupAt;
+  if (DB.workouts.length < 3) return "";
+  if (last && Date.now() - last < 14 * 86400000) return "";
+  return `
+    <div class="card" style="display:flex;gap:12px;align-items:center;margin-top:16px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;font-size:14px">Backup sichern</div>
+        <div class="hint">${last
+          ? "Dein letztes Backup ist über zwei Wochen her."
+          : "Du hast noch kein Backup – so gehen deine Daten nie verloren."}</div>
+      </div>
+      <button class="btn btn-compact" data-action="export-data">Sichern</button>
+    </div>`;
 }
 
 /* Fortsetzen-Leiste */
@@ -1542,19 +1563,30 @@ ACTIONS["open-settings"] = () => {
       </select>
     </div>
     <div class="divider"></div>
+    <div class="section-label" style="margin-top:0">Datensicherung</div>
     <div class="settings-row">
-      <div class="lbl">Daten exportieren<small>Backup als JSON-Datei speichern</small></div>
-      <button class="icon-btn" data-action="export-data" aria-label="Exportieren">${icon("download")}</button>
+      <div class="lbl">Backup erstellen<small>${lastBackupLabel()}</small></div>
+      <button class="btn btn-compact" data-action="export-data">${icon("download")} Sichern</button>
     </div>
     <div class="settings-row">
-      <div class="lbl">Daten importieren<small>Ersetzt die aktuellen Daten</small></div>
-      <button class="icon-btn" data-action="import-data" aria-label="Importieren">${icon("upload")}</button>
+      <div class="lbl">Backup wiederherstellen<small>Nach einer Neuinstallation zurückholen</small></div>
+      <button class="btn btn-compact btn-ghost" data-action="import-data">${icon("upload")} Laden</button>
     </div>
+    <p class="hint" style="margin:10px 2px 0">Sichere dein Backup in Google Drive oder Dateien – dann kannst du es
+      jederzeit zurückholen. Zusätzlich sichert Android die App automatisch in deinem Google-Konto.</p>
     <div class="divider"></div>
     <button class="btn btn-danger-soft" data-action="wipe-data">${icon("trash")} Alle Daten löschen</button>
-    <p class="hint" style="margin-top:16px;text-align:center">Eisenzeit · Deine Daten bleiben auf diesem Gerät.</p>
+    <p class="hint" style="margin-top:16px;text-align:center">Eisenzeit ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
   `);
 };
+
+function lastBackupLabel() {
+  const t = DB.settings.lastBackupAt;
+  if (!t) return "Noch kein Backup erstellt";
+  const days = Math.floor((Date.now() - t) / 86400000);
+  const when = days === 0 ? "heute" : days === 1 ? "gestern" : "vor " + days + " Tagen";
+  return "Zuletzt " + when + " (" + fmtDate(t) + ")";
+}
 
 ACTIONS["toggle-autorest"] = (el) => {
   DB.settings.autoRest = !DB.settings.autoRest;
@@ -1563,48 +1595,202 @@ ACTIONS["toggle-autorest"] = (el) => {
   el.setAttribute("aria-checked", DB.settings.autoRest);
 };
 
-ACTIONS["export-data"] = () => {
-  const blob = new Blob([JSON.stringify(DB, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "eisenzeit-backup-" + new Date().toISOString().slice(0, 10) + ".json";
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast("Backup exportiert");
+/* ── Backup: erstellen ────────────────────────────────────── */
+
+// Capacitor-Plugins, sofern die App nativ läuft (im Browser: undefined)
+const capPlugins = () => (window.Capacitor && window.Capacitor.Plugins) || {};
+
+const backupName = () =>
+  "eisenzeit-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+
+function markBackupDone() {
+  DB.settings.lastBackupAt = Date.now();
+  saveDB();
+}
+
+ACTIONS["export-data"] = async () => {
+  const json = JSON.stringify(DB, null, 2);
+  const name = backupName();
+  const { Filesystem, Share } = capPlugins();
+
+  // Native App: Datei ablegen und über den Teilen-Dialog weitergeben
+  // (Google Drive, Dateien, Mail …). Ein Browser-Download funktioniert in
+  // der Android-WebView nicht.
+  if (Filesystem && Share) {
+    try {
+      const { uri } = await Filesystem.writeFile({
+        path: name, data: json, directory: "CACHE", encoding: "utf8",
+      });
+      await Share.share({
+        title: "Eisenzeit-Backup",
+        url: uri,
+        dialogTitle: "Backup speichern",
+      });
+      markBackupDone();
+      toast("Backup erstellt");
+      return;
+    } catch (e) {
+      // Abbruch durch den Nutzer ist kein Fehler
+      if (/cancel/i.test(String((e && e.message) || e))) return;
+      showBackupText(json, "Teilen hat nicht geklappt – hier ist dein Backup als Text:");
+      return;
+    }
+  }
+
+  // Browser / PWA: klassischer Download
+  try {
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    markBackupDone();
+    toast("Backup gespeichert");
+  } catch (e) {
+    showBackupText(json);
+  }
 };
 
+// Letzter Ausweg: Backup als Text zum Kopieren
+function showBackupText(json, note) {
+  openSheet(`
+    <div class="sheet-title">Backup als Text
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    </div>
+    <p class="hint" style="margin-bottom:10px">${esc(note || "Kopiere den Text und sichere ihn, z. B. in einer Notiz.")}</p>
+    <textarea id="backup-text" readonly rows="6" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;font-family:monospace">${esc(json)}</textarea>
+    <button class="btn" data-action="copy-backup" style="margin-top:12px">Text kopieren</button>
+  `);
+}
+
+ACTIONS["copy-backup"] = async () => {
+  const el = $("#backup-text");
+  if (!el) return;
+  try {
+    await navigator.clipboard.writeText(el.value);
+  } catch (e) {
+    el.select();
+    document.execCommand("copy");
+  }
+  markBackupDone();
+  toast("In die Zwischenablage kopiert");
+};
+
+/* ── Backup: wiederherstellen ─────────────────────────────── */
+
 ACTIONS["import-data"] = () => {
+  openSheet(`
+    <div class="sheet-title">Backup wiederherstellen
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    </div>
+    <p class="hint" style="margin-bottom:14px">Wähle deine Backup-Datei aus – oder füge den Backup-Text unten ein.</p>
+    <button class="btn" data-action="import-file">${icon("upload")} Datei auswählen</button>
+    <div class="divider"></div>
+    <div class="field">
+      <label for="restore-text">Backup-Text einfügen</label>
+      <textarea id="restore-text" rows="4" placeholder='{"version":2,"plans":[…' style="font-family:monospace;font-size:12px"></textarea>
+    </div>
+    <button class="btn btn-ghost" data-action="import-paste">Aus Text wiederherstellen</button>
+  `);
+};
+
+ACTIONS["import-file"] = () => {
   const inp = document.createElement("input");
   inp.type = "file";
-  inp.accept = "application/json,.json";
+  inp.accept = "application/json,.json,text/plain";
   inp.onchange = () => {
     const f = inp.files && inp.files[0];
     if (!f) return;
     const rd = new FileReader();
-    rd.onload = async () => {
-      try {
-        const data = JSON.parse(rd.result);
-        if (!Array.isArray(data.workouts) || !Array.isArray(data.plans)) throw new Error("Format");
-        if (!(await appConfirm(`Backup mit ${data.workouts.length} Workouts und ${data.plans.length} Plänen importieren? Aktuelle Daten werden ersetzt.`, { ok: "Importieren" }))) return;
-        DB = Object.assign(defaultDB(), data, { seeded: true });
-        // Alte Backups (v1) auf die aktuelle Plan-Struktur heben
-        DB.plans = (DB.plans || []).map((p) =>
-          p.workouts ? p : {
-            id: p.id, name: p.name, createdAt: p.createdAt || Date.now(),
-            workouts: [{ id: uid(), name: p.name, exercises: p.exercises || [] }],
-          });
-        saveDB();
-        $$(".backdrop").forEach((b) => b.remove());
-        render();
-        toast("Backup importiert");
-      } catch (e) {
-        toast("Datei konnte nicht gelesen werden");
-      }
-    };
+    rd.onload = () => restoreBackup(String(rd.result));
+    rd.onerror = () => toast("Datei konnte nicht gelesen werden");
     rd.readAsText(f);
   };
   inp.click();
 };
+
+ACTIONS["import-paste"] = () => {
+  const txt = ($("#restore-text") || {}).value || "";
+  if (!txt.trim()) { toast("Bitte den Backup-Text einfügen"); return; }
+  restoreBackup(txt);
+};
+
+// Alte Backups (v1: ein Plan = ein Training) auf die aktuelle Struktur heben
+function upgradePlans(plans) {
+  return (plans || []).map((p) =>
+    p.workouts ? p : {
+      id: p.id || uid(), name: p.name, createdAt: p.createdAt || Date.now(),
+      workouts: [{ id: uid(), name: p.name, exercises: p.exercises || [] }],
+    });
+}
+
+async function restoreBackup(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+    if (!Array.isArray(data.workouts) || !Array.isArray(data.plans)) throw new Error("Format");
+  } catch (e) {
+    toast("Das ist kein gültiges Eisenzeit-Backup");
+    return;
+  }
+
+  const hasOwnData = DB.workouts.length > 0 || DB.customExercises.length > 0;
+  const anz = (n, ein, viele) => n + " " + (n === 1 ? ein : viele);
+  const summary = `${anz(data.workouts.length, "Workout", "Workouts")} und `
+    + `${anz(data.plans.length, "Plan", "Pläne")} gefunden.`;
+
+  let mode = "replace";
+  if (hasOwnData) {
+    mode = await askRestoreMode(summary);
+    if (!mode) return;
+  } else if (!(await appConfirm(summary + " Jetzt wiederherstellen?", { ok: "Wiederherstellen" }))) {
+    return;
+  }
+
+  const incoming = {
+    plans: upgradePlans(data.plans),
+    workouts: data.workouts || [],
+    customExercises: data.customExercises || [],
+  };
+
+  if (mode === "merge") {
+    // Nach id zusammenführen – vorhandene Einträge bleiben unangetastet
+    const byId = (list) => new Set(list.map((x) => x.id));
+    const haveW = byId(DB.workouts), haveP = byId(DB.plans), haveE = byId(DB.customExercises);
+    DB.workouts = DB.workouts.concat(incoming.workouts.filter((w) => !haveW.has(w.id)));
+    DB.plans = DB.plans.concat(incoming.plans.filter((p) => !haveP.has(p.id)));
+    DB.customExercises = DB.customExercises.concat(
+      incoming.customExercises.filter((e) => !haveE.has(e.id)));
+  } else {
+    DB = Object.assign(defaultDB(), data, incoming, { seeded: true });
+  }
+  if (data.settings) DB.settings = Object.assign(DB.settings, data.settings);
+
+  saveDB();
+  $$(".backdrop").forEach((b) => b.remove());
+  render();
+  toast(mode === "merge" ? "Backup zusammengeführt" : "Backup wiederhergestellt");
+}
+
+// Auswahl: ersetzen oder zusammenführen
+function askRestoreMode(summary) {
+  return new Promise((resolve) => {
+    const bd = openSheet(`
+      <div class="sheet-title">Wie wiederherstellen?</div>
+      <p class="hint" style="margin-bottom:14px">${esc(summary)} Du hast bereits eigene Daten in der App.</p>
+      <button class="btn" data-r="merge">Zusammenführen</button>
+      <p class="hint" style="margin:6px 2px 14px">Fehlende Workouts und Pläne werden ergänzt, vorhandene bleiben.</p>
+      <button class="btn btn-danger-soft" data-r="replace">Alles ersetzen</button>
+      <p class="hint" style="margin:6px 2px 0">Die aktuellen Daten in der App werden verworfen.</p>
+    `);
+    bd.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-r]");
+      if (b) { bd.remove(); resolve(b.dataset.r); }
+      else if (e.target === bd) { bd.remove(); resolve(null); }
+    });
+  });
+}
 
 ACTIONS["wipe-data"] = async () => {
   if (!(await appConfirm("Wirklich ALLE Workouts, Pläne und Übungen löschen?", { ok: "Löschen", danger: true }))) return;

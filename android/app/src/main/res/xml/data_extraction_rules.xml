@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android-Datensicherung (Android 12 und neuer).
+  cloud-backup: Sicherung im Google-Konto – nach einer Neuinstallation werden
+  Trainingsdaten automatisch zurückgeholt.
+  device-transfer: Übernahme beim Umzug auf ein neues Gerät.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="root" path="app_webview" />
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+        <exclude domain="root" path="app_webview/Default/Cache" />
+        <exclude domain="root" path="app_webview/Default/Code Cache" />
+        <exclude domain="root" path="app_webview/Default/Service Worker/CacheStorage" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="root" path="app_webview" />
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

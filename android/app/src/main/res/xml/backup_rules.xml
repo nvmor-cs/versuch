@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android-Datensicherung (Android 11 und älter).
+  Eingeschlossen wird der WebView-Datenordner – dort liegen die Trainingsdaten
+  (localStorage). Ohne diese Regel sichert Android nur Standardordner.
+-->
+<full-backup-content>
+    <include domain="root" path="app_webview" />
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <exclude domain="root" path="app_webview/Default/Cache" />
+    <exclude domain="root" path="app_webview/Default/Code Cache" />
+    <exclude domain="root" path="app_webview/Default/Service Worker/CacheStorage" />
+</full-backup-content>

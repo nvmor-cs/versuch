@@ -12,7 +12,8 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 - **Rekord-Erkennung**: Neue Bestleistungen werden beim Beenden gefeiert
 - **Verlauf & Statistik** mit umschaltbarer Sicht: Woche, Quartal, Jahr und Gesamt – Kennzahlen, Volumen-Chart (Tage/Wochen/Monate/Jahre) und Workout-Liste passen sich an; dazu Entwicklungskurve pro Übung
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
-- **Backup**: Export/Import aller Daten als JSON-Datei
+- **Datensicherung**: Backup als Datei teilen (Google Drive, Dateien, Mail) und jederzeit wiederherstellen – wahlweise **ersetzen** oder **zusammenführen**, sodass nichts verloren geht. Dazu sichert Android die App automatisch im Google-Konto (Auto Backup), und die App erinnert ans Sichern, wenn das letzte Backup zu lange her ist.
+- **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
 - **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz, Stahl-Kanten, Caution-Gold als einzige Akzentfarbe
 
 ## Android-App & Play Store 🤖
@@ -44,7 +45,7 @@ Die App muss über **HTTPS** erreichbar sein. Der einfachste Weg: GitHub Pages.
 
 Danach startet Eisenzeit wie eine native App im Vollbild und funktioniert auch offline.
 
-> **Wichtig:** Die Daten liegen im Browser-Speicher des Geräts. Mach gelegentlich ein Backup über *Einstellungen → Daten exportieren* – besonders bevor du Browserdaten löschst.
+> **Wichtig:** Die Daten liegen lokal auf dem Gerät. Mach gelegentlich ein Backup über *Einstellungen → Backup erstellen* – besonders bevor du Browserdaten löschst.
 
 ## Lokal ausprobieren
 
