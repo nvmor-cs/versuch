@@ -22,9 +22,11 @@
   --accent: #f7b500;
   --accent-ink: #0b0c0d;
   --accent-soft: rgba(247, 181, 0, 0.13);
+  --accent-line: rgba(247, 181, 0, 0.3);
   /* Funktional (nur destruktiv, kein zweiter Akzent) */
   --danger: #e5484d;
   --danger-soft: rgba(229, 72, 77, 0.12);
+  --danger-line: rgba(229, 72, 77, 0.25);
   /* Chart-Chrome */
   --grid: #232527;
   --axis: #303336;
@@ -44,6 +46,35 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --hazard: repeating-linear-gradient(-45deg,
       var(--accent) 0 7px, transparent 7px 14px);
+}
+
+/* ── Akzentfarben (Einstellungen → Akzentfarbe) ──────────── */
+/* Gold ist der Standard oben in :root. Jede Variante liefert denselben
+   Satz Rollen: Fläche, Schrift darauf, zarte Füllung, feiner Rand. */
+
+:root[data-accent="rot"] {
+  --accent: #ff1f1f;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(255, 31, 31, 0.15);
+  --accent-line: rgba(255, 31, 31, 0.35);
+  /* Löschen bleibt unterscheidbar: gedeckteres, kühleres Rot */
+  --danger: #ff8f6b;
+  --danger-soft: rgba(255, 143, 107, 0.13);
+  --danger-line: rgba(255, 143, 107, 0.3);
+}
+
+:root[data-accent="gruen"] {
+  --accent: #00e35f;
+  --accent-ink: #06120a;
+  --accent-soft: rgba(0, 227, 95, 0.14);
+  --accent-line: rgba(0, 227, 95, 0.32);
+}
+
+:root[data-accent="weiss"] {
+  --accent: #ffffff;
+  --accent-ink: #0b0c0d;
+  --accent-soft: rgba(255, 255, 255, 0.12);
+  --accent-line: rgba(255, 255, 255, 0.3);
 }
 
 /* ── Basis ──────────────────────────────────────────────── */
@@ -215,8 +246,8 @@ button { cursor: pointer; background: none; border: none; }
   color: var(--ink);
   border: 1px solid var(--border-strong);
 }
-.btn-soft { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(247, 181, 0, 0.28); }
-.btn-danger-soft { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(229, 72, 77, 0.25); }
+.btn-soft { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
+.btn-danger-soft { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
 .btn-good { background: var(--accent); color: var(--accent-ink); }
 .btn-compact { width: auto; padding: 9px 14px; font-size: 13px; }
 
@@ -564,7 +595,7 @@ button.row:active { background: var(--surface-2); }
   gap: 10px;
   padding: 10px 12px;
   background: var(--accent-soft);
-  border: 1px solid rgba(247, 181, 0, 0.22);
+  border: 1px solid var(--accent-line);
   border-radius: 4px;
   color: var(--ink);
   text-align: left;
@@ -889,7 +920,7 @@ button.row:active { background: var(--surface-2); }
   letter-spacing: 0.04em;
 }
 .badge svg { width: 13px; height: 13px; }
-.badge-gold { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(247, 181, 0, 0.3); }
+.badge-gold { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
 .badge-accent { background: var(--accent-soft); color: var(--accent); }
 .badge-muted { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border); }
 
@@ -1008,6 +1039,25 @@ button.row:active { background: var(--surface-2); }
 .settings-row:last-child { border-bottom: none; }
 .settings-row .lbl { font-weight: 700; font-size: 15px; }
 .settings-row .lbl small { display: block; font-weight: 400; font-size: 12.5px; color: var(--ink-2); }
+.accent-picker { display: flex; gap: 9px; flex-shrink: 0; }
+.accent-dot {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--dot);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: box-shadow 0.15s ease;
+}
+.accent-dot svg { width: 16px; height: 16px; }
+.accent-dot.active {
+  box-shadow: 0 0 0 2px var(--dot);
+  color: var(--dot-ink);
+}
+
 .settings-row select {
   background: var(--surface-2);
   border: 1px solid var(--border);

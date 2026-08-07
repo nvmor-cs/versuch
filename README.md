@@ -14,7 +14,7 @@ Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und M
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
 - **Datensicherung**: Backup als Datei teilen (Google Drive, Dateien, Mail) und jederzeit wiederherstellen – wahlweise **ersetzen** oder **zusammenführen**, sodass nichts verloren geht. Dazu sichert Android die App automatisch im Google-Konto (Auto Backup), und die App erinnert ans Sichern, wenn das letzte Backup zu lange her ist.
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
-- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz, Stahl-Kanten, Caution-Gold als einzige Akzentfarbe
+- **Industrial-Design**: bewusst dunkel gehalten – Asphalt-Schwarz und Stahl-Kanten, dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Gold, Rot, Grün oder Weiß
 
 ## Android-App & Play Store 🤖
 
@@ -59,7 +59,7 @@ python3 -m http.server 8000
 - Vanilla HTML/CSS/JS, keine Abhängigkeiten, kein Build-Schritt
 - Datenhaltung in `localStorage` (inkl. laufendem Workout, übersteht Reloads)
 - Service Worker cached die App-Shell für den Offline-Betrieb
-- Ein-Themen-Farbsystem über CSS-Custom-Properties (hell/dunkel)
+- Farbsystem über CSS-Custom-Properties; die Akzentfarbe hängt an einem `data-accent`-Attribut am Wurzelelement
 
 | Datei | Inhalt |
 |---|---|

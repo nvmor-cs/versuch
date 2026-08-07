@@ -3,7 +3,16 @@
 
 "use strict";
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
+
+// Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
+// im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
+const ACCENTS = [
+  { id: "gold",  name: "Gold",  dot: "#f7b500", ink: "#0b0c0d" },
+  { id: "rot",   name: "Rot",   dot: "#ff1f1f", ink: "#ffffff" },
+  { id: "gruen", name: "Grün",  dot: "#00e35f", ink: "#06120a" },
+  { id: "weiss", name: "Weiß",  dot: "#ffffff", ink: "#0b0c0d" },
+];
 
 /* ═══════════════ Helpers ═══════════════ */
 
@@ -100,7 +109,7 @@ const LS_ACTIVE = "eisenzeit.active.v1";
 function defaultDB() {
   return {
     version: 2,
-    settings: { restSecs: 90, autoRest: true, lastBackupAt: null },
+    settings: { restSecs: 90, autoRest: true, lastBackupAt: null, accent: "gold" },
     customExercises: [],
     plans: [],
     workouts: [],
@@ -146,6 +155,14 @@ function loadDB() {
 let DB = loadDB();
 const saveDB = () => localStorage.setItem(LS_DB, JSON.stringify(DB));
 saveDB();
+
+// Akzentfarbe sofort setzen – noch bevor die Oberfläche aufgebaut wird,
+// damit nichts kurz in der Standardfarbe aufblitzt.
+function applyAccent() {
+  const id = DB.settings.accent || "gold";
+  document.documentElement.setAttribute("data-accent", id);
+}
+applyAccent();
 
 let active = null;
 try { active = JSON.parse(localStorage.getItem(LS_ACTIVE) || "null"); } catch (e) { active = null; }
@@ -1556,6 +1573,17 @@ ACTIONS["open-settings"] = () => {
       <button class="switch ${s.autoRest ? "on" : ""}" data-action="toggle-autorest" role="switch" aria-checked="${s.autoRest}" aria-label="Pausen-Timer"></button>
     </div>
     <div class="settings-row">
+      <div class="lbl">Akzentfarbe<small id="accent-name">${esc(accentName())}</small></div>
+      <div class="accent-picker" role="radiogroup" aria-label="Akzentfarbe">
+        ${ACCENTS.map((a) => `
+          <button class="accent-dot ${a.id === (s.accent || "gold") ? "active" : ""}"
+            data-action="set-accent" data-a="${a.id}"
+            style="--dot:${a.dot};--dot-ink:${a.ink}"
+            role="radio" aria-checked="${a.id === (s.accent || "gold")}"
+            aria-label="${a.name}">${icon("check")}</button>`).join("")}
+      </div>
+    </div>
+    <div class="settings-row">
       <div class="lbl">Pausendauer</div>
       <select data-input="rest-secs">
         ${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((v) =>
@@ -1587,6 +1615,27 @@ function lastBackupLabel() {
   const when = days === 0 ? "heute" : days === 1 ? "gestern" : "vor " + days + " Tagen";
   return "Zuletzt " + when + " (" + fmtDate(t) + ")";
 }
+
+function accentName() {
+  const a = ACCENTS.find((x) => x.id === (DB.settings.accent || "gold"));
+  return a ? a.name : "Gold";
+}
+
+ACTIONS["set-accent"] = (el) => {
+  DB.settings.accent = el.dataset.a;
+  saveDB();
+  applyAccent();
+  // Auswahl im offenen Sheet markieren, ohne es neu aufzubauen –
+  // so sieht man die neue Farbe sofort in der ganzen App.
+  $$(".accent-dot").forEach((d) => {
+    const on = d.dataset.a === el.dataset.a;
+    d.classList.toggle("active", on);
+    d.setAttribute("aria-checked", on);
+  });
+  const lbl = $("#accent-name");
+  if (lbl) lbl.textContent = accentName();
+  render();
+};
 
 ACTIONS["toggle-autorest"] = (el) => {
   DB.settings.autoRest = !DB.settings.autoRest;
@@ -1768,6 +1817,7 @@ async function restoreBackup(text) {
   if (data.settings) DB.settings = Object.assign(DB.settings, data.settings);
 
   saveDB();
+  applyAccent();
   $$(".backdrop").forEach((b) => b.remove());
   render();
   toast(mode === "merge" ? "Backup zusammengeführt" : "Backup wiederhergestellt");
