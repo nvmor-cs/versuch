@@ -3,7 +3,7 @@
 
 "use strict";
 
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.5.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -419,6 +419,7 @@ function appConfirm(msg, opts = {}) {
         </div>
       </div>`;
     const done = (v) => { bd.remove(); resolve(v); };
+    bd.zurueck = () => done(false);   // von der Android-Zurücktaste genutzt
     bd.addEventListener("click", (e) => {
       const b = e.target.closest("[data-c]");
       if (b) done(b.dataset.c === "1");
@@ -2134,6 +2135,7 @@ function askRestoreMode(summary) {
       <button class="btn btn-danger-soft" data-r="replace">Alles ersetzen</button>
       <p class="hint" style="margin:6px 2px 0">Die aktuellen Daten in der App werden verworfen.</p>
     `);
+    bd.zurueck = () => { bd.remove(); resolve(null); };
     bd.addEventListener("click", (e) => {
       const b = e.target.closest("[data-r]");
       if (b) { bd.remove(); resolve(b.dataset.r); }
@@ -2192,6 +2194,57 @@ document.addEventListener("change", (e) => {
     setTimeout(signalGeben, 120);
   }
 });
+
+/* ═══════════════ Android-Zurücktaste ═══════════════
+   Zurück soll innerhalb der App navigieren statt sie zu schließen:
+   erst offene Dialoge, dann Vollbild-Ansichten, dann zurück zum Start-Tab.
+   Erst auf dem Start-Tab beendet ein zweites Zurück die App. */
+
+let beendenBereitBis = 0;
+
+function zurueckNavigieren() {
+  // 1. Oberster Dialog (Bestätigung, Sheet, Auswahl)
+  const dialoge = $$(".backdrop");
+  if (dialoge.length) {
+    const oben = dialoge[dialoge.length - 1];
+    if (typeof oben.zurueck === "function") oben.zurueck();
+    else oben.remove();
+    return true;
+  }
+
+  // 2. Oberste Vollbild-Ansicht – jede mit ihrer eigenen Schließ-Logik
+  const ovs = $$(".overlay");
+  if (ovs.length) {
+    const oben = ovs[ovs.length - 1];
+    if (oben.classList.contains("workout-ov")) ACTIONS["minimize-workout"]();
+    else if (oben.classList.contains("picker-ov")) ACTIONS["picker-cancel"]();
+    else if (oben.classList.contains("plan-wo-ov")) ACTIONS["plan-wo-done"]();
+    else { oben.remove(); render(); }
+    return true;
+  }
+
+  // 3. Läuft der Pausen-Timer, hat Zurück ihn zuerst weg
+  if (rest) { stopRest(); return true; }
+
+  // 4. Von jedem anderen Tab zurück zum Start
+  if (currentTab !== "home") { currentTab = "home"; render(); return true; }
+
+  // 5. Auf dem Start-Tab: erst beim zweiten Mal beenden
+  if (Date.now() < beendenBereitBis) return false;
+  beendenBereitBis = Date.now() + 2000;
+  toast(active ? "Workout läuft – nochmal für Beenden" : "Nochmal zurück zum Beenden");
+  return true;
+}
+
+// Für die Web-Version ohne Capacitor nicht nötig – dort gibt es keine
+// Hardware-Zurücktaste, die die App schließen würde.
+(function zurueckTasteVerbinden() {
+  const { App } = capPlugins();
+  if (!App || !App.addListener) return;
+  App.addListener("backButton", () => {
+    if (!zurueckNavigieren()) App.exitApp();
+  });
+})();
 
 /* ═══════════════ Init ═══════════════ */
 
