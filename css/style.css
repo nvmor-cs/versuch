@@ -913,6 +913,19 @@ body.vollbild .rest-bar {
 
 .wo-item.dragging { opacity: 0.9; }
 
+/* „Übungen im Blick": Name als Knopf, rechts das Entfernen */
+.chart-card h3 .watch-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-card h3 .watch-name:active { color: var(--accent); }
+
 /* Fortsetzen-Leiste */
 .resume-bar {
   position: fixed;
@@ -1071,6 +1084,10 @@ body.vollbild .rest-bar {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 2px;
+  /* Reicht für die einfache Überschrift wie für Name + Entfernen-Knopf */
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .chart-card .chart-sub {
   font-size: 12px;

@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.6.0";
+const APP_VERSION = "2.7.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -136,6 +136,8 @@ function defaultDB() {
     settings: {
       restSecs: 90, autoRest: true, lastBackupAt: null,
       accent: ACCENT_DEFAULT, restSignal: "beides",
+      // Übungen, deren Entwicklung im Verlauf-Tab dauerhaft mitläuft
+      beobachtet: [],
     },
     customExercises: [],
     plans: [],
@@ -714,10 +716,11 @@ function renderPlanDetail(ov) {
           <div class="row-title">${esc(w.name)}</div>
           <div class="row-sub">${w.exercises.length} Übungen${names ? " · " + esc(names) : ""}</div>
         </div>
-        <button class="btn btn-compact" data-action="start-plan" data-plan="${p.id}" data-wo="${w.id}">Start</button>
+        <button class="btn btn-compact btn-ghost" data-action="edit-plan-wo-direct" data-plan="${p.id}" data-i="${i}">${icon("edit")} Bearbeiten</button>
       </div>`;
-    }).join("") : `<p class="hint" style="padding:4px 0 10px">Noch keine Trainings – tippe oben auf den Stift, um welche anzulegen.</p>`}
-    <p class="hint" style="margin-top:10px">Tippe auf ein Training, um Übungen und Sätze zu bearbeiten.</p>
+    }).join("") : `<p class="hint" style="padding:4px 0 10px">Noch keine Trainings – leg unten das erste an.</p>`}
+    <button class="btn btn-soft" data-action="plan-wo-neu" data-id="${p.id}" style="margin-top:12px">${icon("plus")} Training hinzufügen</button>
+    <p class="hint" style="margin-top:10px">Gestartet wird ein Training über den Start-Tab.</p>
   `;
 }
 
@@ -725,6 +728,14 @@ function renderPlanDetail(ov) {
 ACTIONS["edit-plan-wo-direct"] = (el) => {
   openPlanEditor(el.dataset.plan);
   openPlanWoEditor(+el.dataset.i);
+};
+
+// Neues Training aus der Plan-Ansicht heraus: Editor öffnen und gleich ein
+// leeres Training anhängen. Bricht man ab, bleibt der Plan unverändert –
+// gearbeitet wird auf einer Kopie (draftPlan).
+ACTIONS["plan-wo-neu"] = (el) => {
+  openPlanEditor(el.dataset.id);
+  ACTIONS["plan-add-wo"]();
 };
 
 /* Plan-Editor – Ebene 1: der Plan mit seinen Trainings */
@@ -1128,8 +1139,15 @@ function openExerciseDetail(exId) {
 
 let pickerState = null;
 
-function openExercisePicker(onDone) {
-  pickerState = { selected: new Set(), search: "", filter: "Alle", onDone };
+// opt: { vorauswahl: [id], max: n, knopf: "…", leerErlaubt: true }
+// max bremst die Auswahl (der Verlauf zeigt höchstens fünf Kurven),
+// leerErlaubt lässt auch ein Abwählen aller Einträge durch.
+function openExercisePicker(onDone, opt) {
+  const o = opt || {};
+  pickerState = {
+    selected: new Set(o.vorauswahl || []), search: "", filter: "Alle", onDone,
+    max: o.max || 0, knopf: o.knopf || "", leerErlaubt: !!o.leerErlaubt,
+  };
   const ov = openOverlay(`
     <div class="overlay-head">
       <button class="icon-btn plain" data-action="picker-cancel" aria-label="Abbrechen">${icon("x")}</button>
@@ -1185,8 +1203,11 @@ function updatePickerDone() {
   const n = pickerState.selected.size;
   const btn = $("#picker-done");
   if (!btn) return;
-  btn.disabled = n === 0;
-  btn.textContent = n === 0 ? "Übungen hinzufügen" : n === 1 ? "1 Übung hinzufügen" : `${n} Übungen hinzufügen`;
+  btn.disabled = n === 0 && !pickerState.leerErlaubt;
+  const wort = pickerState.knopf || "hinzufügen";
+  btn.textContent = n === 0 ? (pickerState.leerErlaubt ? "Keine auswählen" : `Übungen ${wort}`)
+    : `${n} ${n === 1 ? "Übung" : "Übungen"} ${wort}`
+      + (pickerState.max ? ` (max. ${pickerState.max})` : "");
 }
 
 ACTIONS["picker-filter"] = (el) => setPickerFilter(el.dataset.m);
@@ -1209,7 +1230,13 @@ function pickerFilterBlaettern(richtung) {
 ACTIONS["picker-toggle"] = (el) => {
   const id = el.dataset.id;
   if (pickerState.selected.has(id)) pickerState.selected.delete(id);
-  else pickerState.selected.add(id);
+  else {
+    if (pickerState.max && pickerState.selected.size >= pickerState.max) {
+      toast(`Höchstens ${pickerState.max} Übungen`);
+      return;
+    }
+    pickerState.selected.add(id);
+  }
   el.classList.toggle("picked");
   updatePickerDone();
 };
@@ -1217,9 +1244,10 @@ ACTIONS["picker-cancel"] = () => { $(".picker-ov")?.remove(); pickerState = null
 ACTIONS["picker-done"] = () => {
   const ids = Array.from(pickerState.selected);
   const cb = pickerState.onDone;
+  const leerOk = pickerState.leerErlaubt;
   $(".picker-ov")?.remove();
   pickerState = null;
-  if (ids.length) cb(ids);
+  if (ids.length || leerOk) cb(ids);
 };
 
 /* ═══════════════ Aktives Workout ═══════════════ */
@@ -2025,6 +2053,7 @@ function renderHistory() {
       }</div>
       <div class="chart-wrap">${volumeChart(histRange)}</div>
     </div>
+    ${beobachtetBlock()}
     <div class="section-label">Workouts</div>
     ${ws.length ? ws.map(historyRow).join("") : `
       <div class="empty">${icon("history")}
@@ -2034,6 +2063,59 @@ function renderHistory() {
     </div>
   `;
 }
+
+/* ── Übungen im Blick ────────────────────────────────────
+   Bis zu fünf Übungen, deren Entwicklung man dauerhaft im Verlauf-Tab sehen
+   will. Die Kurven zeigen bewusst *alle* Workouts, nicht den oben gewählten
+   Zeitraum: Bei „Woche" wären es ein oder zwei Punkte, und die Frage lautet
+   ja gerade, ob es über Monate aufwärtsgeht. */
+
+const BEOBACHTET_MAX = 5;
+
+const beobachtet = () =>
+  (DB.settings.beobachtet || []).filter((id) => !!exById(id));
+
+function beobachtetBlock() {
+  const ids = beobachtet();
+  return `
+    <div class="section-label">Übungen im Blick</div>
+    ${ids.map((id) => {
+      const typ = exType(id);
+      const rek = recordFor(id);
+      return `
+      <div class="card chart-card">
+        <h3>
+          <button class="watch-name" data-action="open-exercise" data-id="${id}">${esc(exName(id))}</button>
+          <button class="mini-btn danger" data-action="watch-del" data-id="${id}" aria-label="Aus der Übersicht nehmen">${icon("x")}</button>
+        </h3>
+        <div class="chart-sub">${
+          typ === "time" ? "Beste Zeit" : typ === "reps" ? "Meiste Wiederholungen" : "Bestes Gewicht"
+        } pro Workout · alle Workouts${rek ? " · Rekord " + fmtSet(typ, rek.set) : ""}</div>
+        <div class="chart-wrap">${progressChart(id)}</div>
+      </div>`;
+    }).join("")}
+    ${ids.length === 0 ? `<p class="hint" style="padding:2px 0 10px">Noch keine ausgewählt. Wähle bis zu ${BEOBACHTET_MAX} Übungen – etwa Kniebeugen –, dann siehst du hier ihre Entwicklung über alle Workouts.</p>` : ""}
+    <button class="btn btn-soft" data-action="watch-pick">${icon(ids.length ? "edit" : "plus")} Übungen ${ids.length ? "ändern" : "wählen"}</button>`;
+}
+
+ACTIONS["watch-pick"] = () => {
+  openExercisePicker((ids) => {
+    DB.settings.beobachtet = ids;
+    saveDB();
+    renderHistory();
+  }, {
+    vorauswahl: beobachtet(),
+    max: BEOBACHTET_MAX,
+    knopf: "übernehmen",
+    leerErlaubt: true,
+  });
+};
+
+ACTIONS["watch-del"] = (el) => {
+  DB.settings.beobachtet = beobachtet().filter((id) => id !== el.dataset.id);
+  saveDB();
+  renderHistory();
+};
 
 function historyRow(w) {
   return `
