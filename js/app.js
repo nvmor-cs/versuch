@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.7.1";
+const APP_VERSION = "2.8.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -573,7 +573,10 @@ const TABS = [
 ];
 
 ACTIONS["tab"] = (el) => {
+  // Auf demselben Reiter nichts tun – sonst klopft es bei jedem Tipp
+  if (el.dataset.tab === currentTab) return;
   currentTab = el.dataset.tab;
+  tippen();
   render();
 };
 
@@ -2745,6 +2748,22 @@ function zurueckNavigieren() {
     if (!zurueckNavigieren()) App.exitApp();
   });
 })();
+
+/* ═══════════════ Haptik ═══════════════
+   Ein kurzer Stups beim Reiterwechsel. Bewusst nur dort und bewusst leicht:
+   Vibriert alles, achtet man auf nichts mehr. Ohne Capacitor (im Browser)
+   versucht es die Vibrations-Schnittstelle, die viele Handys ignorieren –
+   dann passiert eben nichts. */
+
+function tippen() {
+  const { Haptics } = capPlugins();
+  if (Haptics) {
+    // ImpactStyle.Light – der kürzeste, den der Plugin kennt
+    Haptics.impact({ style: "LIGHT" }).catch(() => {});
+    return;
+  }
+  try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+}
 
 /* ═══════════════ Vollbild-Ansichten melden ═══════════════
    Overlays decken die Tab-Leiste ab. Die Pausenleiste muss das wissen: über
