@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.6.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -219,6 +219,9 @@ try { active = JSON.parse(localStorage.getItem(LS_ACTIVE) || "null"); } catch (e
 const saveActive = () => {
   if (active) localStorage.setItem(LS_ACTIVE, JSON.stringify(active));
   else localStorage.removeItem(LS_ACTIVE);
+  // Jede Änderung am Workout läuft hier durch – der eine Ort, an dem sich
+  // die Meldung in der Leiste zuverlässig nachziehen lässt.
+  meldungPlanen();
 };
 
 /* ═══════════════ Übungs-Zugriff ═══════════════ */
@@ -1289,40 +1292,119 @@ function renderWorkout(ov) {
   updateWoMeta();
 }
 
+/* Immer nur eine Übung offen. Alles gleichzeitig aufgeklappt war beim
+   Trainieren unübersichtlich – man scrollt dann an der Stelle vorbei, an der
+   man gerade eintragen will. null heißt „automatisch": die erste Übung mit
+   einem offenen Satz. Ein Tipp auf eine zugeklappte Übung setzt sie fest. */
+let offeneUebung = null;
+
+function offeneUebungIndex() {
+  if (!active) return -1;
+  if (offeneUebung != null && active.exercises[offeneUebung]) return offeneUebung;
+  return active.exercises.findIndex((e) => e.sets.some((s) => !s.done));
+}
+
 function renderWoExercises() {
   const host = $("#wo-exercises");
   if (!host || !active) return;
   host.innerHTML = active.exercises.length
     ? active.exercises.map((ex, xi) => woExerciseBlock(ex, xi)).join("")
     : `<div class="empty">${icon("dumbbell")}<h3>Leg los!</h3><p>Füge deine erste Übung hinzu.</p></div>`;
+  woSortierbar();
 }
 
 function woExerciseBlock(ex, xi) {
   const type = exType(ex.exerciseId);
-  const prev = prevSetsFor(ex.exerciseId);
-  const curIdx = ex.sets.findIndex((s) => !s.done);
   const ss = supersetInfo(active.exercises)[xi];
   const nächste = active.exercises[xi + 1];
   const verbunden = !!ex.superset && ex.superset === (nächste || {}).superset;
+  const offen = xi === offeneUebungIndex();
+  const griff = `<button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>`;
+  const kopf = `${ss ? `<div class="ss-head">${icon("link")} Supersatz ${ss.letter} · Übung ${ss.pos} von ${ss.size}</div>` : ""}`;
+
   return `
-    <div class="exercise-block ${ss ? "in-superset" : ""}" data-xi="${xi}">
-      ${ss ? `<div class="ss-head">${icon("link")} Supersatz ${ss.letter} · Übung ${ss.pos} von ${ss.size}</div>` : ""}
-      <div class="exercise-block-head">
-        <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
-        <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
+    <div class="wo-item" data-xi="${xi}">
+      <div class="exercise-block ${ss ? "in-superset" : ""} ${offen ? "" : "zu"}" data-xi="${xi}">
+        ${kopf}
+        ${offen ? woKopfOffen(ex, xi, griff) : woKopfZu(ex, xi, type)}
+        ${offen ? woSaetze(ex, xi, type) : ""}
       </div>
-      ${ex.sets.map((s, si) =>
-        s.done ? doneSetRow(type, s, si, xi)
-        : si === curIdx ? currentSetCard(type, ex, xi, si, prev)
-        : queuedSetRow(si, xi)).join("")}
-      ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
-      <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>
-    </div>
-    ${nächste ? `
-    <button class="ss-link ${verbunden ? "on" : ""}" data-action="wo-superset" data-xi="${xi}">
-      ${icon(verbunden ? "unlink" : "link")}
-      ${verbunden ? "Supersatz – trennen" : "Mit nächster Übung verbinden"}
-    </button>` : ""}`;
+      ${nächste ? `
+      <button class="ss-link ${verbunden ? "on" : ""}" data-action="wo-superset" data-xi="${xi}">
+        ${icon(verbunden ? "unlink" : "link")}
+        ${verbunden ? "Supersatz – trennen" : "Mit nächster Übung verbinden"}
+      </button>` : ""}
+    </div>`;
+}
+
+function woKopfOffen(ex, xi, griff) {
+  return `
+    <div class="exercise-block-head">
+      ${griff}
+      <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
+      <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
+    </div>`;
+}
+
+function woKopfZu(ex, xi, type) {
+  const fertig = ex.sets.filter((s) => s.done).length;
+  const letzter = ex.sets.filter((s) => s.done).pop();
+  const stand = fertig === ex.sets.length
+    ? `Fertig · ${ex.sets.length} Sätze`
+    : `${fertig}/${ex.sets.length} Sätze${letzter ? " · " + fmtSet(type, letzter) : ""}`;
+  return `
+    <div class="exercise-block-head zu">
+      <button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>
+      <button class="ex-zu" data-action="wo-open-ex" data-xi="${xi}">
+        <span class="ex-zu-name">${esc(exName(ex.exerciseId))}</span>
+        <span class="ex-zu-stand">${stand}</span>
+      </button>
+      <span class="ex-zu-chev ${fertig === ex.sets.length ? "fertig" : ""}">
+        ${fertig === ex.sets.length ? icon("check") : icon("chevD")}</span>
+    </div>`;
+}
+
+function woSaetze(ex, xi, type) {
+  const prev = prevSetsFor(ex.exerciseId);
+  const curIdx = ex.sets.findIndex((s) => !s.done);
+  return `
+    ${ex.sets.map((s, si) =>
+      s.done ? doneSetRow(type, s, si, xi)
+      : si === curIdx ? currentSetCard(type, ex, xi, si, prev)
+      : queuedSetRow(si, xi)).join("")}
+    ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
+    <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>`;
+}
+
+ACTIONS["wo-open-ex"] = (el) => {
+  offeneUebung = +el.dataset.xi;
+  renderWoExercises();
+  $(`.wo-item[data-xi="${offeneUebung}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+/* Reihenfolge nur für dieses Workout ändern. active.exercises ist beim Start
+   aus dem Plan kopiert worden – der Plan selbst bleibt also unberührt. */
+function woSortierbar() {
+  const host = $("#wo-exercises");
+  if (!host || !active) return;
+  // Nur einmal je Behälter binden. renderWoExercises tauscht bloß den Inhalt
+  // aus, das Element selbst bleibt – ohne diese Sperre sammelte sich mit
+  // jedem Satz ein weiterer Zuhörer an.
+  if (host.dataset.sortierbar) return;
+  host.dataset.sortierbar = "1";
+  makeSortable(host, ".wo-item", ".drag-handle", (von, nach) => {
+    if (von === nach) return;
+    // Die offene Übung am Objekt festhalten, nicht am Index – der verschiebt
+    // sich ja gerade
+    const offenObj = active.exercises[offeneUebungIndex()];
+    const [weg] = active.exercises.splice(von, 1);
+    active.exercises.splice(nach, 0, weg);
+    normalizeSupersets(active.exercises);
+    const neu = active.exercises.indexOf(offenObj);
+    offeneUebung = neu >= 0 ? neu : null;
+    saveActive();
+    renderWoExercises();
+  });
 }
 
 ACTIONS["wo-superset"] = (el) => {
@@ -1358,13 +1440,17 @@ function queuedSetRow(si, xi) {
 function currentSetCard(type, ex, xi, si, prev) {
   const s = ex.sets[si];
   const p = prev && prev[si];
-  // Startwerte: gleicher Satz vom letzten Mal, sonst letzter fertiger Satz, sonst Standard
+  // Startwerte: gleicher Satz vom letzten Mal, sonst letzter fertiger Satz
+  // dieser Übung. Gibt es beides nicht, bleibt alles auf 0 – geraten wird
+  // nicht, sonst trägt man versehentlich Zahlen ein, die nie jemand gehoben
+  // hat. Nur die Zeit startet bei einer Minute, weil 0 Sekunden keine
+  // sinnvolle Vorgabe für eine Halteübung sind.
   const lastDone = ex.sets.slice(0, si).reverse().find((x) => x.done);
   if (type === "weight_reps") {
-    if (s.w == null) s.w = p && p.w != null ? p.w : lastDone && lastDone.w != null ? lastDone.w : 20;
-    if (s.r == null) s.r = p && p.r != null ? p.r : lastDone && lastDone.r != null ? lastDone.r : 8;
+    if (s.w == null) s.w = p && p.w != null ? p.w : lastDone && lastDone.w != null ? lastDone.w : 0;
+    if (s.r == null) s.r = p && p.r != null ? p.r : lastDone && lastDone.r != null ? lastDone.r : 0;
   } else if (type === "reps") {
-    if (s.r == null) s.r = p && p.r != null ? p.r : lastDone && lastDone.r != null ? lastDone.r : 10;
+    if (s.r == null) s.r = p && p.r != null ? p.r : lastDone && lastDone.r != null ? lastDone.r : 0;
   } else {
     if (s.t == null) s.t = p && p.t ? p.t : lastDone && lastDone.t ? lastDone.t : 60;
   }
@@ -1452,7 +1538,7 @@ ACTIONS["wo-step"] = (el) => {
   const s = ex && ex.sets[si];
   if (!s) return;
   if (f === "w") s.w = Math.max(0, Math.round(((s.w || 0) + dir * 2.5) * 100) / 100);
-  if (f === "r") s.r = Math.max(1, (s.r || 0) + dir);
+  if (f === "r") s.r = Math.max(0, (s.r || 0) + dir);
   if (f === "t") s.t = Math.max(15, (s.t || 0) + dir * 15);
   const inp = $(`[data-input="set-${f}"][data-xi="${xi}"][data-si="${si}"]`);
   if (inp) inp.value = f === "w" ? String(s.w).replace(".", ",") : f === "t" ? fmtClock(s.t) : s.r;
@@ -1468,6 +1554,9 @@ ACTIONS["wo-complete-set"] = (el) => {
   if (type === "time" && (!s.t || s.t <= 0)) { toast("Zeit eintragen, z. B. 1:30"); return; }
   if (type === "weight_reps" && s.w == null) s.w = 0;
   s.done = true;
+  // Übung durch? Dann die Festlegung lösen, damit die nächste offene Übung
+  // von selbst aufklappt.
+  if (!ex.sets.some((x) => !x.done)) offeneUebung = null;
   saveActive();
   renderWoExercises();
   updateWoMeta();
@@ -1476,8 +1565,10 @@ ACTIONS["wo-complete-set"] = (el) => {
   // Erst wenn die Runde durch ist, läuft der Pausen-Timer.
   const weiter = naechsteImSupersatz(xi);
   if (weiter >= 0) {
-    const block = $(`.exercise-block[data-xi="${weiter}"]`);
-    if (block) block.scrollIntoView({ behavior: "smooth", block: "center" });
+    offeneUebung = weiter;   // die nächste Übung der Runde aufklappen
+    renderWoExercises();
+    const block = $(`.wo-item[data-xi="${weiter}"]`);
+    if (block) block.scrollIntoView({ behavior: "smooth", block: "start" });
     toast("Weiter mit " + exName(active.exercises[weiter].exerciseId));
     return;
   }
@@ -1655,7 +1746,7 @@ function startRest(secs, info) {
   // wenn das Handy in der Tasche steckt – die Meldung kommt trotzdem.
   planeErinnerung(endet);
   rest = { endsAt: endet, total: secs, info: info || null };
-  pausenMeldungZeigen();
+  meldungAktualisieren();
   const bar = document.createElement("div");
   bar.id = "rest-bar";
   bar.className = "rest-bar";
@@ -1665,6 +1756,7 @@ function startRest(secs, info) {
     <button data-action="rest-plus">+15 s</button>
     <button data-action="rest-skip">Fertig</button>`;
   document.body.appendChild(bar);
+  document.body.classList.add("rest-an");
   rest.interval = setInterval(tickRest, 250);
   tickRest();
 }
@@ -1739,28 +1831,46 @@ function vibrieren() {
   try { navigator.vibrate && navigator.vibrate(muster); } catch (e) {}
 }
 
-/* ── Laufende Pause in der Benachrichtigungsleiste ──────── */
+/* ── Laufendes Workout in der Benachrichtigungsleiste ───── */
 
-// Die Restzeit zählt Android selbst herunter (siehe PausenTimerPlugin) –
-// die App muss dafür nichts nachschreiben und darf schlafen.
-function pausenMeldungZeigen() {
+// Die Meldung steht, solange ein Workout läuft – so kommt man von überall
+// zurück in die App. Während der Satzpause wechselt sie den Inhalt und zählt
+// rückwärts. Die Zeit zählt Android selbst (siehe PausenTimerPlugin), die App
+// muss dafür nichts nachschreiben und darf schlafen.
+
+function meldungAktualisieren() {
   const { PausenTimer } = capPlugins();
-  if (!PausenTimer || !rest) return;
+  if (!PausenTimer) return;
+  if (!active) { PausenTimer.aus().catch(() => {}); return; }
   meldungErlauben().then((ok) => {
-    if (!ok || !rest) return;
-    const restMs = rest.endsAt - Date.now();
-    if (restMs <= 0) return;
-    PausenTimer.start({
-      restMs: Math.round(restMs),
-      titel: (rest.info && rest.info.titel) || "Satzpause",
-      text: (rest.info && rest.info.text) || "",
-    }).catch(() => {});
+    if (!ok || !active) return;
+    const restMs = rest ? rest.endsAt - Date.now() : 0;
+    const daten = restMs > 0
+      ? {
+          modus: "pause", ms: Math.round(restMs),
+          titel: (rest.info && rest.info.titel) || active.name || "Satzpause",
+          text: (rest.info && rest.info.text) || "",
+        }
+      : {
+          modus: "workout", ms: Math.round(Date.now() - active.startedAt),
+          titel: active.name || "Workout",
+          text: `${workoutSets(active)} Sätze · ${fmtVol(workoutVolume(active))}`,
+        };
+    PausenTimer.zeigen(daten).catch(() => {});
   });
 }
 
-function pausenMeldungWeg() {
+function meldungWeg() {
   const { PausenTimer } = capPlugins();
-  if (PausenTimer) PausenTimer.stop().catch(() => {});
+  if (PausenTimer) PausenTimer.aus().catch(() => {});
+}
+
+// Bei jeder Änderung neu schreiben wäre Verschwendung – die Zeit läuft ja von
+// allein weiter. Deshalb gebündelt kurz nach der letzten Änderung.
+let meldungTimer = null;
+function meldungPlanen() {
+  clearTimeout(meldungTimer);
+  meldungTimer = setTimeout(meldungAktualisieren, 700);
 }
 
 // Zeile unter dem Übungsnamen, im Stil der Satzkarte
@@ -1806,6 +1916,9 @@ async function planeErinnerung(endetUm) {
         title: "Pause vorbei",
         body: "Weiter mit dem nächsten Satz.",
         schedule: { at: new Date(endetUm), allowWhileIdle: true },
+        // Eigener lauter Kanal (siehe PausenTimerPlugin): Auf dem
+        // Standardkanal blieb der Ton oft aus, wenn das Handy schlief.
+        channelId: DB.settings.restSignal === "vibration" ? undefined : "pause-ende",
         sound: DB.settings.restSignal === "vibration" ? null : undefined,
       }],
     });
@@ -1822,8 +1935,9 @@ function stopRest(opt) {
   if (rest) clearInterval(rest.interval);
   rest = null;
   $("#rest-bar")?.remove();
-  // Die laufende Anzeige geht immer weg – sie zählt sonst ins Minus
-  pausenMeldungWeg();
+  document.body.classList.remove("rest-an");
+  // Zurück auf die Workout-Anzeige – oder ganz weg, wenn keins mehr läuft
+  meldungAktualisieren();
   // Beim vorzeitigen Abbrechen auch die geplante Meldung zurücknehmen
   if (!opt || !opt.meldungBehalten) loescheErinnerung();
 }
@@ -1833,7 +1947,7 @@ ACTIONS["rest-plus"] = () => {
   rest.endsAt += 15000;
   rest.total += 15;
   planeErinnerung(rest.endsAt);
-  pausenMeldungZeigen();   // schreibt die Meldung mit neuem Ziel neu
+  meldungAktualisieren();   // schreibt die Meldung mit neuem Ziel neu
   tickRest();
 };
 ACTIONS["rest-skip"] = () => stopRest();
@@ -2516,6 +2630,40 @@ function zurueckNavigieren() {
   });
 })();
 
+/* ═══════════════ Vollbild-Ansichten melden ═══════════════
+   Overlays decken die Tab-Leiste ab. Die Pausenleiste muss das wissen: über
+   der Tab-Leiste schweben, wenn sie da ist, sonst ganz nach unten rücken.
+   Ein Beobachter ist zuverlässiger, als jede Stelle einzeln zu pflegen, an
+   der ein Overlay auf- oder zugeht. */
+
+function vollbildBeobachten() {
+  const pruefen = () =>
+    document.body.classList.toggle("vollbild", !!document.querySelector(".overlay"));
+  new MutationObserver(pruefen).observe(document.body, { childList: true });
+  pruefen();
+}
+
+/* ═══════════════ Platz für die Bildschirmtastatur ═══════════════
+   Geht die Tastatur auf, schrumpft der sichtbare Bereich – feste Leisten am
+   unteren Rand lägen dann über dem Feld, in das man gerade tippt. Die
+   Differenz landet als --tastatur im Stylesheet, die Pausenleiste rückt
+   entsprechend nach oben. */
+
+function tastaturBeobachten() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const setzen = () => {
+    // Wie viel des Fensters verdeckt die Tastatur? Kleine Werte sind
+    // Rundungsrauschen, die ignorieren wir.
+    const verdeckt = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty(
+      "--tastatur", (verdeckt > 80 ? Math.round(verdeckt) : 0) + "px");
+  };
+  vv.addEventListener("resize", setzen);
+  vv.addEventListener("scroll", setzen);
+  setzen();
+}
+
 /* ═══════════════ Bildschirm wach halten ═══════════════
    Solange die App offen im Vordergrund liegt, soll der Bildschirm nicht
    zugehen – mitten im Satz will niemand erst entsperren. In der Android-App
@@ -2565,4 +2713,8 @@ function render() {
 render();
 histWischenVerbinden();
 exWischenVerbinden();
+vollbildBeobachten();
+tastaturBeobachten();
 bildschirmWachHalten();
+// Ein wiederhergestelltes Workout gehört sofort in die Leiste
+meldungAktualisieren();

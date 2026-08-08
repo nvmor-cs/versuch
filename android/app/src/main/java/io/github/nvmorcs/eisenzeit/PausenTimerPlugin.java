@@ -5,6 +5,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
@@ -16,59 +18,85 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Zeigt die laufende Satzpause in der Benachrichtigungsleiste – mit
- * mitlaufender Restzeit.
+ * Die Meldung zum laufenden Workout – mit mitlaufender Zeit.
  *
- * Warum nativ: Eine Benachrichtigung, deren Zeit sich sekündlich ändert,
- * lässt sich nicht sinnvoll aus JavaScript nachschreiben – die App liegt
- * während der Pause im Hintergrund und dürfte gar nicht laufen. Android kann
- * das aber selbst: setUsesChronometer(true) zusammen mit
- * setChronometerCountDown(true) und einem Zielzeitpunkt lässt das System die
- * Restzeit herunterzählen, ohne dass die App etwas tut.
+ * Sie steht, solange das Workout läuft, und dient zugleich als Rückweg in die
+ * App. Während einer Satzpause wechselt dieselbe Meldung den Inhalt und zählt
+ * die Restzeit herunter; danach schaltet sie zurück auf die Workout-Dauer.
  *
- * Der Kanal ist bewusst leise (IMPORTANCE_LOW): Die Meldung ist eine Anzeige,
- * kein Signal. Den Ton am Ende der Pause macht weiterhin die App.
+ * Warum nativ: Eine Meldung, deren Zeit sich sekündlich ändert, lässt sich
+ * nicht aus JavaScript nachschreiben – die App liegt zwischendurch im
+ * Hintergrund und dürfte gar nicht laufen. Android kann das selbst:
+ * setUsesChronometer zählt ab einem Zeitpunkt hoch, mit
+ * setChronometerCountDown herunter. Die App setzt den Zeitpunkt einmal, den
+ * Rest macht das System.
+ *
+ * Zwei Kanäle: Die laufende Anzeige ist stumm (IMPORTANCE_LOW), sie ist eine
+ * Anzeige und kein Signal. Das Pausenende bekommt einen eigenen lauten Kanal,
+ * damit der Ton auch ankommt, wenn das Handy in der Tasche steckt.
  */
 @CapacitorPlugin(name = "PausenTimer")
 public class PausenTimerPlugin extends Plugin {
 
-    private static final String KANAL = "pausen-timer";
+    /** Laufende Anzeige: stumm, bleibt stehen */
+    public static final String KANAL_LAUFEND = "workout-laufend";
+    /** Pausenende: laut, mit Ton und Vibration */
+    public static final String KANAL_ENDE = "pause-ende";
+
     private static final int ID = 4712;   // 4711 gehört der Schluss-Meldung
 
     @Override
     public void load() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel kanal = new NotificationChannel(
-                    KANAL, "Satzpause", NotificationManager.IMPORTANCE_LOW);
-            kanal.setDescription("Zeigt die restliche Pause zwischen zwei Sätzen");
-            kanal.setShowBadge(false);
-            kanal.setSound(null, null);
-            kanal.enableVibration(false);
-            getContext().getSystemService(NotificationManager.class)
-                    .createNotificationChannel(kanal);
+            NotificationManager nm = getContext().getSystemService(NotificationManager.class);
+
+            NotificationChannel laufend = new NotificationChannel(
+                    KANAL_LAUFEND, "Laufendes Workout", NotificationManager.IMPORTANCE_LOW);
+            laufend.setDescription("Dauer des Workouts und die restliche Satzpause");
+            laufend.setShowBadge(false);
+            laufend.setSound(null, null);
+            laufend.enableVibration(false);
+            nm.createNotificationChannel(laufend);
+
+            NotificationChannel ende = new NotificationChannel(
+                    KANAL_ENDE, "Pause vorbei", NotificationManager.IMPORTANCE_HIGH);
+            ende.setDescription("Meldet das Ende der Satzpause");
+            ende.enableVibration(true);
+            ende.setVibrationPattern(new long[]{0, 260, 120, 260, 120, 420});
+            ende.setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build());
+            nm.createNotificationChannel(ende);
         }
-        // Beim Start aufräumen: Nach einem Absturz mitten in der Pause könnte
+        // Beim Start aufräumen: Nach einem Absturz mitten im Workout könnte
         // noch eine alte Anzeige stehen, die zu nichts mehr gehört.
         NotificationManagerCompat.from(getContext()).cancel(ID);
     }
 
     /**
-     * @param restMs Verbleibende Pause in Millisekunden. Bewusst die Dauer und
-     *               nicht der Zielzeitpunkt: Ein Zeitstempel seit 1970 ist eine
-     *               krumme große Zahl, die über die JS-Brücke schnell an
-     *               Genauigkeit verliert. Die Dauer bleibt klein und eindeutig.
-     * @param titel  Überschrift, üblicherweise der Übungsname
-     * @param text   Zeile darunter, z. B. „Satz 2/3 · 80 kg × 8 Wdh."
+     * @param modus "workout" zählt hoch, "pause" zählt herunter
+     * @param ms    im Modus "workout" die bereits vergangene Zeit, im Modus
+     *              "pause" die verbleibende – jeweils in Millisekunden.
+     *              Bewusst eine Dauer und kein Zeitstempel: Millisekunden seit
+     *              1970 sind eine krumme große Zahl, bei der die JS-Brücke
+     *              schnell Genauigkeit verliert.
+     * @param titel Überschrift
+     * @param text  Zeile darunter
      */
     @PluginMethod
-    public void start(PluginCall call) {
-        Integer restMs = call.getInt("restMs", 0);
-        if (restMs == null || restMs <= 0) {
-            call.reject("restMs fehlt");
+    public void zeigen(PluginCall call) {
+        String modus = call.getString("modus", "workout");
+        Integer ms = call.getInt("ms", 0);
+        if (ms == null) ms = 0;
+        boolean pause = "pause".equals(modus);
+        if (pause && ms <= 0) {
+            call.reject("ms fehlt");
             return;
         }
-        long endsAt = System.currentTimeMillis() + restMs;
-        String titel = call.getString("titel", "Satzpause");
+        String titel = call.getString("titel", "Workout");
         String text = call.getString("text", "");
 
         Intent oeffnen = new Intent(getContext(), MainActivity.class);
@@ -79,38 +107,36 @@ public class PausenTimerPlugin extends Plugin {
         }
         PendingIntent tippen = PendingIntent.getActivity(getContext(), 0, oeffnen, flags);
 
-        NotificationCompat.Builder b = new NotificationCompat.Builder(getContext(), KANAL)
+        // Im Pausenmodus liegt der Zielzeitpunkt in der Zukunft, sonst der
+        // Startzeitpunkt in der Vergangenheit – daraus zählt Android selbst.
+        long zeitpunkt = pause
+                ? System.currentTimeMillis() + ms
+                : System.currentTimeMillis() - ms;
+
+        NotificationCompat.Builder b = new NotificationCompat.Builder(getContext(), KANAL_LAUFEND)
                 .setSmallIcon(R.drawable.ic_stat_pause)
                 .setContentTitle(titel)
                 .setContentText(text)
-                .setSubText("Pause")
+                .setSubText(pause ? "Satzpause" : "Workout läuft")
                 .setContentIntent(tippen)
                 // Bleibt stehen, bis die App sie zurücknimmt, und lässt sich
                 // nicht versehentlich wegwischen
                 .setOngoing(true)
                 .setAutoCancel(false)
-                // Nur beim ersten Mal melden – jede Verlängerung schreibt die
-                // Meldung neu, das darf nicht jedes Mal blinken
+                // Nur beim ersten Mal melden – die Meldung wird bei jedem Satz
+                // neu geschrieben, das darf nicht jedes Mal blinken
                 .setOnlyAlertOnce(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setShowWhen(true)
-                .setWhen(endsAt)
+                .setWhen(zeitpunkt)
                 .setUsesChronometer(true);
 
         // Rückwärts zählen kann Android erst ab Nougat. Darunter zeigt die
-        // Meldung die Uhrzeit, zu der die Pause endet – auch brauchbar.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        // Meldung die Uhrzeit des Pausenendes – auch brauchbar.
+        if (pause && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             b.setChronometerCountDown(true);
-        }
-
-        // Selbstzerstörung zum Pausenende. Nimmt die App die Meldung nicht
-        // selbst zurück – weil sie im Hintergrund schläft oder inzwischen
-        // beendet wurde –, räumt Android auf. Ohne das zählte die Anzeige
-        // fröhlich ins Minus weiter.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            b.setTimeoutAfter(restMs);
         }
 
         Notification meldung = b.build();
@@ -126,7 +152,7 @@ public class PausenTimerPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void stop(PluginCall call) {
+    public void aus(PluginCall call) {
         NotificationManagerCompat.from(getContext()).cancel(ID);
         call.resolve();
     }
