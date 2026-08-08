@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.8.0";
+const APP_VERSION = "2.8.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -1600,6 +1600,7 @@ ACTIONS["wo-complete-set"] = (el) => {
   if (type === "time" && (!s.t || s.t <= 0)) { toast("Zeit eintragen, z. B. 1:30"); return; }
   if (type === "weight_reps" && s.w == null) s.w = 0;
   s.done = true;
+  tippen(true);
   // Übung durch? Dann die Festlegung lösen, damit die nächste offene Übung
   // von selbst aufklappt.
   if (!ex.sets.some((x) => !x.done)) offeneUebung = null;
@@ -2750,19 +2751,24 @@ function zurueckNavigieren() {
 })();
 
 /* ═══════════════ Haptik ═══════════════
-   Ein kurzer Stups beim Reiterwechsel. Bewusst nur dort und bewusst leicht:
-   Vibriert alles, achtet man auf nichts mehr. Ohne Capacitor (im Browser)
-   versucht es die Vibrations-Schnittstelle, die viele Handys ignorieren –
-   dann passiert eben nichts. */
+   Zwei Stärken, zwei Bedeutungen: leicht beim Reiterwechsel (reine
+   Navigation), kräftiger beim abgeschlossenen Satz (da ist etwas passiert,
+   und die Hand ist möglicherweise die einzige, die es mitbekommt – man
+   schaut beim Absetzen der Hantel nicht aufs Display).
 
-function tippen() {
+   Bewusst nur an diesen beiden Stellen: Vibriert alles, achtet man auf
+   nichts mehr. Ohne Capacitor (im Browser) versucht es die
+   Vibrations-Schnittstelle, die viele Handys ignorieren – dann passiert
+   eben nichts. */
+
+function tippen(stark) {
   const { Haptics } = capPlugins();
   if (Haptics) {
-    // ImpactStyle.Light – der kürzeste, den der Plugin kennt
-    Haptics.impact({ style: "LIGHT" }).catch(() => {});
+    // ImpactStyle: LIGHT ist der kürzeste, MEDIUM der spürbare Klopfer
+    Haptics.impact({ style: stark ? "MEDIUM" : "LIGHT" }).catch(() => {});
     return;
   }
-  try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+  try { navigator.vibrate && navigator.vibrate(stark ? 28 : 12); } catch (e) {}
 }
 
 /* ═══════════════ Vollbild-Ansichten melden ═══════════════

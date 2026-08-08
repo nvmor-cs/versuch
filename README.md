@@ -26,7 +26,7 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 - **Bildschirm bleibt an**, solange die App im Vordergrund liegt – mitten im Satz muss niemand erst entsperren. Geht die App in den Hintergrund, gilt wieder der normale Sperr-Timeout des Handys
 - **Android-Zurücktaste** navigiert innerhalb der App: erst Dialoge, dann Vollbild-Ansichten, dann zurück zum Start-Tab – die App schließt sich erst beim zweiten Zurück
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
-- **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. Beim Wechsel gibt es einen kurzen haptischen Stups – bewusst nur dort, damit er etwas bedeutet
+- **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. Beim Wechsel gibt es einen kurzen haptischen Stups, beim abgeschlossenen Satz einen kräftigeren – bewusst nur an diesen beiden Stellen, damit sie etwas bedeuten
 - **Dunkles Design**: tiefes Nachtblau als Grund (`#111827`), Karten eine Stufe heller (`#1F2937`), dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Blau, Grün, Bernstein, Rot, Magenta oder Weiß. Erledigte Sätze sind grün, Rekorde bernsteinfarben, Löschen rot – Farbe hat immer eine Bedeutung
 
 ## Android-App & Play Store 🤖
