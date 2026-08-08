@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.7.0";
+const APP_VERSION = "2.7.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -701,8 +701,8 @@ function renderPlanDetail(ov) {
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
       <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
-      <div class="screen-title">${esc(p.name)}</div>
-      <button class="icon-btn" data-action="edit-plan" data-id="${p.id}" aria-label="Plan bearbeiten">${icon("edit")}</button>
+      <input class="screen-title" data-input="plan-titel" data-id="${p.id}" value="${esc(p.name)}"
+        style="background:none;border:none;padding:0;width:100%;min-width:0" aria-label="Plan-Name">
     </div>
     ${isActive
       ? `<span class="badge badge-accent" style="margin-bottom:14px">${icon("check")} Aktiver Plan</span>`
@@ -720,7 +720,9 @@ function renderPlanDetail(ov) {
       </div>`;
     }).join("") : `<p class="hint" style="padding:4px 0 10px">Noch keine Trainings – leg unten das erste an.</p>`}
     <button class="btn btn-soft" data-action="plan-wo-neu" data-id="${p.id}" style="margin-top:12px">${icon("plus")} Training hinzufügen</button>
-    <p class="hint" style="margin-top:10px">Gestartet wird ein Training über den Start-Tab.</p>
+    <p class="hint" style="margin-top:10px">Gestartet wird ein Training über den Start-Tab. Den Plan-Namen kannst du oben direkt überschreiben.</p>
+    <div class="divider"></div>
+    <button class="btn btn-danger-soft" data-action="plan-loeschen" data-id="${p.id}">${icon("trash")} Plan löschen</button>
   `;
 }
 
@@ -733,6 +735,19 @@ ACTIONS["edit-plan-wo-direct"] = (el) => {
 // Neues Training aus der Plan-Ansicht heraus: Editor öffnen und gleich ein
 // leeres Training anhängen. Bricht man ab, bleibt der Plan unverändert –
 // gearbeitet wird auf einer Kopie (draftPlan).
+ACTIONS["plan-loeschen"] = async (el) => {
+  const pl = DB.plans.find((x) => x.id === el.dataset.id);
+  if (!pl) return;
+  if (!(await appConfirm(`Plan „${pl.name}" wirklich löschen? Bereits getrackte Workouts bleiben erhalten.`,
+                         { ok: "Löschen", danger: true }))) return;
+  DB.plans = DB.plans.filter((x) => x.id !== pl.id);
+  if (DB.activePlanId === pl.id) DB.activePlanId = (DB.plans[0] || {}).id || null;
+  saveDB();
+  $(".plan-detail-ov")?.remove();
+  toast("Plan gelöscht");
+  render();
+};
+
 ACTIONS["plan-wo-neu"] = (el) => {
   openPlanEditor(el.dataset.id);
   ACTIONS["plan-add-wo"]();
@@ -2638,6 +2653,12 @@ document.addEventListener("input", (e) => {
     draftPlan.workouts[draftWoIdx].exercises[+el.dataset.i].sets = Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 3;
   }
   else if (k === "wo-name") { active.name = el.value; saveActive(); }
+  else if (k === "plan-titel") {
+    // Direkt an der Plan-Ansicht, ohne Entwurf. Ein leerer Name wäre in der
+    // Liste unsichtbar, deshalb füllt der blur-Handler ihn auf.
+    const pl = DB.plans.find((x) => x.id === el.dataset.id);
+    if (pl) { pl.name = el.value; saveDB(); renderPlans(); renderHome(); }
+  }
   else if (k === "set-w" || k === "set-r" || k === "set-t") {
     const s = active.exercises[+el.dataset.xi].sets[+el.dataset.si];
     if (k === "set-w") { const v = parseNum(el.value); s.w = Number.isFinite(v) ? v : null; }
@@ -2647,6 +2668,19 @@ document.addEventListener("input", (e) => {
     saveActive();
   }
 });
+
+// Ein leer gelassener Plan-Name wäre in der Liste unsichtbar
+document.addEventListener("blur", (e) => {
+  const el = e.target;
+  if (!el.dataset || el.dataset.input !== "plan-titel") return;
+  const pl = DB.plans.find((x) => x.id === el.dataset.id);
+  if (pl && !pl.name.trim()) {
+    pl.name = "Mein Plan";
+    saveDB();
+    el.value = pl.name;
+    render();
+  }
+}, true);
 
 document.addEventListener("change", (e) => {
   const sek = e.target.closest('[data-input="rest-secs"]');
