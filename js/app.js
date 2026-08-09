@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.8.1";
+const APP_VERSION = "2.9.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -138,6 +138,8 @@ function defaultDB() {
       accent: ACCENT_DEFAULT, restSignal: "beides",
       // Übungen, deren Entwicklung im Verlauf-Tab dauerhaft mitläuft
       beobachtet: [],
+      // Rückmeldung nach dem Workout (siehe coachTipps)
+      coach: true,
     },
     customExercises: [],
     plans: [],
@@ -526,7 +528,7 @@ function appConfirm(msg, opts = {}) {
         <div class="sheet-grip"></div>
         <p style="font-size:15px;font-weight:600;margin:4px 2px 18px">${esc(msg)}</p>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-ghost" data-c="0" style="flex:1">Abbrechen</button>
+          <button class="btn btn-ghost" data-c="0" style="flex:1">${esc(opts.cancel || "Abbrechen")}</button>
           <button class="btn ${opts.danger ? "btn-danger-soft" : ""}" data-c="1" style="flex:1">${esc(opts.ok || "OK")}</button>
         </div>
       </div>`;
@@ -1291,6 +1293,9 @@ ACTIONS["start-plan"] = (el) => {
   if (!wo) return;
   active = {
     id: uid(), name: wo.name, startedAt: Date.now(),
+    // Herkunft: Nur damit lässt sich am Ende fragen, ob Änderungen dauerhaft
+    // in dieses Training sollen
+    planId: plan.id, woId: wo.id,
     exercises: wo.exercises.map((pe) => ({
       exerciseId: pe.exerciseId,
       superset: pe.superset,
@@ -1705,13 +1710,168 @@ ACTIONS["finish-workout"] = async () => {
 
   DB.workouts.push(finished);
   saveDB();
+  const herkunft = { planId: active.planId, woId: active.woId, exercises: active.exercises };
   active = null;
   saveActive();
   stopRest();
   $(".workout-ov")?.remove();
   render();
+
+  await planAbgleichen(herkunft);
   showSummary(finished, prs);
 };
+
+/* Hat man im Workout Übungen ergänzt, entfernt oder umsortiert, gilt das
+   zunächst nur für dieses eine Mal. Beim Beenden fragen wir, ob es auch für
+   die Zukunft gelten soll – ungefragt den Plan umzuschreiben wäre übergriffig,
+   und die Änderung stillschweigend verfallen zu lassen ärgerlich. */
+
+const planSignatur = (liste) => liste
+  .map((e) => `${e.exerciseId}:${e.superset || "-"}:${Array.isArray(e.sets) ? e.sets.length : e.sets || 0}`)
+  .join("|");
+
+function planUnterschied(vorher, nachher) {
+  const alt = vorher.map((e) => e.exerciseId), neu = nachher.map((e) => e.exerciseId);
+  const dazu = neu.filter((id) => !alt.includes(id)).length;
+  const weg = alt.filter((id) => !neu.includes(id)).length;
+  const teile = [];
+  if (dazu) teile.push(`${dazu} ${dazu === 1 ? "Übung" : "Übungen"} dazu`);
+  if (weg) teile.push(`${weg} ${weg === 1 ? "Übung" : "Übungen"} entfernt`);
+  if (!dazu && !weg) {
+    const umsortiert = alt.join() !== neu.join();
+    teile.push(umsortiert ? "Reihenfolge geändert" : "Sätze geändert");
+  }
+  return teile.join(", ");
+}
+
+async function planAbgleichen(h) {
+  if (!h.planId || !h.woId) return;                 // freies Workout
+  const plan = DB.plans.find((p) => p.id === h.planId);
+  const wo = plan && plan.workouts.find((x) => x.id === h.woId);
+  if (!wo) return;                                  // Training inzwischen weg
+  if (planSignatur(wo.exercises) === planSignatur(h.exercises)) return;
+
+  const was = planUnterschied(wo.exercises, h.exercises);
+  const ok = await appConfirm(
+    `Du hast im Workout etwas verändert (${was}). Soll „${wo.name}" künftig so aussehen?`,
+    { ok: "Übernehmen", cancel: "Nur diesmal" });
+  if (!ok) return;
+  wo.exercises = h.exercises.map((e) => ({
+    exerciseId: e.exerciseId,
+    superset: e.superset,
+    sets: Math.max(1, e.sets.length),
+  }));
+  saveDB();
+  render();
+  toast(`„${wo.name}" aktualisiert`);
+}
+
+/* ═══════════════ Coach ═══════════════
+   Regelbasiert, ohne Netz und ohne Server: Die App kennt die eigene Historie,
+   das reicht für die Beobachtungen, die beim Training wirklich helfen. Lieber
+   wenige treffende Sätze als eine Liste – deshalb höchstens vier, und die
+   auffälligsten zuerst. */
+
+const COACH_MAX = 4;
+
+// Das vorherige Vorkommen einer Übung, ohne das gerade beendete Workout
+function vorigerEintrag(exId, ausserId) {
+  for (const w of workoutsDesc()) {
+    if (w.id === ausserId) continue;
+    const ex = w.exercises.find((e) => e.exerciseId === exId);
+    if (ex && ex.sets.length) return { workout: w, ex };
+  }
+  return null;
+}
+
+const bestwert = (typ, ex) => ex.sets.reduce((m, s) => Math.max(m, setValue(typ, s)), 0);
+
+function coachTipps(w, prs) {
+  if (DB.settings.coach === false) return [];
+  const tipps = [];
+
+  // 1) Rekorde zuerst – das ist die stärkste Rückmeldung
+  for (const p of prs.slice(0, 2)) {
+    tipps.push({ ton: "lob", text: p.first
+      ? `${p.name}: erste Marke gesetzt. Ab hier geht es aufwärts.`
+      : `${p.name}: neuer Bestwert. Sauber.` });
+  }
+
+  // 2) Steigerung oder Rückgang gegenüber dem letzten Mal
+  for (const ex of w.exercises) {
+    const typ = exType(ex.exerciseId);
+    if (typ !== "weight_reps") continue;
+    const vor = vorigerEintrag(ex.exerciseId, w.id);
+    if (!vor) continue;
+    const jetzt = bestwert(typ, ex), damals = bestwert(typ, vor.ex);
+    if (!damals) continue;
+    const name = exName(ex.exerciseId);
+    if (jetzt > damals) {
+      tipps.push({ ton: "lob", text:
+        `${name}: ${fmtKg(jetzt)} kg statt ${fmtKg(damals)} kg beim letzten Mal. Schöne Steigerung.` });
+    } else if (jetzt < damals * 0.92) {
+      tipps.push({ ton: "frage", text:
+        `${name}: ${fmtKg(jetzt)} kg, letztes Mal waren es ${fmtKg(damals)} kg. War das Absicht – oder steckt Müdigkeit dahinter?` });
+    }
+  }
+
+  // 3) Stillstand: dreimal in Folge dasselbe Topgewicht bei gleichen Wdh.
+  for (const ex of w.exercises) {
+    const typ = exType(ex.exerciseId);
+    if (typ !== "weight_reps") continue;
+    const reihe = [ex];
+    let letzteId = w.id;
+    for (let i = 0; i < 2; i++) {
+      const v = vorigerEintrag(ex.exerciseId, letzteId);
+      if (!v) break;
+      reihe.push(v.ex); letzteId = v.workout.id;
+    }
+    if (reihe.length < 3) continue;
+    const werte = reihe.map((e) => bestwert(typ, e));
+    const wdh = reihe.map((e) => Math.max(...e.sets.map((x) => x.r || 0)));
+    if (werte.every((v) => v === werte[0]) && wdh.every((v) => v === wdh[0]) && werte[0] > 0) {
+      tipps.push({ ton: "frage", text:
+        `Bei ${exName(ex.exerciseId)} liegst du seit drei Einheiten bei ${fmtKg(werte[0])} kg × ${wdh[0]}. Bist du da wirklich ans Limit gegangen?` });
+    }
+  }
+
+  // 4) Alle Sätze gleich und viele Wiederholungen – Zeichen für zu leicht
+  for (const ex of w.exercises) {
+    if (exType(ex.exerciseId) !== "weight_reps" || ex.sets.length < 3) continue;
+    const gleich = ex.sets.every((x) => x.w === ex.sets[0].w && x.r === ex.sets[0].r);
+    if (gleich && (ex.sets[0].r || 0) >= 12) {
+      tipps.push({ ton: "hinweis", text:
+        `${exName(ex.exerciseId)}: dreimal ${ex.sets[0].r} Wiederholungen ohne Einbruch. Da ist Luft für mehr Gewicht.` });
+    }
+  }
+
+  // 5) Gesamtvolumen gegenüber dem letzten gleichnamigen Workout
+  const vorherGleich = workoutsDesc().find((x) => x.id !== w.id && x.name === w.name);
+  if (vorherGleich) {
+    const a = workoutVolume(w), b2 = workoutVolume(vorherGleich);
+    if (b2 > 0) {
+      const proz = Math.round(((a - b2) / b2) * 100);
+      if (proz >= 8) tipps.push({ ton: "lob", text: `Gesamtvolumen ${proz} % über dem letzten „${w.name}". Das summiert sich.` });
+      else if (proz <= -15) tipps.push({ ton: "hinweis", text: `Gesamtvolumen ${Math.abs(proz)} % unter dem letzten „${w.name}" – kürzeres Training oder weniger Sätze?` });
+    }
+  }
+
+  // Fragen und Hinweise vor reinem Lob: Sie sind das, woran man arbeitet
+  const rang = { frage: 0, hinweis: 1, lob: 2 };
+  tipps.sort((x, y) => rang[x.ton] - rang[y.ton]);
+  return tipps.slice(0, COACH_MAX);
+}
+
+function coachBlock(w, prs) {
+  const tipps = coachTipps(w, prs);
+  if (!tipps.length) return "";
+  const zeichen = { lob: "trophy", frage: "search", hinweis: "timer" };
+  return `<div class="section-label">Coach</div>` + tipps.map((t) => `
+    <div class="coach-zeile ${t.ton}">
+      <span class="coach-ic">${icon(zeichen[t.ton])}</span>
+      <span>${esc(t.text)}</span>
+    </div>`).join("");
+}
 
 function showSummary(w, prs) {
   openSheet(`
@@ -1726,6 +1886,7 @@ function showSummary(w, prs) {
         <span class="row-main"><span class="row-title">${esc(p.name)}</span></span>
         <b style="font-variant-numeric:tabular-nums">${p.type === "weight_reps" ? fmtKg(p.val) + " kg" : p.type === "reps" ? p.val + " Wdh." : fmtClock(p.val)}</b>
       </div>`).join("") : ""}
+    ${coachBlock(w, prs)}
     ${backupReminder()}
     <button class="btn" data-action="close-sheet" style="margin-top:14px">Fertig</button>
   `);
@@ -1787,12 +1948,13 @@ let audioCtx = null;
 // info: { titel, text } für die Meldung in der Benachrichtigungsleiste
 function startRest(secs, info) {
   stopRest();
-  entsperreTon();
   const endet = Date.now() + secs * 1000;
   // Benachrichtigung planen: Der Timer im Bildschirm läuft nicht weiter,
   // wenn das Handy in der Tasche steckt – die Meldung kommt trotzdem.
   planeErinnerung(endet);
-  rest = { endsAt: endet, total: secs, info: info || null };
+  // hintergrund merkt sich, ob die App während der Pause weg war – davon
+  // hängt ab, wer am Ende den Ton macht (siehe restDone)
+  rest = { endsAt: endet, total: secs, info: info || null, hintergrund: document.visibilityState !== "visible" };
   meldungAktualisieren();
   const bar = document.createElement("div");
   bar.id = "rest-bar";
@@ -1821,22 +1983,41 @@ function tickRest() {
 }
 
 function restDone() {
-  stopRest({ meldungBehalten: true });
+  // Genau ein Signal. War die App die ganze Pause über im Vordergrund, macht
+  // sie den Ton selbst und nimmt die geplante Meldung zurück. War sie
+  // zwischendurch weg, gehört das Signal der Meldung – auch wenn man
+  // inzwischen zurückgewechselt hat. Sonst klingelt es zweimal, und beim
+  // zweiten Mal steckt man schon im nächsten Satz.
+  const selbst = !!rest && !rest.hintergrund && document.visibilityState === "visible";
+  stopRest({ meldungBehalten: !selbst });
   toast("Pause vorbei – nächster Satz!");
-  signalGeben();
+  if (selbst) signalGeben();
 }
+
+// Jeder Wechsel aus der App heraus zählt: Danach übernimmt die Meldung.
+function pauseVerlassenMerken() {
+  if (rest && document.visibilityState !== "visible") rest.hintergrund = true;
+}
+document.addEventListener("visibilitychange", pauseVerlassenMerken);
 
 /* ── Signal am Ende der Pause ───────────────────────────── */
 
-// Ton darf erst nach einer Nutzeraktion starten – beim Satzabschluss ist
-// diese gegeben, also den Audio-Kontext dort aufwecken.
-function entsperreTon() {
-  if (DB.settings.restSignal === "aus" || DB.settings.restSignal === "vibration") return;
+// Der Ton-Kontext darf erst nach einer Nutzergeste entstehen. Wichtiger noch:
+// Ein *laufender* Kontext hält den Audio-Fokus, und Android pausiert dann die
+// Musik anderer Apps – samt deren Benachrichtigung. Deshalb schläft er und
+// wacht nur für die Sekunde des Signals auf.
+function tonVorbereiten() {
+  if (audioCtx) return;
+  // Wer keinen Ton will, braucht auch keinen Kontext – und damit gar keine
+  // Berührung mit dem Audio-Fokus des Systems.
+  const modus = DB.settings.restSignal || "beides";
+  if (modus === "aus" || modus === "vibration") return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.suspend();
   } catch (e) {}
 }
+document.addEventListener("pointerdown", tonVorbereiten, { once: true });
 
 function signalGeben() {
   const modus = DB.settings.restSignal || "beides";
@@ -1845,23 +2026,37 @@ function signalGeben() {
   if (modus !== "ton") vibrieren();
 }
 
+// Eine Glocke: Sinus mit kurzem Anschlag und langem Ausklang, dazu ein
+// leiser Oberton. Klingt nach Anschlagen und nicht nach Wecker – das alte
+// Rechteck-Piepen war im Ohr unangenehm.
+function glocke(hz, t0, staerke) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = "sine";
+  o.frequency.value = hz;
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.3 * staerke, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.1);
+  o.start(t0); o.stop(t0 + 1.15);
+}
+
 function tonSpielen() {
+  if (!audioCtx) return;
+  const spielen = () => {
+    try {
+      const t = audioCtx.currentTime + 0.03;
+      // Zwei Töne, eine Quinte auseinander – aufwärts klingt nach „weiter"
+      [[0, 784], [0.17, 1175]].forEach(([versatz, hz]) => {
+        glocke(hz, t + versatz, 1);
+        glocke(hz * 2, t + versatz, 0.22);
+      });
+      // Fokus wieder abgeben, sobald der Ausklang durch ist
+      setTimeout(() => { try { audioCtx.suspend(); } catch (e) {} }, 1600);
+    } catch (e) {}
+  };
   try {
-    if (!audioCtx) return;
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    // Drei kräftige Töne, absteigend – im Hallenlärm besser hörbar
-    [[0, 1046], [0.28, 1046], [0.56, 784]].forEach(([versatz, hz]) => {
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = "square";
-      o.frequency.value = hz;
-      o.connect(g); g.connect(audioCtx.destination);
-      const t0 = audioCtx.currentTime + versatz;
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.015);
-      g.gain.setValueAtTime(0.5, t0 + 0.16);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
-      o.start(t0); o.stop(t0 + 0.26);
-    });
+    const r = audioCtx.resume();
+    if (r && r.then) r.then(spielen).catch(() => {}); else spielen();
   } catch (e) {}
 }
 
@@ -2363,6 +2558,11 @@ ACTIONS["open-settings"] = () => {
       </select>
     </div>
     <div class="settings-row">
+      <div class="lbl">Coach<small>Kurze Rückmeldung nach jedem Workout</small></div>
+      <button class="switch ${s.coach !== false ? "on" : ""}" data-action="toggle-coach" role="switch" aria-checked="${s.coach !== false}" aria-label="Coach"></button>
+    </div>
+    <div id="alarm-hinweis"></div>
+    <div class="settings-row">
       <div class="lbl">Pausendauer</div>
       <select data-input="rest-secs">
         ${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((v) =>
@@ -2383,8 +2583,10 @@ ACTIONS["open-settings"] = () => {
       jederzeit zurückholen. Zusätzlich sichert Android die App automatisch in deinem Google-Konto.</p>
     <div class="divider"></div>
     <button class="btn btn-danger-soft" data-action="wipe-data">${icon("trash")} Alle Daten löschen</button>
-    <p class="hint" style="margin-top:16px;text-align:center">${APP_NAME} ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
+    <p class="hint" style="margin-top:16px;text-align:center" id="ver-zeile">${APP_NAME} ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
   `);
+  // Erst jetzt: Das Zielelement entsteht mit dem Sheet
+  alarmHinweisPruefen();
 };
 
 function lastBackupLabel() {
@@ -2414,6 +2616,42 @@ ACTIONS["set-accent"] = (el) => {
   const lbl = $("#accent-name");
   if (lbl) lbl.textContent = accentName();
   render();
+};
+
+ACTIONS["toggle-coach"] = (el) => {
+  DB.settings.coach = DB.settings.coach === false;
+  saveDB();
+  el.classList.toggle("on", DB.settings.coach);
+  el.setAttribute("aria-checked", DB.settings.coach);
+};
+
+/* Ohne die Erlaubnis für exakte Alarme schiebt Android die Meldung zum
+   Pausenende auf – sie kommt dann irgendwann später, oft erst wenn man das
+   Gerät wieder anfasst. Das ist nichts, was die App reparieren kann; sie kann
+   nur darauf hinweisen und die passende Systemeinstellung öffnen. */
+async function alarmHinweisPruefen() {
+  const { PausenTimer } = capPlugins();
+  const ziel = $("#alarm-hinweis");
+  if (!PausenTimer || !ziel || !PausenTimer.alarmStatus) return;
+  try {
+    const st = await PausenTimer.alarmStatus();
+    if (st.exakt || !st.einstellbar) return;
+    ziel.innerHTML = `
+      <div class="card" style="display:flex;gap:12px;align-items:center;margin:4px 0 14px;
+           border-color:var(--warn-line);background:var(--warn-soft)">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:14px">Meldung kommt verspätet</div>
+          <div class="hint">Ohne „Alarme und Erinnerungen" schiebt Android die Meldung
+            zum Pausenende auf – sie kommt dann oft erst mitten im nächsten Satz.</div>
+        </div>
+        <button class="btn btn-compact" data-action="alarm-einstellen">Erlauben</button>
+      </div>`;
+  } catch (e) {}
+}
+
+ACTIONS["alarm-einstellen"] = () => {
+  const { PausenTimer } = capPlugins();
+  if (PausenTimer && PausenTimer.alarmEinstellungen) PausenTimer.alarmEinstellungen().catch(() => {});
 };
 
 ACTIONS["toggle-autorest"] = (el) => {
@@ -2693,7 +2931,7 @@ document.addEventListener("change", (e) => {
   if (sig) {
     DB.settings.restSignal = sig.value;
     saveDB();
-    entsperreTon();
+    tonVorbereiten();
     // Kurz vorführen, damit man die Wahl gleich hört bzw. spürt
     setTimeout(signalGeben, 120);
   }
@@ -2778,8 +3016,13 @@ function tippen(stark) {
    der ein Overlay auf- oder zugeht. */
 
 function vollbildBeobachten() {
-  const pruefen = () =>
+  const pruefen = () => {
     document.body.classList.toggle("vollbild", !!document.querySelector(".overlay"));
+    // Der Übungs-Picker hat unten eine eigene Aktionsleiste. Ohne diesen
+    // Hinweis läge die Pausenleiste genau auf „Übungen hinzufügen" – man
+    // konnte auswählen, aber nicht bestätigen.
+    document.body.classList.toggle("aktionsleiste", !!document.querySelector(".picker-ov"));
+  };
   new MutationObserver(pruefen).observe(document.body, { childList: true });
   pruefen();
 }

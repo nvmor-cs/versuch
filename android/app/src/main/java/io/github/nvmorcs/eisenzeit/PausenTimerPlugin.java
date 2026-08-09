@@ -1,10 +1,13 @@
 package io.github.nvmorcs.eisenzeit;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
@@ -12,6 +15,7 @@ import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -154,6 +158,42 @@ public class PausenTimerPlugin extends Plugin {
     @PluginMethod
     public void aus(PluginCall call) {
         NotificationManagerCompat.from(getContext()).cancel(ID);
+        call.resolve();
+    }
+
+    /**
+     * Darf die App Alarme auf die Sekunde genau legen?
+     *
+     * Daran hängt, ob die Meldung zum Pausenende pünktlich kommt. Seit
+     * Android 12 ist das eine eigene Erlaubnis, die der Nutzer erteilen muss –
+     * ohne sie schiebt das System den Alarm auf und er löst irgendwann später
+     * aus, oft erst wenn man das Gerät wieder anfasst. Genau das erklärt einen
+     * Ton, der mitten im nächsten Satz kommt.
+     */
+    @PluginMethod
+    public void alarmStatus(PluginCall call) {
+        boolean exakt = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager am = getContext().getSystemService(AlarmManager.class);
+            exakt = am != null && am.canScheduleExactAlarms();
+        }
+        JSObject o = new JSObject();
+        o.put("exakt", exakt);
+        // Unter Android 12 gibt es die Einstellung nicht – dann ist auch
+        // nichts zu erlauben.
+        o.put("einstellbar", Build.VERSION.SDK_INT >= Build.VERSION_CODES.S);
+        call.resolve(o);
+    }
+
+    /** Öffnet die Systemeinstellung „Alarme und Erinnerungen". */
+    @PluginMethod
+    public void alarmEinstellungen(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:" + getContext().getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+        }
         call.resolve();
     }
 }

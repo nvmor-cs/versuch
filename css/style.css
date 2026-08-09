@@ -841,6 +841,10 @@ body.rest-an .screen { padding-bottom: calc(var(--tabbar-raum) + var(--safe-bott
 body.vollbild .rest-bar {
   bottom: calc(var(--safe-bottom) + var(--tastatur, 0px) + 12px);
 }
+/* Über die Aktionsleiste des Pickers rücken, nicht darauf */
+body.aktionsleiste .rest-bar {
+  bottom: calc(var(--safe-bottom) + var(--tastatur, 0px) + 92px);
+}
 
 .rest-bar::before {
   content: "";
@@ -944,6 +948,29 @@ body.vollbild .rest-bar {
   white-space: nowrap;
 }
 .chart-card h3 .watch-name:active { color: var(--accent); }
+
+/* Coach: kurze Rückmeldungen nach dem Workout. Der Ton steckt in der Farbe –
+   Lob grün, Frage in der Akzentfarbe, Hinweis bernstein. */
+.coach-zeile {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-s);
+  font-size: 14px;
+  line-height: 1.4;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.coach-ic { flex-shrink: 0; display: inline-flex; margin-top: 1px; }
+.coach-ic svg { width: 17px; height: 17px; }
+.coach-zeile.lob     { background: var(--success-soft); border-color: var(--success-line); }
+.coach-zeile.lob .coach-ic { color: var(--success); }
+.coach-zeile.frage   { background: var(--accent-soft); border-color: var(--accent-line); }
+.coach-zeile.frage .coach-ic { color: var(--accent); }
+.coach-zeile.hinweis { background: var(--warn-soft); border-color: var(--warn-line); }
+.coach-zeile.hinweis .coach-ic { color: var(--warn); }
 
 /* Fortsetzen-Leiste */
 .resume-bar {
