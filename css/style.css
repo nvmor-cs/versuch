@@ -213,6 +213,47 @@ button { cursor: pointer; background: none; border: none; }
 }
 .section-label:first-child { margin-top: 0; }
 
+/* Zuklappbarer Abschnittskopf (Startseite).
+   Er sieht aus wie eine normale Überschrift, ist aber ein Knopf – deshalb
+   die Reset-Zeilen. Das Polster vergrößert die Trefferfläche, ohne den
+   Abstand zum Inhalt zu verändern (6 + 18 = die alten 24 px). */
+button.section-label.klapp {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  text-align: left;
+  cursor: pointer;
+  margin: 18px 0 4px;
+  padding: 6px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+button.section-label.klapp:active { opacity: 0.6; }
+.klapp-titel { margin-right: auto; white-space: nowrap; }
+.klapp-kurz {
+  min-width: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+}
+.klapp-pfeil {
+  display: flex;
+  color: var(--ink-3);
+  transition: transform 0.18s ease;
+}
+.klapp-pfeil svg { width: 18px; height: 18px; }
+.klapp.zu .klapp-pfeil { transform: rotate(-90deg); }
+
 /* ── Tab-Bar ────────────────────────────────────────────── */
 
 /* Freistehende Pille am unteren Rand statt eines durchgehenden Balkens.

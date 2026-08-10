@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.9.0";
+const APP_VERSION = "2.9.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -140,6 +140,8 @@ function defaultDB() {
       beobachtet: [],
       // Rückmeldung nach dem Workout (siehe coachTipps)
       coach: true,
+      // Zugeklappte Abschnitte der Startseite (siehe sektion())
+      eingeklappt: [],
     },
     customExercises: [],
     plans: [],
@@ -591,10 +593,45 @@ function renderTabbar() {
 
 /* ═══════════════ Start-Tab ═══════════════ */
 
+/* Ein Abschnitt der Startseite, der sich zuklappen lässt.
+ *
+ * Der Zustand liegt in den Einstellungen und damit in localStorage: Wer den
+ * Verlauf einmal weggeräumt hat, will ihn nicht beim nächsten Start wieder
+ * vorfinden. Zugeklappt wird der Inhalt gar nicht erst gebaut – dafür steht
+ * neben der Überschrift eine kurze Zeile, damit der Abschnitt nicht zur
+ * blinden Klappe wird.
+ */
+function istEingeklappt(id) {
+  return (DB.settings.eingeklappt || []).includes(id);
+}
+
+function sektion(id, titel, inhalt, kurz) {
+  const zu = istEingeklappt(id);
+  return `
+    <button class="section-label klapp${zu ? " zu" : ""}" data-action="sektion" data-sektion="${id}"
+            aria-expanded="${zu ? "false" : "true"}">
+      <span class="klapp-titel">${esc(titel)}</span>
+      ${zu && kurz ? `<span class="klapp-kurz">${esc(kurz)}</span>` : ""}
+      <span class="klapp-pfeil">${icon("chevD")}</span>
+    </button>
+    ${zu ? "" : inhalt}`;
+}
+
+ACTIONS["sektion"] = (el) => {
+  const liste = DB.settings.eingeklappt || (DB.settings.eingeklappt = []);
+  const i = liste.indexOf(el.dataset.sektion);
+  if (i < 0) liste.push(el.dataset.sektion); else liste.splice(i, 1);
+  saveDB();
+  renderHome();
+};
+
 function renderHome() {
   const today = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
   const recent = workoutsDesc().slice(0, 3);
   const ap = activePlan();
+  const planInhalt =
+    (ap ? planCard(ap) : `<p class="hint">Noch kein Plan – lege im Tab „Pläne" einen an.</p>`) +
+    (DB.plans.length > 1 ? `<button class="btn btn-ghost" data-action="switch-plan">${icon("plans")} Plan wechseln</button>` : "");
   $("#screen-home").innerHTML = `
     <div class="screen-head">
       <div>
@@ -604,10 +641,9 @@ function renderHome() {
       <button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${icon("gear")}</button>
     </div>
     <button class="btn" data-action="start-empty">${icon("plus")} Leeres Workout starten</button>
-    <div class="section-label" style="margin-top:24px">Aktueller Plan</div>
-    ${ap ? planCard(ap) : `<p class="hint">Noch kein Plan – lege im Tab „Pläne" einen an.</p>`}
-    ${DB.plans.length > 1 ? `<button class="btn btn-ghost" data-action="switch-plan">${icon("plans")} Plan wechseln</button>` : ""}
-    ${recent.length ? `<div class="section-label">Zuletzt trainiert</div>` + recent.map(historyRow).join("") : ""}
+    ${sektion("plan", "Aktueller Plan", planInhalt, ap ? ap.name : "kein Plan")}
+    ${recent.length ? sektion("verlauf", "Zuletzt trainiert", recent.map(historyRow).join(""),
+      fmtDateShort(recent[0].startedAt)) : ""}
   `;
 }
 
