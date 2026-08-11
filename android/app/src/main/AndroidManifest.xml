@@ -26,6 +26,12 @@
 
         </activity>
 
+        <!-- Rückfallebene für das Pausenende, falls die App währenddessen
+             aus dem Speicher geräumt wird -->
+        <receiver
+            android:name=".PausenAlarm"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

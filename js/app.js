@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.9.1";
+const APP_VERSION = "2.10.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -98,6 +98,7 @@ const I = {
   chevR: '<path d="m9 5 7 7-7 7"/>',
   chevL: '<path d="m15 5-7 7 7 7"/>',
   chevD: '<path d="m5 9 7 7 7-7"/>',
+  chevU: '<path d="m19 15-7-7-7 7"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -142,6 +143,8 @@ function defaultDB() {
       coach: true,
       // Zugeklappte Abschnitte der Startseite (siehe sektion())
       eingeklappt: [],
+      // Geräteübungen je Training vergleichen (siehe verlaufFuer)
+      geraeteGetrennt: true,
     },
     customExercises: [],
     plans: [],
@@ -244,27 +247,63 @@ const workoutsDesc = () => DB.workouts.slice().sort((a, b) => b.startedAt - a.st
 const activePlan = () =>
   DB.plans.find((p) => p.id === DB.activePlanId) || DB.plans[0] || null;
 
-// Sätze des letzten Workouts mit dieser Übung
-function prevSetsFor(exId, excludeId) {
+/* ── Geräte: was vergleichbar ist und was nicht ──────────────
+ *
+ * An Maschinen und Kabelzügen sagt die Zahl am Stapel nur im Zusammenhang mit
+ * genau diesem Gerät etwas: 30 kg am Kabelzug im einen Studio sind nicht die
+ * 30 kg im anderen – Rollen, Hebel und Übersetzung unterscheiden sich. Freie
+ * Gewichte dagegen wiegen überall gleich viel.
+ *
+ * Deshalb werden Geräteübungen je Training verglichen: Was im Training
+ * „Oberkörper Meridian" stand, taucht nur dort wieder auf, nicht im
+ * „Oberkörper Owschlag". Freie Übungen laufen wie bisher über alles.
+ * Abschaltbar in den Einstellungen, wer immer im selben Studio trainiert.
+ */
+const GERAET_STUDIOABHAENGIG = ["Kabelzug", "Maschine", "Smith-Maschine", "Cardiogerät"];
+
+function geraetGetrennt(exId) {
+  if (DB.settings.geraeteGetrennt === false) return false;
+  const ex = exById(exId);
+  return !!ex && GERAET_STUDIOABHAENGIG.includes(ex.equipment);
+}
+
+// Stammt ein Workout aus der Historie aus demselben Training wie ref?
+function selbesTraining(w, ref) {
+  if (!ref) return true;
+  // woId ist die Herkunft aus dem Plan. Einträge von vor dieser Fassung
+  // kennen sie nicht – für die muss der Name des Trainings reichen.
+  if (ref.woId && w.woId) return w.woId === ref.woId;
+  return (w.name || "") === (ref.name || "");
+}
+
+// Historie einer Übung, neueste zuerst. ref = laufendes bzw. betrachtetes
+// Workout; an ihm hängt bei Geräteübungen, was überhaupt zählt.
+function* verlaufFuer(exId, excludeId, ref) {
+  const nurHier = geraetGetrennt(exId);
   for (const w of workoutsDesc()) {
     if (excludeId && w.id === excludeId) continue;
+    if (nurHier && !selbesTraining(w, ref)) continue;
     const ex = w.exercises.find((e) => e.exerciseId === exId);
-    if (ex && ex.sets.length) return ex.sets;
+    if (ex && ex.sets.length) yield { workout: w, ex };
   }
+}
+
+// Sätze des letzten Workouts mit dieser Übung
+function prevSetsFor(exId, excludeId, ref) {
+  for (const t of verlaufFuer(exId, excludeId, ref)) return t.ex.sets;
   return null;
 }
 
 const setValue = (type, s) =>
   type === "weight_reps" ? (s.w || 0) : type === "reps" ? (s.r || 0) : (s.t || 0);
 
-// Bisheriger Rekord (Maximalwert) für eine Übung
-function recordFor(exId, excludeId) {
+// Bisheriger Rekord (Maximalwert) für eine Übung. Bei Geräteübungen zählt nur,
+// was am selben Gerät passiert ist – sonst wäre jeder Studiowechsel entweder
+// ein Rekordregen oder eine Durststrecke.
+function recordFor(exId, excludeId, ref) {
   const type = exType(exId);
   let best = null;
-  for (const w of DB.workouts) {
-    if (excludeId && w.id === excludeId) continue;
-    const ex = w.exercises.find((e) => e.exerciseId === exId);
-    if (!ex) continue;
+  for (const { workout: w, ex } of verlaufFuer(exId, excludeId, ref)) {
     for (const s of ex.sets) {
       const v = setValue(type, s);
       if (!best || v > best.val) best = { val: v, set: s, date: w.startedAt };
@@ -1379,14 +1418,21 @@ function renderWorkout(ov) {
   updateWoMeta();
 }
 
-/* Immer nur eine Übung offen. Alles gleichzeitig aufgeklappt war beim
+/* Höchstens eine Übung offen. Alles gleichzeitig aufgeklappt war beim
    Trainieren unübersichtlich – man scrollt dann an der Stelle vorbei, an der
-   man gerade eintragen will. null heißt „automatisch": die erste Übung mit
-   einem offenen Satz. Ein Tipp auf eine zugeklappte Übung setzt sie fest. */
+   man gerade eintragen will.
+
+   null heißt „automatisch": die erste Übung mit einem offenen Satz. Ein Tipp
+   auf eine zugeklappte Übung setzt sie fest, ein Tipp auf die offene klappt
+   sie wieder zu (ALLE_ZU). Zugeklappt ist jede Übung eine kurze Zeile – so
+   sieht man die ganze Reihenfolge und kann sie bequem umstellen, ohne vorher
+   irgendwo Sätze eintragen zu müssen. */
+const ALLE_ZU = -1;
 let offeneUebung = null;
 
 function offeneUebungIndex() {
   if (!active) return -1;
+  if (offeneUebung === ALLE_ZU) return -1;
   if (offeneUebung != null && active.exercises[offeneUebung]) return offeneUebung;
   return active.exercises.findIndex((e) => e.sets.some((s) => !s.done));
 }
@@ -1429,6 +1475,7 @@ function woKopfOffen(ex, xi, griff) {
     <div class="exercise-block-head">
       ${griff}
       <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
+      <button class="mini-btn" data-action="wo-open-ex" data-xi="${xi}" aria-label="Übung zuklappen">${icon("chevU")}</button>
       <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
     </div>`;
 }
@@ -1452,21 +1499,28 @@ function woKopfZu(ex, xi, type) {
 }
 
 function woSaetze(ex, xi, type) {
-  const prev = prevSetsFor(ex.exerciseId);
+  const prev = prevSetsFor(ex.exerciseId, null, active);
+  // Nichts aus diesem Training, aber anderswo schon gemacht? Dann ist „Erster
+  // Eintrag" gelogen – es ist der erste an diesem Gerät.
+  const andernorts = !prev && geraetGetrennt(ex.exerciseId) && !!prevSetsFor(ex.exerciseId);
   const curIdx = ex.sets.findIndex((s) => !s.done);
   return `
     ${ex.sets.map((s, si) =>
       s.done ? doneSetRow(type, s, si, xi)
-      : si === curIdx ? currentSetCard(type, ex, xi, si, prev)
+      : si === curIdx ? currentSetCard(type, ex, xi, si, prev, andernorts)
       : queuedSetRow(si, xi)).join("")}
     ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
     <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>`;
 }
 
+// Ein Tipp auf den Kopf klappt auf – oder zu, wenn die Übung schon offen war
 ACTIONS["wo-open-ex"] = (el) => {
-  offeneUebung = +el.dataset.xi;
+  const xi = +el.dataset.xi;
+  offeneUebung = xi === offeneUebungIndex() ? ALLE_ZU : xi;
   renderWoExercises();
-  $(`.wo-item[data-xi="${offeneUebung}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (offeneUebung !== ALLE_ZU) {
+    $(`.wo-item[data-xi="${xi}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 };
 
 /* Reihenfolge nur für dieses Workout ändern. active.exercises ist beim Start
@@ -1483,12 +1537,15 @@ function woSortierbar() {
     if (von === nach) return;
     // Die offene Übung am Objekt festhalten, nicht am Index – der verschiebt
     // sich ja gerade
+    const zu = offeneUebungIndex() < 0;
     const offenObj = active.exercises[offeneUebungIndex()];
     const [weg] = active.exercises.splice(von, 1);
     active.exercises.splice(nach, 0, weg);
     normalizeSupersets(active.exercises);
     const neu = active.exercises.indexOf(offenObj);
-    offeneUebung = neu >= 0 ? neu : null;
+    // Wer alles zugeklappt hat, um zu sortieren, will danach nicht wieder
+    // eine aufgeklappte Übung vorfinden
+    offeneUebung = zu ? ALLE_ZU : neu >= 0 ? neu : null;
     saveActive();
     renderWoExercises();
   });
@@ -1524,7 +1581,7 @@ function queuedSetRow(si, xi) {
 }
 
 // Aktueller Satz: Karte mit Plus/Minus-Steppern und Abschließen-Button
-function currentSetCard(type, ex, xi, si, prev) {
+function currentSetCard(type, ex, xi, si, prev, andernorts) {
   const s = ex.sets[si];
   const p = prev && prev[si];
   // Startwerte: gleicher Satz vom letzten Mal, sonst letzter fertiger Satz
@@ -1559,7 +1616,8 @@ function currentSetCard(type, ex, xi, si, prev) {
     <div class="current-set">
       <div class="current-set-head">
         <span class="cs-no">Satz ${si + 1} / ${ex.sets.length}</span>
-        <span class="cs-prev">${p ? "Letztes Mal: " + fmtSet(type, p) : "Erster Eintrag"}</span>
+        <span class="cs-prev">${p ? "Letztes Mal: " + fmtSet(type, p)
+          : andernorts ? "Erstes Mal in diesem Training" : "Erster Eintrag"}</span>
         <button class="mini-btn" data-action="wo-del-set" ${d} aria-label="Satz entfernen">${icon("x")}</button>
       </div>
       ${type === "weight_reps" ? stepper("Gewicht (kg)", "w", wInput) + stepper("Wiederholungen", "r", rInput) : ""}
@@ -1711,6 +1769,11 @@ ACTIONS["finish-workout"] = async () => {
     startedAt: active.startedAt,
     endedAt: Date.now(),
     durationSec: Math.round((Date.now() - active.startedAt) / 1000),
+    // Herkunft mitschreiben: Nur so lässt sich später sagen, ob zwei Einträge
+    // aus demselben Training stammen – daran hängt der Vergleich von
+    // Geräteübungen (siehe verlaufFuer).
+    planId: active.planId || null,
+    woId: active.woId || null,
     exercises: [],
   };
   let undone = 0;
@@ -1738,7 +1801,7 @@ ACTIONS["finish-workout"] = async () => {
     const type = exType(ex.exerciseId);
     let bestNew = 0;
     for (const s of ex.sets) bestNew = Math.max(bestNew, setValue(type, s));
-    const old = recordFor(ex.exerciseId);
+    const old = recordFor(ex.exerciseId, null, finished);
     if (bestNew > 0 && (!old || bestNew > old.val)) {
       prs.push({ name: exName(ex.exerciseId), type, val: bestNew, first: !old });
     }
@@ -1810,13 +1873,12 @@ async function planAbgleichen(h) {
 
 const COACH_MAX = 4;
 
-// Das vorherige Vorkommen einer Übung, ohne das gerade beendete Workout
-function vorigerEintrag(exId, ausserId) {
-  for (const w of workoutsDesc()) {
-    if (w.id === ausserId) continue;
-    const ex = w.exercises.find((e) => e.exerciseId === exId);
-    if (ex && ex.sets.length) return { workout: w, ex };
-  }
+// Das vorherige Vorkommen einer Übung, ohne das gerade beendete Workout.
+// ref sorgt dafür, dass der Coach Geräteübungen nur mit demselben Gerät
+// vergleicht – „weniger als letzte Woche" wäre sonst oft nur ein anderes
+// Studio.
+function vorigerEintrag(exId, ausserId, ref) {
+  for (const t of verlaufFuer(exId, ausserId, ref)) return t;
   return null;
 }
 
@@ -1837,7 +1899,7 @@ function coachTipps(w, prs) {
   for (const ex of w.exercises) {
     const typ = exType(ex.exerciseId);
     if (typ !== "weight_reps") continue;
-    const vor = vorigerEintrag(ex.exerciseId, w.id);
+    const vor = vorigerEintrag(ex.exerciseId, w.id, w);
     if (!vor) continue;
     const jetzt = bestwert(typ, ex), damals = bestwert(typ, vor.ex);
     if (!damals) continue;
@@ -1858,7 +1920,7 @@ function coachTipps(w, prs) {
     const reihe = [ex];
     let letzteId = w.id;
     for (let i = 0; i < 2; i++) {
-      const v = vorigerEintrag(ex.exerciseId, letzteId);
+      const v = vorigerEintrag(ex.exerciseId, letzteId, w);
       if (!v) break;
       reihe.push(v.ex); letzteId = v.workout.id;
     }
@@ -1985,12 +2047,12 @@ let audioCtx = null;
 function startRest(secs, info) {
   stopRest();
   const endet = Date.now() + secs * 1000;
-  // Benachrichtigung planen: Der Timer im Bildschirm läuft nicht weiter,
-  // wenn das Handy in der Tasche steckt – die Meldung kommt trotzdem.
-  planeErinnerung(endet);
-  // hintergrund merkt sich, ob die App während der Pause weg war – davon
-  // hängt ab, wer am Ende den Ton macht (siehe restDone)
-  rest = { endsAt: endet, total: secs, info: info || null, hintergrund: document.visibilityState !== "visible" };
+  // Das Signal am Ende plant die native Seite, sobald sie die Pause anzeigt
+  // (siehe meldungAktualisieren und PausenTimerPlugin). Sie ist die einzige
+  // Stelle, die es auslöst – deshalb kann es weder doppelt noch zur falschen
+  // Pause kommen.
+  pauseSignalVerbinden();
+  rest = { endsAt: endet, total: secs, info: info || null };
   meldungAktualisieren();
   const bar = document.createElement("div");
   bar.id = "rest-bar";
@@ -2019,22 +2081,38 @@ function tickRest() {
 }
 
 function restDone() {
-  // Genau ein Signal. War die App die ganze Pause über im Vordergrund, macht
-  // sie den Ton selbst und nimmt die geplante Meldung zurück. War sie
-  // zwischendurch weg, gehört das Signal der Meldung – auch wenn man
-  // inzwischen zurückgewechselt hat. Sonst klingelt es zweimal, und beim
-  // zweiten Mal steckt man schon im nächsten Satz.
-  const selbst = !!rest && !rest.hintergrund && document.visibilityState === "visible";
-  stopRest({ meldungBehalten: !selbst });
+  const { PausenTimer } = capPlugins();
+  if (PausenTimer) {
+    // Erst auslösen, dann aufräumen: Die native Seite entscheidet, ob die App
+    // klingelt oder die Meldung – sie weiß als einzige, ob die App die ganze
+    // Pause über offen war. Räumten wir zuerst auf, sagten wir ihr damit das
+    // Signal ab.
+    PausenTimer.pauseVorbei().catch(() => {});
+    // meldungLassen: Die Anzeige stellt die native Seite selbst zurück.
+    stopRest({ meldungLassen: true });
+    return;
+  }
+  // Ohne Plugin (im Browser) macht die App es selbst
+  stopRest();
   toast("Pause vorbei – nächster Satz!");
-  if (selbst) signalGeben();
+  signalGeben();
 }
 
-// Jeder Wechsel aus der App heraus zählt: Danach übernimmt die Meldung.
-function pauseVerlassenMerken() {
-  if (rest && document.visibilityState !== "visible") rest.hintergrund = true;
+// Das Signal kommt von der nativen Seite. ton sagt, ob die App klingeln soll –
+// war sie zwischendurch weg, hat die Meldung den Ton schon gemacht.
+function pauseSignalEmpfangen(e) {
+  toast("Pause vorbei – nächster Satz!");
+  if (e && e.ton) signalGeben();
 }
-document.addEventListener("visibilitychange", pauseVerlassenMerken);
+
+let signalVerbunden = false;
+function pauseSignalVerbinden() {
+  if (signalVerbunden) return;
+  const { PausenTimer } = capPlugins();
+  if (!PausenTimer || !PausenTimer.addListener) return;
+  signalVerbunden = true;
+  PausenTimer.addListener("pauseVorbei", pauseSignalEmpfangen);
+}
 
 /* ── Signal am Ende der Pause ───────────────────────────── */
 
@@ -2123,11 +2201,18 @@ function meldungAktualisieren() {
   meldungErlauben().then((ok) => {
     if (!ok || !active) return;
     const restMs = rest ? rest.endsAt - Date.now() : 0;
+    // Die Pause ist im selben Augenblick abgelaufen: nicht auf „Workout"
+    // umschreiben, das sagte der nativen Seite das Signal ab, das sie gerade
+    // geben will. Gleich meldet sich restDone.
+    if (rest && restMs <= 0) return;
     const daten = restMs > 0
       ? {
           modus: "pause", ms: Math.round(restMs),
           titel: (rest.info && rest.info.titel) || active.name || "Satzpause",
           text: (rest.info && rest.info.text) || "",
+          // „aus" heißt: kein Ton, keine Meldung – nur der stille Ablauf
+          melden: (DB.settings.restSignal || "beides") !== "aus",
+          leise: DB.settings.restSignal === "vibration",
         }
       : {
           modus: "workout", ms: Math.round(Date.now() - active.startedAt),
@@ -2182,28 +2267,10 @@ async function meldungErlauben() {
   }
 }
 
-async function planeErinnerung(endetUm) {
-  const { LocalNotifications } = capPlugins();
-  if (!LocalNotifications || DB.settings.restSignal === "aus") return;
-  try {
-    if (!(await meldungErlauben())) return;
-    await LocalNotifications.cancel({ notifications: [{ id: REST_MELDUNG_ID }] });
-    await LocalNotifications.schedule({
-      notifications: [{
-        id: REST_MELDUNG_ID,
-        title: "Pause vorbei",
-        body: "Weiter mit dem nächsten Satz.",
-        schedule: { at: new Date(endetUm), allowWhileIdle: true },
-        // Eigener lauter Kanal (siehe PausenTimerPlugin): Auf dem
-        // Standardkanal blieb der Ton oft aus, wenn das Handy schlief.
-        channelId: DB.settings.restSignal === "vibration" ? undefined : "pause-ende",
-        sound: DB.settings.restSignal === "vibration" ? null : undefined,
-      }],
-    });
-  } catch (e) {}
-}
-
-function loescheErinnerung() {
+// Aus einer früheren Fassung könnte noch eine über LocalNotifications geplante
+// Meldung in der Warteschlange stehen. Die gehört zu keiner Pause mehr und
+// würde irgendwann grundlos klingeln – einmal beim Start wegräumen.
+function alteErinnerungAufraeumen() {
   const { LocalNotifications } = capPlugins();
   if (!LocalNotifications) return;
   LocalNotifications.cancel({ notifications: [{ id: REST_MELDUNG_ID }] }).catch(() => {});
@@ -2214,18 +2281,20 @@ function stopRest(opt) {
   rest = null;
   $("#rest-bar")?.remove();
   document.body.classList.remove("rest-an");
-  // Zurück auf die Workout-Anzeige – oder ganz weg, wenn keins mehr läuft
-  meldungAktualisieren();
-  // Beim vorzeitigen Abbrechen auch die geplante Meldung zurücknehmen
-  if (!opt || !opt.meldungBehalten) loescheErinnerung();
+  // Zurück auf die Workout-Anzeige – oder ganz weg, wenn keins mehr läuft.
+  // Das sagt der nativen Seite zugleich: keine Pause mehr, Signal absagen.
+  // Nach einer regulär abgelaufenen Pause stellt sie die Anzeige selbst
+  // zurück – dann darf hier nichts dazwischenfunken.
+  if (!opt || !opt.meldungLassen) meldungAktualisieren();
 }
 
 ACTIONS["rest-plus"] = () => {
   if (!rest) return;
   rest.endsAt += 15000;
   rest.total += 15;
-  planeErinnerung(rest.endsAt);
-  meldungAktualisieren();   // schreibt die Meldung mit neuem Ziel neu
+  // Schreibt die Meldung mit neuem Ziel neu – und plant damit auch das
+  // Signal neu, das alte Merkmal verfällt dabei
+  meldungAktualisieren();
   tickRest();
 };
 ACTIONS["rest-skip"] = () => stopRest();
@@ -2597,6 +2666,10 @@ ACTIONS["open-settings"] = () => {
       <div class="lbl">Coach<small>Kurze Rückmeldung nach jedem Workout</small></div>
       <button class="switch ${s.coach !== false ? "on" : ""}" data-action="toggle-coach" role="switch" aria-checked="${s.coach !== false}" aria-label="Coach"></button>
     </div>
+    <div class="settings-row">
+      <div class="lbl">Geräte je Training<small>Kabelzug und Maschinen nur mit demselben Training vergleichen – freie Gewichte immer</small></div>
+      <button class="switch ${s.geraeteGetrennt !== false ? "on" : ""}" data-action="toggle-geraete" role="switch" aria-checked="${s.geraeteGetrennt !== false}" aria-label="Geräte je Training"></button>
+    </div>
     <div id="alarm-hinweis"></div>
     <div class="settings-row">
       <div class="lbl">Pausendauer</div>
@@ -2661,10 +2734,18 @@ ACTIONS["toggle-coach"] = (el) => {
   el.setAttribute("aria-checked", DB.settings.coach);
 };
 
-/* Ohne die Erlaubnis für exakte Alarme schiebt Android die Meldung zum
-   Pausenende auf – sie kommt dann irgendwann später, oft erst wenn man das
-   Gerät wieder anfasst. Das ist nichts, was die App reparieren kann; sie kann
-   nur darauf hinweisen und die passende Systemeinstellung öffnen. */
+ACTIONS["toggle-geraete"] = (el) => {
+  DB.settings.geraeteGetrennt = DB.settings.geraeteGetrennt === false;
+  saveDB();
+  el.classList.toggle("on", DB.settings.geraeteGetrennt);
+  el.setAttribute("aria-checked", DB.settings.geraeteGetrennt);
+};
+
+/* Das Signal gibt die App selbst, solange sie im Speicher liegt – das ist der
+   Normalfall und dafür braucht es keine Erlaubnis. Nur die Rückfallebene für
+   den Fall, dass Android die App währenddessen wegräumt, hängt an „Alarme und
+   Erinnerungen". Ohne sie kommt das Signal dann später. Hinweisen ja,
+   dramatisieren nein. */
 async function alarmHinweisPruefen() {
   const { PausenTimer } = capPlugins();
   const ziel = $("#alarm-hinweis");
@@ -2676,9 +2757,9 @@ async function alarmHinweisPruefen() {
       <div class="card" style="display:flex;gap:12px;align-items:center;margin:4px 0 14px;
            border-color:var(--warn-line);background:var(--warn-soft)">
         <div style="flex:1;min-width:0">
-          <div style="font-weight:800;font-size:14px">Meldung kommt verspätet</div>
-          <div class="hint">Ohne „Alarme und Erinnerungen" schiebt Android die Meldung
-            zum Pausenende auf – sie kommt dann oft erst mitten im nächsten Satz.</div>
+          <div style="font-weight:800;font-size:14px">Signal ohne Netz und doppelten Boden</div>
+          <div class="hint">Räumt Android die App während der Pause aus dem Speicher,
+            kommt das Signal ohne „Alarme und Erinnerungen" verspätet.</div>
         </div>
         <button class="btn btn-compact" data-action="alarm-einstellen">Erlauben</button>
       </div>`;
@@ -3131,6 +3212,8 @@ function render() {
 }
 
 render();
+pauseSignalVerbinden();
+alteErinnerungAufraeumen();
 histWischenVerbinden();
 exWischenVerbinden();
 vollbildBeobachten();
