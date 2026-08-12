@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "2.10.0";
+const APP_VERSION = "3.0.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -110,6 +110,7 @@ const I = {
   download: '<path d="M12 4v10M7 10l5 5 5-5M5 20h14"/>',
   upload: '<path d="M12 14V4M7 8l5-5 5 5M5 20h14"/>',
   grip: '<path d="M5 9h14M5 15h14"/>',
+  apple: '<path d="M9 8.5c-2 0-3.5 1.9-3.5 4.6C5.5 17 7.6 21 9.6 21c.9 0 1.5-.5 2.4-.5s1.5.5 2.4.5c2 0 4.1-4 4.1-7.9 0-2.7-1.5-4.6-3.5-4.6-1 0-1.9.5-3 .5s-2-.5-3-.5z"/><path d="M12 8.5V6"/><path d="M12 6c2.1 0 3.8-1.6 3.8-3.5C13.7 2.5 12 4.1 12 6z"/>',
   link: '<path d="M10 14 14 10"/><path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/>',
   unlink: '<path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/><path d="M4 4l16 16"/>',
 };
@@ -330,6 +331,11 @@ const workoutSets = (w) => w.exercises.reduce((a, ex) => a + ex.sets.length, 0);
 /* ═══════════════ Aktions-Registry (Event-Delegation) ═══════════════ */
 
 const ACTIONS = {};
+
+/* Dasselbe für Eingabefelder. Die Fälle unten in app.js sind gewachsen und
+   bleiben, wo sie sind; Module wie die Ernährung tragen sich hier ein, statt
+   die Kette dort zu verlängern. */
+const INPUTS = {};
 
 document.addEventListener("click", (e) => {
   const el = e.target.closest("[data-action]");
@@ -608,26 +614,126 @@ ACTIONS["close-overlay"] = (el) => { el.closest(".overlay")?.remove(); render();
 /* ═══════════════ Tabs ═══════════════ */
 
 let currentTab = "home";
-const TABS = [
-  { id: "home", label: "Start", ic: "home" },
-  { id: "plans", label: "Pläne", ic: "plans" },
-  { id: "exercises", label: "Übungen", ic: "dumbbell" },
-  { id: "history", label: "Verlauf", ic: "history" },
+/* Zwei Welten, eine Leiste.
+   Training und Ernährung haben nichts miteinander zu tun – sie in eine Reihe
+   aus sieben Reitern zu quetschen wäre falsch. Stattdessen zeigt die Pille
+   immer nur eine Welt; ein Wischen darüber wechselt sie. Damit das nicht
+   geheim bleibt, sitzen zwei Punkte über der Pille, die auch antippbar sind. */
+const BEREICHE = [
+  {
+    id: "training", label: "Training", tabs: [
+      { id: "home", label: "Start", ic: "home" },
+      { id: "plans", label: "Pläne", ic: "plans" },
+      { id: "exercises", label: "Übungen", ic: "dumbbell" },
+      { id: "history", label: "Verlauf", ic: "history" },
+    ],
+  },
+  {
+    id: "essen", label: "Ernährung", tabs: [
+      { id: "food-day", label: "Heute", ic: "apple" },
+      { id: "food-lib", label: "Lebensmittel", ic: "search" },
+      { id: "food-hist", label: "Verlauf", ic: "history" },
+    ],
+  },
 ];
+
+/* Gestartet wird immer im Training: Das ist die Heimat der App, dort liegt
+   die Leiste für ein laufendes Workout, und dorthin führt auch die
+   Zurücktaste. Die Ernährung ist einen Wisch entfernt. Innerhalb einer
+   Sitzung merkt sich jede Welt ihren Reiter – wer hin und her wechselt,
+   steht wieder da, wo er war. */
+let currentBereich = "training";
+const letzterTab = { training: "home", essen: "food-day" };
+
+const bereich = () => BEREICHE.find((b) => b.id === currentBereich) || BEREICHE[0];
+const bereichIndex = () => BEREICHE.findIndex((b) => b.id === currentBereich);
+const bereichVon = (tab) => (BEREICHE.find((b) => b.tabs.some((t) => t.id === tab)) || BEREICHE[0]).id;
 
 ACTIONS["tab"] = (el) => {
   // Auf demselben Reiter nichts tun – sonst klopft es bei jedem Tipp
   if (el.dataset.tab === currentTab) return;
   currentTab = el.dataset.tab;
+  letzterTab[currentBereich] = currentTab;
   tippen();
   render();
 };
 
+function bereichWechseln(richtung) {
+  const i = bereichIndex() + richtung;
+  if (i < 0 || i >= BEREICHE.length) return false;
+  currentBereich = BEREICHE[i].id;
+  currentTab = letzterTab[currentBereich] || BEREICHE[i].tabs[0].id;
+  tippen();
+  render();
+  const inner = $("#tabbar-inner");
+  if (inner) paneEinblenden(inner, richtung);
+  const screen = $("#screen-" + currentTab);
+  if (screen) paneEinblenden(screen, richtung);
+  return true;
+}
+
+ACTIONS["bereich"] = (el) => {
+  const ziel = BEREICHE.findIndex((b) => b.id === el.dataset.b);
+  if (ziel >= 0 && ziel !== bereichIndex()) bereichWechseln(ziel - bereichIndex());
+};
+
 function renderTabbar() {
-  $("#tabbar-inner").innerHTML = TABS.map(
+  const b = bereich();
+  const inner = $("#tabbar-inner");
+  inner.style.gridTemplateColumns = `repeat(${b.tabs.length}, 1fr)`;
+  inner.innerHTML = b.tabs.map(
     (t) => `<button class="tab-btn ${t.id === currentTab ? "active" : ""}" data-action="tab" data-tab="${t.id}" aria-label="${t.label}">${icon(t.ic)}<span>${t.label}</span></button>`
   ).join("");
+  const punkte = $("#bereich-punkte");
+  if (punkte) {
+    punkte.innerHTML = BEREICHE.map((x) => `
+      <button class="bereich-punkt ${x.id === currentBereich ? "active" : ""}" data-action="bereich" data-b="${x.id}"
+        aria-label="${x.label}" aria-current="${x.id === currentBereich}"></button>`).join("");
+  }
   $$(".screen").forEach((s) => s.classList.toggle("active", s.id === "screen-" + currentTab));
+}
+
+/* Wischen über der Pille wechselt die Welt. Bewusst nur dort und nicht über
+   dem ganzen Bildschirm: Im Inhalt bedeutet Wischen schon etwas anderes
+   (Muskelgruppe, Zeitraum, Tag). */
+function bereichWischenVerbinden() {
+  const leiste = $(".tabbar");
+  if (!leiste) return;
+  let zug = null;
+  leiste.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    zug = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, achse: null };
+  });
+  leiste.addEventListener("pointermove", (e) => {
+    if (!zug || e.pointerId !== zug.id) return;
+    const dx = e.clientX - zug.x, dy = e.clientY - zug.y;
+    if (!zug.achse) {
+      if (Math.abs(dx) < 12) return;
+      if (Math.abs(dx) <= Math.abs(dy) * 1.2) { zug = null; return; }
+      zug.achse = "x";
+      leiste.setPointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    const inner = $("#tabbar-inner");
+    const rand = bereichIndex() + (dx < 0 ? 1 : -1);
+    zug.dx = rand < 0 || rand >= BEREICHE.length ? dx * 0.25 : dx;
+    if (inner) {
+      inner.style.transition = "none";
+      inner.style.transform = `translateX(${zug.dx * 0.5}px)`;
+      inner.style.opacity = String(Math.max(0.35, 1 - Math.abs(zug.dx) / 160));
+    }
+  });
+  const loslassen = () => {
+    if (!zug) return;
+    const { achse, dx } = zug;
+    zug = null;
+    const inner = $("#tabbar-inner");
+    if (inner) { inner.style.transition = ""; inner.style.transform = ""; inner.style.opacity = ""; }
+    if (achse !== "x") return;
+    if (Math.abs(dx) > 46) bereichWechseln(dx < 0 ? 1 : -1);
+  };
+  leiste.addEventListener("pointerup", loslassen);
+  leiste.addEventListener("pointercancel", loslassen);
 }
 
 /* ═══════════════ Start-Tab ═══════════════ */
@@ -2791,8 +2897,13 @@ function markBackupDone() {
   saveDB();
 }
 
+// Das Backup nimmt beide Welten mit. Sie liegen getrennt im Speicher, aber
+// wer sichert, will alles sichern – nicht die Hälfte.
+const backupDaten = () =>
+  Object.assign({}, DB, { essen: typeof ESSEN === "object" ? ESSEN : undefined });
+
 ACTIONS["export-data"] = async () => {
-  const json = JSON.stringify(DB, null, 2);
+  const json = JSON.stringify(backupDaten(), null, 2);
   const name = backupName();
   const { Filesystem, Share } = capPlugins();
 
@@ -2920,8 +3031,11 @@ async function restoreBackup(text) {
 
   const hasOwnData = DB.workouts.length > 0 || DB.customExercises.length > 0;
   const anz = (n, ein, viele) => n + " " + (n === 1 ? ein : viele);
-  const summary = `${anz(data.workouts.length, "Workout", "Workouts")} und `
-    + `${anz(data.plans.length, "Plan", "Pläne")} gefunden.`;
+  const essenTage = data.essen && data.essen.tage ? Object.keys(data.essen.tage).length : 0;
+  const summary = `${anz(data.workouts.length, "Workout", "Workouts")}, `
+    + `${anz(data.plans.length, "Plan", "Pläne")}`
+    + (essenTage ? ` und ${anz(essenTage, "Ernährungstag", "Ernährungstage")}` : "")
+    + " gefunden.";
 
   let mode = "replace";
   if (hasOwnData) {
@@ -2957,11 +3071,36 @@ async function restoreBackup(text) {
   }
   migrateScheme(DB.settings);
 
+  essenWiederherstellen(data.essen, mode);
+
   saveDB();
   applyAccent();
   $$(".backdrop").forEach((b) => b.remove());
   render();
   toast(mode === "merge" ? "Backup zusammengeführt" : "Backup wiederhergestellt");
+}
+
+/* Die Ernährung wohnt in ihrem eigenen Speicher und darf nicht mitverwaltet
+   werden – nur mitgesichert. Deshalb hier ein eigener, kleiner Schritt: Beim
+   Ersetzen zählt das Backup, beim Zusammenführen werden Lebensmittel nach
+   Kennung und Tage nach Datum ergänzt. Ein Tag, der schon Einträge hat, bleibt
+   unangetastet: Zwei Fassungen desselben Tages zu vermischen ergäbe ein
+   Mittagessen, das niemand gegessen hat. */
+function essenWiederherstellen(daten, mode) {
+  if (typeof ESSEN !== "object" || !daten || typeof daten !== "object") return;
+  if (mode !== "merge") {
+    ESSEN = Object.assign(defaultEssen(), daten);
+    ESSEN.ziele = Object.assign(defaultEssen().ziele, daten.ziele || {});
+  } else {
+    const da = new Set(ESSEN.lebensmittel.map((l) => l.id));
+    ESSEN.lebensmittel = ESSEN.lebensmittel.concat(
+      (daten.lebensmittel || []).filter((l) => l && !da.has(l.id)));
+    for (const [tag, liste] of Object.entries(daten.tage || {})) {
+      if (!ESSEN.tage[tag] || !ESSEN.tage[tag].length) ESSEN.tage[tag] = liste;
+    }
+  }
+  speichereEssen();
+  if (typeof renderEssen === "function") renderEssen();
 }
 
 // Auswahl: ersetzen oder zusammenführen
@@ -3026,6 +3165,7 @@ document.addEventListener("input", (e) => {
     if (s.done) updateWoMeta();
     saveActive();
   }
+  else if (INPUTS[k]) INPUTS[k](el, e);
 });
 
 // Ein leer gelassener Plan-Name wäre in der Liste unsichtbar
@@ -3085,10 +3225,13 @@ function zurueckNavigieren() {
   // 3. Läuft der Pausen-Timer, hat Zurück ihn zuerst weg
   if (rest) { stopRest(); return true; }
 
-  // 4. Von jedem anderen Tab zurück zum Start
-  if (currentTab !== "home") { currentTab = "home"; render(); return true; }
+  // 4. Aus der Ernährung zurück ins Training – das ist die Heimatwelt
+  if (currentBereich !== "training") { bereichWechseln(-bereichIndex()); return true; }
 
-  // 5. Auf dem Start-Tab: erst beim zweiten Mal beenden
+  // 5. Von jedem anderen Tab zurück zum Start
+  if (currentTab !== "home") { currentTab = "home"; letzterTab.training = "home"; render(); return true; }
+
+  // 6. Auf dem Start-Tab: erst beim zweiten Mal beenden
   if (Date.now() < beendenBereitBis) return false;
   beendenBereitBis = Date.now() + 2000;
   toast(active ? "Workout läuft – nochmal für Beenden" : "Nochmal zurück zum Beenden");
@@ -3209,9 +3352,13 @@ function render() {
   renderExercises();
   renderHistory();
   renderResumeBar();
+  // Das Ernährungsmodul lädt nach app.js. Beim ersten render() ist es noch
+  // nicht da – es zeichnet sich dann selbst, sobald es soweit ist.
+  if (typeof renderEssen === "function") renderEssen();
 }
 
 render();
+bereichWischenVerbinden();
 pauseSignalVerbinden();
 alteErinnerungAufraeumen();
 histWischenVerbinden();

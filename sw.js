@@ -1,5 +1,5 @@
 // Lumora Service Worker – App-Shell offline verfügbar halten
-const CACHE = "lumora-v27";
+const CACHE = "lumora-v29";
 const ASSETS = [
   "./",
   "index.html",
@@ -10,6 +10,7 @@ const ASSETS = [
   "img/koerper-vorn.png",
   "img/koerper-hinten.png",
   "js/app.js",
+  "js/essen.js",
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png",
@@ -31,6 +32,10 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // Fremde Adressen – die Lebensmittel-Datenbank – gehen am Cache vorbei.
+  // Suchergebnisse sind nichts zum Wiederverwenden, und ignoreSearch würde
+  // unten zwei verschiedene Suchen für dieselbe halten.
+  if (new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then((hit) => {
       if (hit) return hit;

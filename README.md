@@ -1,10 +1,12 @@
-# Lumora – Training, Fortschritt, Gesundheit
+# Lumora – Training, Ernährung, Gesundheit
 
-Eine Progressive Web App (PWA) fürs Fitnessstudio – inspiriert von Hevy und MacroFactor Training. Komplett offline-fähig, ohne Konto, ohne Server: **Alle Daten bleiben lokal auf deinem Gerät.**
+Eine Progressive Web App (PWA) fürs Fitnessstudio und für den Küchentisch – inspiriert von Hevy und MacroFactor. Komplett offline-fähig, ohne Konto, ohne Server: **Alle Daten bleiben lokal auf deinem Gerät.**
+
+Die App hat **zwei Welten**: Training und Ernährung. Sie haben nichts miteinander zu tun, teilen keine Daten und liegen sogar in getrennten Speichern – geteilt werden nur das Aussehen und die Tab-Leiste. **Über die Leiste unten wischt man von der einen in die andere**; die zwei Punkte darüber zeigen, wo man ist, und sind selbst antippbar.
 
 Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalität, bewusst ohne Hantel-Motiv. Alle Grafiken (App-Icons, Launcher, Splash, Store-Assets) entstehen aus derselben Formdefinition per `python3 scripts/make-icons.py`.
 
-## Features
+## Training 🏋️
 
 - **Übungsbibliothek** mit 150 vordefinierten Übungen (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
 - **Muskel-Piktogramme**: Jede Übung zeigt eine anatomische Strichzeichnung, auf der genau der trainierte Muskel in der **gewählten Akzentfarbe** leuchtet. Jede Gruppe zoomt dabei auf ihre Körperregion – bei Brust auf den Brustkorb, bei Waden auf die Unterschenkel. Die Flächen sind nicht gezeichnet, sondern aus der Vorlage ausgefüllt (`scripts/make-muscle-paths.py`), sitzen also exakt auf den Linien
@@ -28,10 +30,20 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 - **Workout wiederholen**, minimieren und später fortsetzen (übersteht auch ein versehentliches Schließen der App)
 - **Datensicherung**: Backup als Datei teilen (Google Drive, Dateien, Mail) und jederzeit wiederherstellen – wahlweise **ersetzen** oder **zusammenführen**, sodass nichts verloren geht. Dazu sichert Android die App automatisch im Google-Konto (Auto Backup), und die App erinnert ans Sichern, wenn das letzte Backup zu lange her ist.
 - **Bildschirm bleibt an**, solange die App im Vordergrund liegt – mitten im Satz muss niemand erst entsperren. Geht die App in den Hintergrund, gilt wieder der normale Sperr-Timeout des Handys
-- **Android-Zurücktaste** navigiert innerhalb der App: erst Dialoge, dann Vollbild-Ansichten, dann zurück zum Start-Tab – die App schließt sich erst beim zweiten Zurück
+- **Android-Zurücktaste** navigiert innerhalb der App: erst Dialoge, dann Vollbild-Ansichten, dann aus der Ernährung zurück ins Training, dann zum Start-Tab – die App schließt sich erst beim zweiten Zurück
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
-- **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. Beim Wechsel gibt es einen kurzen haptischen Stups, beim abgeschlossenen Satz einen kräftigeren – bewusst nur an diesen beiden Stellen, damit sie etwas bedeuten
+- **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. **Wischen über der Pille wechselt zwischen Training und Ernährung**, die zwei Punkte darüber zeigen die Welt an und sind auch antippbar. Beim Wechsel gibt es einen kurzen haptischen Stups, beim abgeschlossenen Satz einen kräftigeren – bewusst nur an diesen beiden Stellen, damit sie etwas bedeuten. Gestartet wird immer im Training: Dort liegt die Leiste für ein laufendes Workout, und dorthin führt auch die Zurücktaste
 - **Dunkles Design**: tiefes Nachtblau als Grund (`#111827`), Karten eine Stufe heller (`#1F2937`), dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Blau, Grün, Bernstein, Rot, Magenta oder Weiß. Erledigte Sätze sind grün, Rekorde bernsteinfarben, Löschen rot – Farbe hat immer eine Bedeutung
+
+## Ernährung 🥗
+
+- **Tagebuch nach Mahlzeiten**: Frühstück, Mittagessen, Abendessen, Snacks. Oben stehen Kalorien, das, was vom Tagesziel übrig ist, und drei Balken für Eiweiß, Kohlenhydrate und Fett. Durch die Tage wischt man wie durch die Zeiträume im Trainingsverlauf – nach vorn ist heute Schluss
+- **Lebensmittel aus Open Food Facts**: kostenlos, offen (Open Database License) und mit sehr guter Abdeckung deutscher Produkte. Gesucht wird über die deutsche Adresse, also mit deutschen Namen und deutschen Produkten zuerst. Kein Konto, kein Schlüssel; hinausgeschickt wird nur der Suchbegriff
+- **Barcode eintippen**: Die Ziffernfolge von der Packung ins Suchfeld – dann wird das Produkt direkt geholt, statt danach zu suchen
+- **Offline ist die Regel, nicht der Notfall**: 76 gängige Lebensmittel sind eingebaut (Richtwerte je 100 g bzw. ml), und alles, was einmal eingetragen wurde, bleibt in der eigenen Liste. Ohne Netz sucht die App darin weiter und sagt es auch. Die Datenbank ist eine Ergänzung, keine Voraussetzung
+- **Eigene Lebensmittel** anlegen, mit Portionsgröße („1 Scheibe = 45 g"). Auch ein eingebautes Lebensmittel lässt sich korrigieren – die Änderung gilt danach überall, alte Einträge bleiben gültig
+- **Tagesziele** für Kalorien und die drei Nährstoffe. Reine Zielmarken: Die App rechnet nichts daraus und verrechnet sie mit nichts aus dem Training
+- **Verlauf** über 7, 30 oder 90 Tage: Durchschnitte und ein Balken je Tag, Tage über dem Ziel bernsteinfarben, die Ziellinie gestrichelt darüber
 
 ## Android-App & Play Store 🤖
 
@@ -74,7 +86,7 @@ python3 -m http.server 8000
 ## Technik
 
 - Vanilla HTML/CSS/JS, keine Abhängigkeiten, kein Build-Schritt
-- Datenhaltung in `localStorage` (inkl. laufendem Workout, übersteht Reloads)
+- Datenhaltung in `localStorage`, inkl. laufendem Workout (übersteht Reloads). Training und Ernährung nutzen **getrennte Schlüssel** (`eisenzeit.db.v1` und `lumora.essen.v1`) – das Backup sichert und stellt beide wieder her
 - Service Worker cached die App-Shell für den Offline-Betrieb
 - Farbsystem über CSS-Custom-Properties; die Akzentfarbe hängt an einem `data-accent`-Attribut am Wurzelelement
 - Alle Grafiken werden aus `scripts/make-icons.py` generiert (Pillow), die Marke steckt zusätzlich als SVG-Pfad in `js/app.js`
@@ -88,7 +100,8 @@ python3 -m http.server 8000
 | `js/muscle-icons.js` | Zuordnung Muskelgruppe → Figur und Bildausschnitt |
 | `js/muscle-paths.js` | Erzeugte Muskelflächen (nicht von Hand ändern) |
 | `scripts/make-muscle-paths.py` | Füllt die Muskeln aus `img/koerper-*.png` aus |
-| `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke |
+| `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke, Tab-Leiste |
+| `js/essen.js` | Ernährung: Tagebuch, Lebensmittel, Open Food Facts, eigener Speicher |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
 | `android/…/PausenTimerPlugin.java` | Meldung mit mitlaufender Restzeit und das Signal am Pausenende (eigenes Capacitor-Plugin) |
 | `android/…/PausenAlarm.java` | Rückfallebene, falls Android die App während der Pause wegräumt |

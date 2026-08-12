@@ -54,7 +54,9 @@
   --tabbar-h: 56px;
   --tabbar-rand: 6px;
   --tabbar-luft: 10px;
-  --tabbar-raum: calc(var(--tabbar-h) + 2 * var(--tabbar-rand) + var(--tabbar-luft));
+  /* Zeile mit den zwei Bereichspunkten über den Reitern */
+  --tabbar-punkte: 15px;
+  --tabbar-raum: calc(var(--tabbar-h) + var(--tabbar-punkte) + 2 * var(--tabbar-rand) + var(--tabbar-luft));
   --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* Feine Akzentlinie über Timer und Kennzahlen */
@@ -310,6 +312,217 @@ button.section-label.klapp:active { opacity: 0.6; }
   background: var(--accent-soft);
 }
 .tab-btn:active { transform: scale(0.96); }
+
+
+/* ── Bereichspunkte über den Reitern ─────────────────────
+   Zwei Welten in einer Leiste: Wischen wechselt sie, die Punkte zeigen, wo
+   man ist – und sind selbst antippbar, damit die Geste nicht der einzige Weg
+   bleibt. */
+.bereich-punkte {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  height: var(--tabbar-punkte);
+}
+.bereich-punkt {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  padding: 0;
+  transition: background 0.16s ease, width 0.16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.bereich-punkt.active {
+  width: 18px;
+  background: var(--accent);
+}
+.tabbar-inner { transition: transform 0.2s ease, opacity 0.2s ease; }
+
+/* ── Ernährung ───────────────────────────────────────────── */
+
+.tag-leiste {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 4px 6px;
+}
+.tag-leiste span {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.icon-btn.plain.aus { opacity: 0.25; }
+
+.kcal-karte { padding: 16px 14px 10px; }
+.kcal-zahlen {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.kcal-gross {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.kcal-rest { text-align: right; }
+.kcal-rest b {
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+}
+.kcal-rest span {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+}
+.kcal-rest.drueber b { color: var(--warn); }
+.kcal-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin: 12px 0 16px;
+}
+.kcal-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.kcal-bar i.drueber { background: var(--warn); }
+
+.makro { margin-bottom: 10px; }
+.makro:last-child { margin-bottom: 4px; }
+.makro-kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.makro-kopf span { color: var(--ink-2); font-weight: 700; }
+.makro-kopf b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.makro-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.makro-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+/* Drei Nährstoffe, drei feste Farben – die Akzentfarbe bleibt der Navigation
+   und den Zielen vorbehalten, sonst sagt sie nichts mehr. */
+.m-eiweiss { background: var(--success); }
+.m-kh { background: #60a5fa; }
+.m-fett { background: var(--warn); }
+
+.section-label .mz-kcal {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.mz-add { margin-bottom: 4px; }
+
+.lm-zeile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 8px 10px 8px 12px;
+  margin-bottom: 6px;
+}
+.lm-haupt {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lm-name {
+  font-size: 15px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lm-marke { font-weight: 600; color: var(--ink-3); font-size: 13px; }
+.lm-sub {
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lm-kcal {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.werte-gitter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.werte-gitter div {
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  padding: 9px 4px;
+  text-align: center;
+}
+.werte-gitter span {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.werte-gitter b {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.feld-zwei {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 10px;
+}
+
+.ziel-linie {
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.bar-rect.ueberziel { fill: var(--warn); }
 
 /* ── Buttons ────────────────────────────────────────────── */
 
