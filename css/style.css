@@ -1171,11 +1171,19 @@ body.aktionsleiste .rest-bar {
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
+/* Der Pfeil klappt auf, genau wie der Name daneben. Er war lange nur ein
+   Zeichen ohne Funktion – wer ihn traf, tippte ins Leere. Das Polster macht
+   ihn zu einer Fläche, die man auch mit dem Daumen erwischt. */
 .ex-zu-chev {
   display: inline-flex;
+  align-items: center;
   color: var(--ink-3);
   flex-shrink: 0;
+  padding: 10px 6px;
+  margin: -10px -4px -10px 0;
+  -webkit-tap-highlight-color: transparent;
 }
+.ex-zu-chev:active { opacity: 0.55; }
 .ex-zu-chev svg { width: 18px; height: 18px; }
 .ex-zu-chev.fertig { color: var(--success); }
 

@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.0.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -230,8 +230,8 @@ const saveActive = () => {
   if (active) localStorage.setItem(LS_ACTIVE, JSON.stringify(active));
   else localStorage.removeItem(LS_ACTIVE);
   // Jede Änderung am Workout läuft hier durch – der eine Ort, an dem sich
-  // die Meldung in der Leiste zuverlässig nachziehen lässt.
-  meldungPlanen();
+  // der Zustand für die Leiste zuverlässig nachziehen lässt.
+  standPlanen();
 };
 
 /* ═══════════════ Übungs-Zugriff ═══════════════ */
@@ -1599,8 +1599,9 @@ function woKopfZu(ex, xi, type) {
         <span class="ex-zu-name">${esc(exName(ex.exerciseId))}</span>
         <span class="ex-zu-stand">${stand}</span>
       </button>
-      <span class="ex-zu-chev ${fertig === ex.sets.length ? "fertig" : ""}">
-        ${fertig === ex.sets.length ? icon("check") : icon("chevD")}</span>
+      <button class="ex-zu-chev ${fertig === ex.sets.length ? "fertig" : ""}"
+        data-action="wo-open-ex" data-xi="${xi}" aria-label="Übung aufklappen">
+        ${fertig === ex.sets.length ? icon("check") : icon("chevD")}</button>
     </div>`;
 }
 
@@ -2144,22 +2145,83 @@ setInterval(() => {
   if (r) r.textContent = t;
 }, 1000);
 
-/* ═══════════════ Pausen-Timer ═══════════════ */
+/* ═══════════════ Satzpause ═══════════════
 
-let rest = null; // { endsAt, total, interval }
+   Die Pause gehört der nativen Seite (siehe PausenTimerPlugin). Hier läuft
+   nur der Balken auf dem Bildschirm – und der ist reine Anzeige.
+
+   Zwei Anläufe sind daran gescheitert, dass beide Seiten mitgeplant haben:
+   JavaScript sagte ab und plante neu, während die native Seite dasselbe tat.
+   Jeder Aufruf über die Brücke hat seine eigene Laufzeit, also konnten sich
+   zwei Nachrichten überholen – ein „keine Pause mehr" traf nach dem „neue
+   Pause" ein und löschte sie. Deshalb jetzt:
+
+   * Es gibt nur **eine** Nachricht, standSenden(), und die beschreibt den
+     **ganzen** Zustand. Halb überholen kann man einen ganzen Zustand nicht.
+   * Sie trägt eine laufende Nummer, und die native Seite verwirft alles
+     Ältere. Damit ist die Reihenfolge der Brücke egal.
+   * Nachrichten gehen durch **eine Kette**, nie parallel.
+   * Jede Pause hat eine Kennung. Dieselbe Kennung schreibt nur die Anzeige
+     neu, eine neue plant den Zeitpunkt. Wer die Pause verlängert, vergibt
+     eine neue Kennung – dann und nur dann verschiebt sich das Ziel. */
+
+let rest = null;      // { id, endsAt, total, interval, info }
 let audioCtx = null;
+let standFolge = 0;
+let standKette = Promise.resolve();
+// Die Weboberfläche kann neu laden, ohne dass die App darunter stirbt. Dann
+// beginnt die Zählung wieder bei eins – daran erkennt die native Seite den
+// neuen Durchlauf, statt jede Nachricht für überholt zu halten.
+const STAND_LAUF = uid();
+
+// Der vollständige Zustand, wie ihn die native Seite braucht
+function standDaten() {
+  const d = { lauf: STAND_LAUF, folge: ++standFolge, aktiv: !!active };
+  if (!active) return d;
+  d.workoutMs = Math.max(0, Math.round(Date.now() - active.startedAt));
+  d.titel = active.name || "Workout";
+  d.text = `${workoutSets(active)} Sätze · ${fmtVol(workoutVolume(active))}`;
+  d.pauseId = rest ? rest.id : "";
+  if (rest) {
+    d.pauseMs = Math.max(0, Math.round(rest.endsAt - Date.now()));
+    d.pauseTitel = (rest.info && rest.info.titel) || d.titel;
+    d.pauseText = (rest.info && rest.info.text) || "";
+    // „aus" heißt: kein Ton, keine Meldung – nur der stille Ablauf
+    d.melden = (DB.settings.restSignal || "beides") !== "aus";
+    d.leise = DB.settings.restSignal === "vibration";
+  }
+  return d;
+}
+
+function standSenden() {
+  const { PausenTimer } = capPlugins();
+  if (!PausenTimer || !PausenTimer.stand) return;
+  pauseSignalVerbinden();
+  if (active) meldungErlaubnisHolen();
+  const daten = standDaten();
+  // Einreihen statt losschicken: So kann keine Nachricht die vorige überholen.
+  standKette = standKette.then(() => PausenTimer.stand(daten)).catch(() => {});
+}
+
+// Bei jeder Kleinigkeit neu zu schreiben wäre Verschwendung – die Zeit läuft
+// ja von allein weiter. Deshalb gebündelt kurz nach der letzten Änderung.
+let standTimer = null;
+function standPlanen() {
+  clearTimeout(standTimer);
+  standTimer = setTimeout(standSenden, 700);
+}
 
 // info: { titel, text } für die Meldung in der Benachrichtigungsleiste
 function startRest(secs, info) {
-  stopRest();
-  const endet = Date.now() + secs * 1000;
-  // Das Signal am Ende plant die native Seite, sobald sie die Pause anzeigt
-  // (siehe meldungAktualisieren und PausenTimerPlugin). Sie ist die einzige
-  // Stelle, die es auslöst – deshalb kann es weder doppelt noch zur falschen
-  // Pause kommen.
-  pauseSignalVerbinden();
-  rest = { endsAt: endet, total: secs, info: info || null };
-  meldungAktualisieren();
+  // still, damit für den Wechsel „alte Pause weg, neue Pause an" nur eine
+  // einzige Nachricht hinausgeht
+  stopRest({ still: true });
+  rest = {
+    id: uid(),
+    endsAt: Date.now() + secs * 1000,
+    total: secs,
+    info: info || null,
+  };
   const bar = document.createElement("div");
   bar.id = "rest-bar";
   bar.className = "rest-bar";
@@ -2172,6 +2234,15 @@ function startRest(secs, info) {
   document.body.classList.add("rest-an");
   rest.interval = setInterval(tickRest, 250);
   tickRest();
+  standSenden();
+}
+
+function stopRest(opt) {
+  if (rest) clearInterval(rest.interval);
+  rest = null;
+  $("#rest-bar")?.remove();
+  document.body.classList.remove("rest-an");
+  if (!opt || !opt.still) standSenden();
 }
 
 function tickRest() {
@@ -2186,20 +2257,24 @@ function tickRest() {
   if (f) f.style.width = Math.max(0, Math.min(100, (left / rest.total) * 100)) + "%";
 }
 
+/* Der Zähler auf dem Bildschirm ist bei null. Die App ist damit sichtbar
+   offen – also der nativen Seite Bescheid geben, damit sie sofort auslöst
+   statt auf ihren Handler zu warten. Ob das Signal überhaupt noch zu einer
+   laufenden Pause gehört, entscheidet dort die Kennung: Lag die App
+   zwischendurch im Hintergrund, war der Zähler eingefroren und meldet sich
+   verspätet – dann ist die Pause längst abgehakt und die Meldung verpufft. */
 function restDone() {
+  const id = rest ? rest.id : null;
   const { PausenTimer } = capPlugins();
-  if (PausenTimer) {
-    // Erst auslösen, dann aufräumen: Die native Seite entscheidet, ob die App
-    // klingelt oder die Meldung – sie weiß als einzige, ob die App die ganze
-    // Pause über offen war. Räumten wir zuerst auf, sagten wir ihr damit das
-    // Signal ab.
-    PausenTimer.pauseVorbei().catch(() => {});
-    // meldungLassen: Die Anzeige stellt die native Seite selbst zurück.
-    stopRest({ meldungLassen: true });
+  // still: Die Anzeige in der Leiste stellt die native Seite selbst zurück.
+  // Schickten wir hier „keine Pause mehr", sagten wir ihr das Signal ab, das
+  // sie im selben Moment geben will.
+  stopRest({ still: !!(PausenTimer && PausenTimer.pauseVorbei && id) });
+  if (PausenTimer && PausenTimer.pauseVorbei && id) {
+    standKette = standKette.then(() => PausenTimer.pauseVorbei({ pauseId: id })).catch(() => {});
     return;
   }
   // Ohne Plugin (im Browser) macht die App es selbst
-  stopRest();
   toast("Pause vorbei – nächster Satz!");
   signalGeben();
 }
@@ -2207,6 +2282,9 @@ function restDone() {
 // Das Signal kommt von der nativen Seite. ton sagt, ob die App klingeln soll –
 // war sie zwischendurch weg, hat die Meldung den Ton schon gemacht.
 function pauseSignalEmpfangen(e) {
+  // Die Pause kann auch geendet haben, während die App weg war: dann steht
+  // der Balken noch, obwohl längst nichts mehr läuft.
+  stopRest({ still: true });
   toast("Pause vorbei – nächster Satz!");
   if (e && e.ton) signalGeben();
 }
@@ -2219,6 +2297,17 @@ function pauseSignalVerbinden() {
   signalVerbunden = true;
   PausenTimer.addListener("pauseVorbei", pauseSignalEmpfangen);
 }
+
+ACTIONS["rest-plus"] = () => {
+  if (!rest) return;
+  rest.endsAt += 15000;
+  rest.total += 15;
+  // Neue Kennung: Nur so verschiebt die native Seite den Zielzeitpunkt.
+  rest.id = uid();
+  standSenden();
+  tickRest();
+};
+ACTIONS["rest-skip"] = () => stopRest();
 
 /* ── Signal am Ende der Pause ───────────────────────────── */
 
@@ -2295,52 +2384,8 @@ function vibrieren() {
 
 /* ── Laufendes Workout in der Benachrichtigungsleiste ───── */
 
-// Die Meldung steht, solange ein Workout läuft – so kommt man von überall
-// zurück in die App. Während der Satzpause wechselt sie den Inhalt und zählt
-// rückwärts. Die Zeit zählt Android selbst (siehe PausenTimerPlugin), die App
-// muss dafür nichts nachschreiben und darf schlafen.
-
-function meldungAktualisieren() {
-  const { PausenTimer } = capPlugins();
-  if (!PausenTimer) return;
-  if (!active) { PausenTimer.aus().catch(() => {}); return; }
-  meldungErlauben().then((ok) => {
-    if (!ok || !active) return;
-    const restMs = rest ? rest.endsAt - Date.now() : 0;
-    // Die Pause ist im selben Augenblick abgelaufen: nicht auf „Workout"
-    // umschreiben, das sagte der nativen Seite das Signal ab, das sie gerade
-    // geben will. Gleich meldet sich restDone.
-    if (rest && restMs <= 0) return;
-    const daten = restMs > 0
-      ? {
-          modus: "pause", ms: Math.round(restMs),
-          titel: (rest.info && rest.info.titel) || active.name || "Satzpause",
-          text: (rest.info && rest.info.text) || "",
-          // „aus" heißt: kein Ton, keine Meldung – nur der stille Ablauf
-          melden: (DB.settings.restSignal || "beides") !== "aus",
-          leise: DB.settings.restSignal === "vibration",
-        }
-      : {
-          modus: "workout", ms: Math.round(Date.now() - active.startedAt),
-          titel: active.name || "Workout",
-          text: `${workoutSets(active)} Sätze · ${fmtVol(workoutVolume(active))}`,
-        };
-    PausenTimer.zeigen(daten).catch(() => {});
-  });
-}
-
-function meldungWeg() {
-  const { PausenTimer } = capPlugins();
-  if (PausenTimer) PausenTimer.aus().catch(() => {});
-}
-
-// Bei jeder Änderung neu schreiben wäre Verschwendung – die Zeit läuft ja von
-// allein weiter. Deshalb gebündelt kurz nach der letzten Änderung.
-let meldungTimer = null;
-function meldungPlanen() {
-  clearTimeout(meldungTimer);
-  meldungTimer = setTimeout(meldungAktualisieren, 700);
-}
+// Die Anzeige in der Leiste und das Signal am Ende gehören der nativen
+// Seite. Von hier geht nur der Zustand hinaus – siehe standSenden().
 
 // Zeile unter dem Übungsnamen, im Stil der Satzkarte
 function pausenInfo(ex, si) {
@@ -2355,22 +2400,24 @@ function pausenInfo(ex, si) {
   };
 }
 
-/* ── Erinnerung, wenn die App nicht im Vordergrund ist ──── */
+/* ── Erlaubnis für die Leiste ─────────────────────────────
+   Ohne sie bleibt die Meldung aus. Gefragt wird genau einmal und nur, wenn
+   tatsächlich ein Workout läuft – nicht beim ersten Start der App, wo die
+   Frage aus dem Nichts käme. Bewusst außerhalb des Nachrichtenwegs: Das
+   Warten auf eine Antwort war in der alten Fassung genau die Stelle, an der
+   sich zwei Nachrichten überholen konnten. */
 
 const REST_MELDUNG_ID = 4711;
 
-// Ohne erteilte Berechtigung bleibt die Leiste leer – einmal nachfragen
-async function meldungErlauben() {
+let erlaubnisGefragt = false;
+function meldungErlaubnisHolen() {
+  if (erlaubnisGefragt) return;
+  erlaubnisGefragt = true;
   const { LocalNotifications } = capPlugins();
-  if (!LocalNotifications) return false;
-  try {
-    const status = await LocalNotifications.checkPermissions();
-    if (status.display === "granted") return true;
-    const neu = await LocalNotifications.requestPermissions();
-    return neu.display === "granted";
-  } catch (e) {
-    return false;
-  }
+  if (!LocalNotifications) return;
+  LocalNotifications.checkPermissions()
+    .then((st) => (st.display === "granted" ? null : LocalNotifications.requestPermissions()))
+    .catch(() => {});
 }
 
 // Aus einer früheren Fassung könnte noch eine über LocalNotifications geplante
@@ -2381,29 +2428,6 @@ function alteErinnerungAufraeumen() {
   if (!LocalNotifications) return;
   LocalNotifications.cancel({ notifications: [{ id: REST_MELDUNG_ID }] }).catch(() => {});
 }
-
-function stopRest(opt) {
-  if (rest) clearInterval(rest.interval);
-  rest = null;
-  $("#rest-bar")?.remove();
-  document.body.classList.remove("rest-an");
-  // Zurück auf die Workout-Anzeige – oder ganz weg, wenn keins mehr läuft.
-  // Das sagt der nativen Seite zugleich: keine Pause mehr, Signal absagen.
-  // Nach einer regulär abgelaufenen Pause stellt sie die Anzeige selbst
-  // zurück – dann darf hier nichts dazwischenfunken.
-  if (!opt || !opt.meldungLassen) meldungAktualisieren();
-}
-
-ACTIONS["rest-plus"] = () => {
-  if (!rest) return;
-  rest.endsAt += 15000;
-  rest.total += 15;
-  // Schreibt die Meldung mit neuem Ziel neu – und plant damit auch das
-  // Signal neu, das alte Merkmal verfällt dabei
-  meldungAktualisieren();
-  tickRest();
-};
-ACTIONS["rest-skip"] = () => stopRest();
 
 /* ═══════════════ Verlauf-Tab ═══════════════ */
 
@@ -3367,4 +3391,4 @@ vollbildBeobachten();
 tastaturBeobachten();
 bildschirmWachHalten();
 // Ein wiederhergestelltes Workout gehört sofort in die Leiste
-meldungAktualisieren();
+standSenden();
