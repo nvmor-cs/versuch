@@ -924,6 +924,11 @@ body.rest-an .screen { padding-bottom: calc(var(--tabbar-raum) + var(--safe-bott
 
 /* ── Bottom-Sheets ──────────────────────────────────────── */
 
+/* Blätter sitzen unten. Geht die Bildschirmtastatur auf, schiebt --tastatur
+   sie darüber – sonst liegt genau der Knopf zum Bestätigen hinter der
+   Tastatur, und wer danebentippt, trifft den Hintergrund und schließt das
+   Blatt, ohne etwas zu übernehmen. Das sah aus, als würde die App die
+   Eingabe verschlucken. */
 .backdrop {
   position: fixed;
   inset: 0;
@@ -932,6 +937,8 @@ body.rest-an .screen { padding-bottom: calc(var(--tabbar-raum) + var(--safe-bott
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  padding-bottom: var(--tastatur, 0px);
+  transition: padding-bottom 0.16s ease;
   animation: dim 0.16s ease;
 }
 @keyframes dim { from { opacity: 0; } to { opacity: 1; } }
@@ -939,7 +946,7 @@ body.rest-an .screen { padding-bottom: calc(var(--tabbar-raum) + var(--safe-bott
 .sheet {
   width: 100%;
   max-width: 560px;
-  max-height: 88dvh;
+  max-height: calc(88dvh - var(--tastatur, 0px));
   background: var(--surface);
   border-radius: var(--radius) var(--radius) 0 0;
   border: 1px solid var(--border-strong);
@@ -948,6 +955,19 @@ body.rest-an .screen { padding-bottom: calc(var(--tabbar-raum) + var(--safe-bott
   overflow-y: auto;
   animation: slideup 0.2s ease;
 }
+/* Der bestätigende Knopf klebt am unteren Rand des Blattes. Bei offener
+   Tastatur ist vom Blatt wenig übrig, und der Knopf lag dann irgendwo weiter
+   unten im Gescrollten – man suchte ihn, statt ihn zu drücken. */
+.sheet-fuss {
+  position: sticky;
+  bottom: 0;
+  margin: 8px -16px calc(-1 * (var(--safe-bottom) + 20px));
+  padding: 10px 16px calc(var(--safe-bottom) + 14px);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.sheet-fuss .btn { margin: 0; }
+
 .sheet-grip {
   width: 42px; height: 4px;
   border-radius: var(--radius-xs);

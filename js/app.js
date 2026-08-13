@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.1.0";
+const APP_VERSION = "3.1.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -593,11 +593,17 @@ function appConfirm(msg, opts = {}) {
 
 /* ═══════════════ Sheets & Overlays ═══════════════ */
 
-function openSheet(html) {
+/* opt.fest: Ein Tipp daneben schließt das Blatt NICHT. Für alles, in das man
+   etwas einträgt – eine halb ausgefüllte Eingabe darf nicht an einem
+   danebengegangenen Tipp verloren gehen. Zu ist es über das Kreuz oder die
+   Zurücktaste. */
+function openSheet(html, opt) {
   const bd = document.createElement("div");
   bd.className = "backdrop";
   bd.innerHTML = `<div class="sheet" role="dialog"><div class="sheet-grip"></div>${html}</div>`;
-  bd.addEventListener("click", (e) => { if (e.target === bd) bd.remove(); });
+  if (!opt || !opt.fest) {
+    bd.addEventListener("click", (e) => { if (e.target === bd) bd.remove(); });
+  }
   document.body.appendChild(bd);
   return bd;
 }

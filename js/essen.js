@@ -527,61 +527,100 @@ ACTIONS["essen-eintrag"] = (el) => {
   });
 };
 
-// Ein Blatt für „wie viel davon?" – beim Hinzufügen wie beim Ändern
+/* Ein Blatt für „wie viel davon?" – beim Hinzufügen wie beim Ändern.
+ *
+ * Das Feld ist der Hauptweg: hineintippen, wie viel es waren, und darunter
+ * stehen Kalorien und Nährstoffe sofort da – ausgerechnet aus den Werten je
+ * 100 g. Die Plus/Minus-Knöpfe sind nur die Abkürzung für „ungefähr so viel";
+ * wer die Packung abgewogen hat, tippt die Zahl.
+ *
+ * Beim Antippen wird der Inhalt markiert: Man will die vorgeschlagene Menge
+ * ersetzen, nicht hinter ihr weiterschreiben.
+ */
 function mengeSheet(lm, menge, mahlzeit, fertig) {
   if (!lm) return;
-  let m = menge, mz = mahlzeit || "fr";
-  const bd = openSheet("");
-  const zeichne = () => {
+  let m = Number(menge) || 0;
+  const e = lm.einheit;
+  const je100 = `Je 100 ${e}: ${Math.round(lm.kcal)} kcal · E ${fmtKg(lm.eiweiss)} g `
+    + `· KH ${fmtKg(lm.kh)} g · F ${fmtKg(lm.fett)} g`;
+
+  const bd = openSheet(`
+    <div class="sheet-title">${esc(lm.name)}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    </div>
+    ${lm.marke ? `<p class="hint" style="margin:-6px 2px 10px">${esc(lm.marke)}</p>` : ""}
+    <div class="stepper-group">
+      <div class="stepper-label">Wie viel hast du gegessen? (${e})</div>
+      <div class="stepper">
+        <button class="stepper-btn" data-m="-1" aria-label="weniger">−</button>
+        <input class="stepper-val" type="text" inputmode="decimal" id="menge-feld"
+               value="${esc(String(fmtKg(m)))}" aria-label="Menge in ${e}">
+        <button class="stepper-btn" data-m="1" aria-label="mehr">+</button>
+      </div>
+    </div>
+    ${lm.portion ? `<button class="btn btn-soft btn-compact" data-p="1" style="margin-bottom:10px">
+      1 ${esc(lm.portion.name)} = ${fmtKg(lm.portion.gramm)} ${e}</button>` : ""}
+    <div class="werte-gitter" id="menge-werte"></div>
+    <p class="hint" style="margin:-6px 2px 14px">${esc(je100)}</p>
+    <div class="settings-row">
+      <div class="lbl">Mahlzeit</div>
+      <select id="mz-feld">
+        ${MAHLZEITEN.map((x) => `<option value="${x.id}" ${x.id === (mahlzeit || "fr") ? "selected" : ""}>${x.label}</option>`).join("")}
+      </select>
+    </div>
+    <div class="sheet-fuss">
+      <button class="btn" data-ok="1">${icon("check")} Übernehmen</button>
+    </div>`, { fest: true });
+
+  const feld = bd.querySelector("#menge-feld");
+  const gitter = bd.querySelector("#menge-werte");
+
+  // Nur die Zahlen neu schreiben, nicht das ganze Blatt – sonst verlöre das
+  // Feld beim Tippen Fokus und Cursor.
+  const werteZeigen = () => {
     const f = m / 100;
-    bd.querySelector(".sheet").innerHTML = `
-      <div class="sheet-grip"></div>
-      <div class="sheet-title">${esc(lm.name)}
-        <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
-      </div>
-      ${lm.marke ? `<p class="hint" style="margin:-6px 2px 12px">${esc(lm.marke)}</p>` : ""}
-      <div class="stepper-group">
-        <div class="stepper-label">Menge (${lm.einheit})</div>
-        <div class="stepper">
-          <button class="stepper-btn" data-m="-1" aria-label="weniger">−</button>
-          <input class="stepper-val" type="text" inputmode="decimal" id="menge-feld" value="${String(fmtKg(m)).replace(".", ",")}" aria-label="Menge">
-          <button class="stepper-btn" data-m="1" aria-label="mehr">+</button>
-        </div>
-      </div>
-      ${lm.portion ? `<button class="btn btn-soft btn-compact" data-p="1" style="margin-bottom:12px">
-        1 ${esc(lm.portion.name)} = ${fmtKg(lm.portion.gramm)} ${lm.einheit}</button>` : ""}
-      <div class="werte-gitter">
-        ${[["kcal", Math.round((lm.kcal || 0) * f)], ["Eiweiß", Math.round((lm.eiweiss || 0) * f) + " g"],
-           ["KH", Math.round((lm.kh || 0) * f) + " g"], ["Fett", Math.round((lm.fett || 0) * f) + " g"]]
-          .map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}
-      </div>
-      <div class="settings-row">
-        <div class="lbl">Mahlzeit</div>
-        <select id="mz-feld">
-          ${MAHLZEITEN.map((x) => `<option value="${x.id}" ${x.id === mz ? "selected" : ""}>${x.label}</option>`).join("")}
-        </select>
-      </div>
-      <button class="btn" data-ok="1">${icon("check")} Übernehmen</button>`;
+    gitter.innerHTML = [
+      ["kcal", Math.round((lm.kcal || 0) * f)],
+      ["Eiweiß", Math.round((lm.eiweiss || 0) * f) + " g"],
+      ["KH", Math.round((lm.kh || 0) * f) + " g"],
+      ["Fett", Math.round((lm.fett || 0) * f) + " g"],
+    ].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("");
   };
-  zeichne();
-  bd.addEventListener("click", (e) => {
-    const stufe = e.target.closest("[data-m]");
+  werteZeigen();
+
+  const setzen = (wert) => {
+    m = Math.max(0, wert);
+    feld.value = String(fmtKg(m));
+    werteZeigen();
+  };
+
+  feld.addEventListener("input", () => {
+    const v = parseNum(feld.value);
+    m = Number.isFinite(v) && v > 0 ? v : 0;
+    werteZeigen();
+  });
+  feld.addEventListener("focus", () => feld.select());
+
+  bd.addEventListener("click", (ev) => {
+    const stufe = ev.target.closest("[data-m]");
     if (stufe) {
-      // Kleine Mengen in 5er-Schritten, große in 10er – Öl zählt man anders als Reis
+      // Kleine Mengen in 5er-Schritten, große in 10er – Öl zählt man anders
+      // als Reis. Gesprungen wird auf das nächste Vielfache in der Richtung
+      // des Knopfes: Von 75 führt „+" nach 80 und nicht nach 90.
       const schritt = m < 50 ? 5 : 10;
-      m = Math.max(1, Math.round((m + +stufe.dataset.m * schritt) / schritt) * schritt);
-      zeichne();
+      setzen(+stufe.dataset.m > 0
+        ? (Math.floor(m / schritt) + 1) * schritt
+        : Math.max(0, (Math.ceil(m / schritt) - 1) * schritt));
       return;
     }
-    if (e.target.closest("[data-p]")) { m = lm.portion.gramm; zeichne(); return; }
-    if (e.target.closest("[data-ok]")) {
-      const feld = bd.querySelector("#menge-feld");
-      const v = parseNum(feld ? feld.value : "");
-      const sel = bd.querySelector("#mz-feld");
-      if (sel) mz = sel.value;
+    if (ev.target.closest("[data-p]")) { setzen(lm.portion.gramm); return; }
+    if (ev.target.closest("[data-ok]")) {
+      const v = parseNum(feld.value);
       if (Number.isFinite(v) && v > 0) m = v;
+      if (!(m > 0)) { toast("Trag erst eine Menge ein"); return; }
+      const sel = bd.querySelector("#mz-feld");
       bd.remove();
-      fertig(m, mz);
+      fertig(m, sel ? sel.value : mahlzeit || "fr");
     }
   });
 }
@@ -948,7 +987,9 @@ async function barcodeVerarbeiten(code) {
     const lm = await offProdukt(code);
     if (lm) {
       offCache.set(lm.id, lm);
-      lmDetail(lm, mahlzeit);
+      // Direkt zur Menge: Nach dem Scannen weiß man, was man hat – die Frage
+      // ist nur noch, wie viel davon. Ein Blatt weniger auf dem Weg.
+      lmHinzufuegen(lm, mahlzeit);
     } else {
       // Das kommt vor: Die Datenbank lebt von Beiträgen und kennt längst
       // nicht jede Packung.
@@ -1010,8 +1051,10 @@ function lmFormular(vorlage, opt) {
       ${feld("pname", "Portion heißt", l.portion ? l.portion.name : "")}
       ${feld("pgramm", "Portion hat", l.portion ? fmtKg(l.portion.gramm) : "", "decimal")}
     </div>
-    <button class="btn" data-speichern="1" style="margin-top:6px">${icon("check")} Speichern</button>
-  `);
+    <div class="sheet-fuss">
+      <button class="btn" data-speichern="1">${icon("check")} Speichern</button>
+    </div>
+  `, { fest: true });
   bd.querySelector("[data-speichern]").addEventListener("click", () => {
     const v = (k) => (bd.querySelector(`[data-f="${k}"]`) || {}).value || "";
     const num = (k) => { const n = parseNum(v(k)); return Number.isFinite(n) && n >= 0 ? n : 0; };
@@ -1057,7 +1100,7 @@ ACTIONS["essen-ziele"] = () => {
     kh: Number(ESSEN.ziele.khP) || 0,
     fett: Number(ESSEN.ziele.fettP) || 0,
   };
-  const bd = openSheet("");
+  const bd = openSheet("", { fest: true });
 
   // Nach einer Änderung die restlichen Anteile so nachziehen, dass die Summe
   // wieder 100 ergibt – zuerst am Ausgleichsposten, dann am dritten Wert.
@@ -1102,7 +1145,9 @@ ACTIONS["essen-ziele"] = () => {
           ? `Summe 100 % · ${gramm("eiweiss") * 4 + gramm("kh") * 4 + gramm("fett") * 9} kcal nach Rundung auf volle Gramm`
           : `Summe ${summeP} % – wird beim Ändern automatisch auf 100 % gebracht`}
       </p>
-      <button class="btn" data-ziele="1">${icon("check")} Speichern</button>`;
+      <div class="sheet-fuss">
+        <button class="btn" data-ziele="1">${icon("check")} Speichern</button>
+      </div>`;
   };
   zeichne();
 
