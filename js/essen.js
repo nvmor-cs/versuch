@@ -1184,6 +1184,14 @@ const ZIEL_ARTEN = [
   { k: "fett", label: "Fett" },
 ];
 
+/* Die Felder werden beim Tippen NICHT neu gezeichnet.
+ *
+ * Vorher schrieb jeder Tastendruck das ganze Blatt neu. Das Feld war danach
+ * ein anderes, und der Cursor stand wieder ganz vorn – die Rücktaste löschte
+ * dann nichts, sie sprang nur an den Zeilenanfang. Deshalb: Aufbau einmal,
+ * danach werden ausschließlich die Zahlen daneben nachgeführt. Und in ein
+ * Feld, in dem gerade getippt wird, schreibt niemand zurück.
+ */
 ACTIONS["essen-ziele"] = () => {
   const stand = {
     kcal: Number(ESSEN.ziele.kcal) || 0,
@@ -1191,10 +1199,60 @@ ACTIONS["essen-ziele"] = () => {
     kh: Number(ESSEN.ziele.khP) || 0,
     fett: Number(ESSEN.ziele.fettP) || 0,
   };
-  const bd = openSheet("", { fest: true });
 
-  // Nach einer Änderung die restlichen Anteile so nachziehen, dass die Summe
-  // wieder 100 ergibt – zuerst am Ausgleichsposten, dann am dritten Wert.
+  const bd = openSheet(`
+    <div class="sheet-title">Tagesziele
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    </div>
+    <div class="field">
+      <label for="z-kcal">Kalorien am Tag</label>
+      <input id="z-kcal" data-kcal="1" type="text" inputmode="numeric" value="${stand.kcal}" autocomplete="off">
+    </div>
+    <div class="section-label" style="margin-top:14px">Verteilung</div>
+    ${ZIEL_ARTEN.map(({ k, label }) => `
+      <div class="ziel-zeile">
+        <div class="ziel-kopf">
+          <span>${label} <em>in %</em></span>
+          <b id="zg-${k}">–</b>
+        </div>
+        <div class="stepper">
+          <button class="stepper-btn" data-p="${k}" data-d="-1" aria-label="${label} verringern">−</button>
+          <input class="stepper-val" data-pv="${k}" type="text" inputmode="numeric"
+                 value="${stand[k]}" aria-label="${label} in Prozent">
+          <button class="stepper-btn" data-p="${k}" data-d="1" aria-label="${label} erhöhen">+</button>
+        </div>
+      </div>`).join("")}
+    <p class="hint" id="ziel-summe" style="margin:2px 2px 14px"></p>
+    <div class="sheet-fuss">
+      <button class="btn" data-ziele="1">${icon("check")} Speichern</button>
+    </div>`, { fest: true });
+
+  const feldK = bd.querySelector("[data-kcal]");
+  const feldP = {};
+  ZIEL_ARTEN.forEach(({ k }) => { feldP[k] = bd.querySelector(`[data-pv="${k}"]`); });
+
+  const gramm = (k) => Math.round((stand.kcal * stand[k]) / 100 / PRO_GRAMM[k]);
+
+  // Nur die Zahlen nachführen, nie die Felder selbst
+  const zeigen = () => {
+    ZIEL_ARTEN.forEach(({ k }) => {
+      const el = bd.querySelector(`#zg-${k}`);
+      if (el) el.textContent = gramm(k) + " g";
+    });
+    const summe = stand.eiweiss + stand.kh + stand.fett;
+    const zeile = bd.querySelector("#ziel-summe");
+    if (!zeile) return;
+    zeile.className = "hint" + (summe === 100 ? "" : " warn-text");
+    zeile.textContent = summe === 100
+      ? `Summe 100 % · ${gramm("eiweiss") * 4 + gramm("kh") * 4 + gramm("fett") * 9} kcal nach Rundung auf volle Gramm`
+      : `Summe ${summe} % – wird beim Speichern auf 100 % gebracht`;
+  };
+
+  /* Nach einer Änderung die übrigen Anteile so nachziehen, dass die Summe
+     wieder 100 ergibt. Ausgeglichen wird zuerst an den Kohlenhydraten – das
+     ist der Posten, den man üblicherweise auffüllt, nachdem Eiweiß und Fett
+     stehen. Wer die Kohlenhydrate selbst anfasst, bekommt die Differenz beim
+     Fett abgezogen. */
   const ausgleichen = (geaendert) => {
     stand[geaendert] = Math.max(0, Math.min(100, Math.round(stand[geaendert])));
     const reihe = geaendert === "kh" ? ["fett", "eiweiss"] : ["kh", "fett", "eiweiss"];
@@ -1206,69 +1264,43 @@ ACTIONS["essen-ziele"] = () => {
     }
   };
 
-  const zeichne = () => {
-    const summeP = stand.eiweiss + stand.kh + stand.fett;
-    const gramm = (k) => Math.round((stand.kcal * stand[k]) / 100 / PRO_GRAMM[k]);
-    bd.querySelector(".sheet").innerHTML = `
-      <div class="sheet-grip"></div>
-      <div class="sheet-title">Tagesziele
-        <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
-      </div>
-      <div class="field">
-        <label for="z-kcal">Kalorien am Tag</label>
-        <input id="z-kcal" data-kcal="1" type="text" inputmode="numeric" value="${stand.kcal}">
-      </div>
-      <div class="section-label" style="margin-top:14px">Verteilung</div>
-      ${ZIEL_ARTEN.map(({ k, label }) => `
-        <div class="ziel-zeile">
-          <div class="ziel-kopf">
-            <span>${label} <em>in %</em></span>
-            <b>${gramm(k)} g</b>
-          </div>
-          <div class="stepper">
-            <button class="stepper-btn" data-p="${k}" data-d="-1" aria-label="${label} verringern">−</button>
-            <input class="stepper-val" data-pv="${k}" type="text" inputmode="numeric" value="${stand[k]}" aria-label="${label} in Prozent">
-            <button class="stepper-btn" data-p="${k}" data-d="1" aria-label="${label} erhöhen">+</button>
-          </div>
-        </div>`).join("")}
-      <p class="hint ${summeP === 100 ? "" : "warn-text"}" style="margin:2px 2px 14px">
-        ${summeP === 100
-          ? `Summe 100 % · ${gramm("eiweiss") * 4 + gramm("kh") * 4 + gramm("fett") * 9} kcal nach Rundung auf volle Gramm`
-          : `Summe ${summeP} % – wird beim Ändern automatisch auf 100 % gebracht`}
-      </p>
-      <div class="sheet-fuss">
-        <button class="btn" data-ziele="1">${icon("check")} Speichern</button>
-      </div>`;
+  // In das Feld, in dem gerade getippt wird, schreibt niemand zurück
+  const felderSchreiben = (ausser) => {
+    ZIEL_ARTEN.forEach(({ k }) => {
+      if (k !== ausser && feldP[k]) feldP[k].value = stand[k];
+    });
   };
-  zeichne();
 
-  const kcalLesen = () => {
-    const el = bd.querySelector("[data-kcal]");
-    const n = parseInt(el ? el.value : "", 10);
-    if (Number.isFinite(n) && n >= 0) stand.kcal = n;
-  };
+  zeigen();
 
   bd.addEventListener("input", (e) => {
-    if (e.target.matches("[data-kcal]")) { kcalLesen(); zeichne(); bd.querySelector("[data-kcal]").focus(); }
+    if (e.target === feldK) {
+      const n = parseInt(feldK.value, 10);
+      stand.kcal = Number.isFinite(n) && n >= 0 ? n : 0;
+      zeigen();
+      return;
+    }
+    const pv = e.target.closest("[data-pv]");
+    if (!pv) return;
+    const k = pv.dataset.pv;
+    const n = parseInt(pv.value, 10);
+    // Ein leeres Feld ist ein Zwischenstand beim Tippen, kein Wert
+    stand[k] = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+    ausgleichen(k);
+    felderSchreiben(k);
+    zeigen();
   });
 
   bd.addEventListener("click", (e) => {
     const stufe = e.target.closest("[data-p]");
     if (stufe) {
-      kcalLesen();
       stand[stufe.dataset.p] += 5 * +stufe.dataset.d;
       ausgleichen(stufe.dataset.p);
-      zeichne();
+      felderSchreiben();
+      zeigen();
       return;
     }
     if (e.target.closest("[data-ziele]")) {
-      kcalLesen();
-      const feld = (k) => {
-        const el = bd.querySelector(`[data-pv="${k}"]`);
-        const n = parseInt(el ? el.value : "", 10);
-        if (Number.isFinite(n) && n >= 0) stand[k] = n;
-      };
-      ZIEL_ARTEN.forEach(({ k }) => feld(k));
       ausgleichen("eiweiss");
       ESSEN.ziele = {
         kcal: stand.kcal, eiweissP: stand.eiweiss, khP: stand.kh, fettP: stand.fett,
