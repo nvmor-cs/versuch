@@ -398,8 +398,28 @@ async function offSuchen(begriff) {
 /* ═══════════════ Reiter „Heute" ═══════════════ */
 
 let essenTag = tagKey(Date.now());
+/* Welcher Tag „heute" war, als zuletzt gezeichnet wurde. Die App liegt oft
+   tagelang im Hintergrund, ohne neu zu starten – ohne das stünde man am
+   nächsten Morgen weiter auf dem gestrigen Tagebuch, trüge dort ein und
+   suchte den Eintrag vergeblich unter „Heute". */
+let letztesHeute = tagKey(Date.now());
 
 const istHeute = (key) => key === tagKey(Date.now());
+
+function tagesWechselPruefen() {
+  const heute = tagKey(Date.now());
+  if (heute === letztesHeute) return;
+  // Nur mitwandern, wer auf dem bisherigen Heute stand – wer bewusst
+  // zurückgeblättert hat, bleibt, wo er ist.
+  const mitwandern = essenTag === letztesHeute;
+  letztesHeute = heute;
+  if (mitwandern) essenTag = heute;
+  renderEssen();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") tagesWechselPruefen();
+});
 
 function tagVerschieben(richtung) {
   const [y, m, d] = essenTag.split("-").map(Number);
@@ -634,20 +654,45 @@ let lmSuchTimer = null;
 let lmLetzteSuche = "";    // wofür „Nochmal versuchen" gilt
 let lmFehler = false;
 
-// Wonach zuletzt gegriffen wurde, steht oben – das ist beim Essen fast immer
-// die richtige Reihenfolge.
-function eigeneTreffer(q) {
+/* Die Liste war eine einzige, alphabetisch sortierte Reihe – und bei 40
+   Einträgen abgeschnitten. Mit 76 Grundnahrungsmitteln fiel damit ein frisch
+   angelegtes „Selbstgemacht" hinten heraus und war schlicht unsichtbar.
+
+   Jetzt in Gruppen: Zuletzt benutztes zuerst (das ist beim Essen fast immer
+   das Richtige), dann die eigenen Lebensmittel – beide vollständig, da wird
+   nichts abgeschnitten –, dann der Grundvorrat. Wird gesucht, fallen die
+   Gruppen zusammen; ein Suchbegriff grenzt schon genug ein. */
+
+const passtAuf = (l, s) => !s || (l.name + " " + (l.marke || "")).toLowerCase().includes(s);
+const nachName = (a, b) => a.name.localeCompare(b.name, "de");
+
+function lmGruppen(q) {
   const s = q.trim().toLowerCase();
-  const passt = (l) => !s || (l.name + " " + (l.marke || "")).toLowerCase().includes(s);
-  return alleLebensmittel().filter(passt)
-    .sort((a, x) => (x.benutzt || 0) - (a.benutzt || 0) || a.name.localeCompare(x.name, "de"))
-    .slice(0, 40);
+  const alle = alleLebensmittel().filter((l) => passtAuf(l, s));
+  if (s) {
+    // Bei einer Suche: eigene zuerst, dann zuletzt benutzte, dann der Rest
+    const sortiert = alle.slice().sort((a, b) =>
+      (b.quelle === "eigen") - (a.quelle === "eigen")
+      || (b.benutzt || 0) - (a.benutzt || 0)
+      || nachName(a, b));
+    return [{ titel: "Deine Liste", eintraege: sortiert.slice(0, 40) }];
+  }
+  const benutzt = alle.filter((l) => l.benutzt)
+    .sort((a, b) => (b.benutzt || 0) - (a.benutzt || 0)).slice(0, 12);
+  const drin = new Set(benutzt.map((l) => l.id));
+  const eigen = alle.filter((l) => l.quelle === "eigen" && !drin.has(l.id)).sort(nachName);
+  eigen.forEach((l) => drin.add(l.id));
+  const rest = alle.filter((l) => !drin.has(l.id)).sort(nachName);
+  return [
+    { titel: "Zuletzt benutzt", eintraege: benutzt },
+    { titel: "Eigene Lebensmittel", eintraege: eigen },
+    { titel: "Grundvorrat", eintraege: rest },
+  ].filter((g) => g.eintraege.length);
 }
 
 function renderEssenLib() {
   const host = $("#screen-food-lib");
   if (!host) return;
-  const eigen = eigeneTreffer(lmSuche);
   host.innerHTML = `
     <div class="screen-head">
       <div class="screen-title">Lebensmittel</div>
@@ -659,13 +704,15 @@ function renderEssenLib() {
       </div>
       ${scannerMoeglich() ? `<button class="icon-btn scan-btn" data-action="essen-scannen" aria-label="Barcode scannen">${icon("barcode")}</button>` : ""}
     </div>
-    <div id="lm-liste">${lmListe(eigen)}</div>`;
+    <div id="lm-liste">${lmListe()}</div>`;
 }
 
-function lmListe(eigen) {
+function lmListe() {
+  const gruppen = lmGruppen(lmSuche);
   return `
-    <div class="section-label">Deine Liste</div>
-    ${eigen.length ? eigen.map((l) => lmZeile(l)).join("")
+    ${gruppen.length ? gruppen.map((g) => `
+      <div class="section-label">${g.titel}</div>
+      ${g.eintraege.map((l) => lmZeile(l)).join("")}`).join("")
       : `<p class="hint">Nichts gefunden. Such unten in der Datenbank oder leg dir das Lebensmittel selbst an.</p>`}
     <div class="section-label">Open Food Facts</div>
     ${lmStatus ? `<p class="hint">${esc(lmStatus)}</p>` : ""}
@@ -694,8 +741,7 @@ const offCache = new Map();
    aus einer Mahlzeit heraus aufgeht. Vorher stand das zweimal fast gleich da –
    und ging zweimal fast gleich schief. */
 function lmListenZeichnen() {
-  const eigen = eigeneTreffer(lmSuche);
-  const html = lmListe(eigen);
+  const html = lmListe();
   const a = $("#lm-liste"), b = $("#lm-liste-ov");
   if (a) a.innerHTML = html;
   if (b) b.innerHTML = html;
@@ -806,24 +852,30 @@ function lmDetail(lm, mahlzeit) {
 // Ins Tagebuch übernehmen. Dabei wandert das Lebensmittel in die eigene
 // Liste – ab dann geht es auch ohne Netz.
 function lmHinzufuegen(lm, mahlzeit) {
-  mengeSheet(lm, lm.portion ? lm.portion.gramm : 100, mahlzeit || vorschlagMahlzeit(), (menge, mz) => {
-    lmMerken(Object.assign({}, lm, { benutzt: Date.now() }));
-    const liste = ESSEN.tage[essenTag] || (ESSEN.tage[essenTag] = []);
-    liste.push({ id: uid(), lmId: lm.id, mahlzeit: mz, menge });
-    speichereEssen();
-    tippen(true);
-    toast("Eingetragen");
-    // Die Suche hat ihren Zweck erfüllt und darf aus dem Weg
-    $(".essen-ov")?.remove();
-    renderEssenTag();
-    renderEssenLib();
-    renderEssenVerlauf();
-    if (currentTab !== "food-day") {
-      currentTab = "food-day";
-      letzterTab.essen = "food-day";
-      render();
-    }
-  });
+  mengeSheet(lm, lm.portion ? lm.portion.gramm : 100, mahlzeit || vorschlagMahlzeit(),
+    (menge, mz) => eintragen(lm, menge, mz));
+}
+
+/* Der eine Weg ins Tagebuch – egal ob über die Liste, den Scanner oder das
+   Formular. Das Lebensmittel wandert dabei in die eigene Liste: ab dann ist
+   es auch ohne Netz da und steht ganz oben unter „Zuletzt benutzt". */
+function eintragen(lm, menge, mahlzeit) {
+  lmMerken(Object.assign({}, lm, { benutzt: Date.now() }));
+  const liste = ESSEN.tage[essenTag] || (ESSEN.tage[essenTag] = []);
+  liste.push({ id: uid(), lmId: lm.id, mahlzeit, menge });
+  speichereEssen();
+  tippen(true);
+  toast("Eingetragen");
+  // Die Suche hat ihren Zweck erfüllt und darf aus dem Weg
+  $(".essen-ov")?.remove();
+  renderEssenTag();
+  renderEssenLib();
+  renderEssenVerlauf();
+  // Ans Ziel bringen: Wer etwas einträgt, will sehen, dass es angekommen ist
+  currentBereich = "essen";
+  currentTab = "food-day";
+  letzterTab.essen = "food-day";
+  render();
 }
 
 // Nach der Uhrzeit geraten – das trifft meistens zu und spart einen Griff
@@ -1051,12 +1103,43 @@ function lmFormular(vorlage, opt) {
       ${feld("pname", "Portion heißt", l.portion ? l.portion.name : "")}
       ${feld("pgramm", "Portion hat", l.portion ? fmtKg(l.portion.gramm) : "", "decimal")}
     </div>
+    <div class="section-label">Gleich eintragen</div>
+    <p class="hint" style="margin:-4px 2px 10px">Optional: Wie viel hast du davon gegessen? Leer lassen,
+      wenn du die Werte nur speichern willst.</p>
+    <div class="feld-zwei">
+      <div class="field">
+        <label for="lf-menge">Menge</label>
+        <input id="lf-menge" data-f="menge" type="text" inputmode="decimal" placeholder="z. B. 150" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="lf-mahlzeit">Mahlzeit</label>
+        <select id="lf-mahlzeit" data-f="mahlzeit">
+          ${MAHLZEITEN.map((x) => `<option value="${x.id}" ${x.id === (o.mahlzeit || vorschlagMahlzeit()) ? "selected" : ""}>${x.label}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+    <p class="hint" id="lf-vorschau" style="margin:-6px 2px 12px"></p>
     <div class="sheet-fuss">
       <button class="btn" data-speichern="1">${icon("check")} Speichern</button>
     </div>
   `, { fest: true });
+  // Vorschau: Sobald Werte und Menge dastehen, zeigt die Zeile, was das ergibt
+  const v = (k) => (bd.querySelector(`[data-f="${k}"]`) || {}).value || "";
+  const vorschau = () => {
+    const zeile = bd.querySelector("#lf-vorschau");
+    if (!zeile) return;
+    const menge = parseNum(v("menge"));
+    const kcal = parseNum(v("kcal"));
+    if (!(menge > 0) || !Number.isFinite(kcal)) { zeile.textContent = ""; return; }
+    const f = menge / 100;
+    const g = (k) => Math.round((parseNum(v(k)) || 0) * f);
+    zeile.textContent = `${fmtKg(menge)} ${v("einheit") === "ml" ? "ml" : "g"} = `
+      + `${Math.round(kcal * f)} kcal · E ${g("eiweiss")} g · KH ${g("kh")} g · F ${g("fett")} g`;
+  };
+  bd.addEventListener("input", vorschau);
+  bd.addEventListener("change", vorschau);
+
   bd.querySelector("[data-speichern]").addEventListener("click", () => {
-    const v = (k) => (bd.querySelector(`[data-f="${k}"]`) || {}).value || "";
     const num = (k) => { const n = parseNum(v(k)); return Number.isFinite(n) && n >= 0 ? n : 0; };
     const name = v("name").trim();
     if (!name) { toast("Der Name fehlt"); return; }
@@ -1070,6 +1153,14 @@ function lmFormular(vorlage, opt) {
     lmMerken(neu);
     bd.remove();
     renderEssenLib();
+
+    // Steht eine Menge im Formular, wandert sie gleich ins Tagebuch – dann
+    // spart man sich den Umweg über Liste, Antippen, Hinzufügen.
+    const menge = parseNum(v("menge"));
+    if (Number.isFinite(menge) && menge > 0) {
+      eintragen(neu, menge, v("mahlzeit") || vorschlagMahlzeit());
+      return;
+    }
     toast("Gespeichert");
     // Direkt nach einem Scan will man es auch eintragen, nicht nur anlegen
     if (o.barcode) lmHinzufuegen(neu, o.mahlzeit);

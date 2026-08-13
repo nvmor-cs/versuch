@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.1.1";
+const APP_VERSION = "3.1.2";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -604,8 +604,64 @@ function openSheet(html, opt) {
   if (!opt || !opt.fest) {
     bd.addEventListener("click", (e) => { if (e.target === bd) bd.remove(); });
   }
+  blattZiehen(bd);
   document.body.appendChild(bd);
   return bd;
+}
+
+/* Der Griff oben am Blatt sah aus, als könne man es herunterziehen – konnte
+   man aber nicht. Jetzt kann man.
+ *
+ * Die Zuhörer hängen am Hintergrund und nicht am Griff selbst: Manche Blätter
+ * schreiben ihren Inhalt neu (die Tagesziele bei jeder Änderung), dabei ginge
+ * der Griff samt Zuhörern verloren. Gezogen wird nur nach unten; losgelassen
+ * entscheidet der Weg – oder das Tempo, denn ein kurzer Schnipp ist auch eine
+ * Ansage. */
+function blattZiehen(bd) {
+  let zug = null;
+  const blatt = () => bd.querySelector(".sheet");
+
+  bd.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (!e.target.closest(".sheet-grip")) return;
+    zug = { id: e.pointerId, y: e.clientY, dy: 0, start: Date.now() };
+    const b = blatt();
+    if (b) b.style.transition = "none";
+    try { bd.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  bd.addEventListener("pointermove", (e) => {
+    if (!zug || e.pointerId !== zug.id) return;
+    e.preventDefault();
+    // Nach oben gibt das Blatt nur zäh nach – dort ist nichts zu holen
+    const roh = e.clientY - zug.y;
+    zug.dy = roh > 0 ? roh : roh * 0.2;
+    const b = blatt();
+    if (b) b.style.transform = `translateY(${zug.dy}px)`;
+    bd.style.background = `rgba(0,0,0,${(0.65 * Math.max(0.2, 1 - Math.max(0, zug.dy) / 420)).toFixed(3)})`;
+  });
+
+  const loslassen = () => {
+    if (!zug) return;
+    const { dy, start } = zug;
+    zug = null;
+    const b = blatt();
+    if (b) b.style.transition = "";
+    const schnipp = Date.now() - start < 300 && dy > 50;
+    if (dy > 110 || schnipp) {
+      if (b) b.style.transform = `translateY(${b.offsetHeight}px)`;
+      bd.style.background = "transparent";
+      setTimeout(() => {
+        if (typeof bd.zurueck === "function") bd.zurueck();
+        else bd.remove();
+      }, 170);
+      return;
+    }
+    if (b) b.style.transform = "";
+    bd.style.background = "";
+  };
+  bd.addEventListener("pointerup", loslassen);
+  bd.addEventListener("pointercancel", loslassen);
 }
 ACTIONS["close-sheet"] = (el) => el.closest(".backdrop")?.remove();
 
