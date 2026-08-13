@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.0.1";
+const APP_VERSION = "3.1.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -110,6 +110,7 @@ const I = {
   download: '<path d="M12 4v10M7 10l5 5 5-5M5 20h14"/>',
   upload: '<path d="M12 14V4M7 8l5-5 5 5M5 20h14"/>',
   grip: '<path d="M5 9h14M5 15h14"/>',
+  barcode: '<path d="M4 6v12M7 6v12M10.5 6v12M14 6v9M17 6v12M20 6v12"/>',
   apple: '<path d="M9 8.5c-2 0-3.5 1.9-3.5 4.6C5.5 17 7.6 21 9.6 21c.9 0 1.5-.5 2.4-.5s1.5.5 2.4.5c2 0 4.1-4 4.1-7.9 0-2.7-1.5-4.6-3.5-4.6-1 0-1.9.5-3 .5s-2-.5-3-.5z"/><path d="M12 8.5V6"/><path d="M12 6c2.1 0 3.8-1.6 3.8-3.5C13.7 2.5 12 4.1 12 6z"/>',
   link: '<path d="M10 14 14 10"/><path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/>',
   unlink: '<path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/><path d="M4 4l16 16"/>',
@@ -669,6 +670,7 @@ function bereichWechseln(richtung) {
   if (inner) paneEinblenden(inner, richtung);
   const screen = $("#screen-" + currentTab);
   if (screen) paneEinblenden(screen, richtung);
+  punkteZeigen(3000);
   return true;
 }
 
@@ -693,29 +695,54 @@ function renderTabbar() {
   $$(".screen").forEach((s) => s.classList.toggle("active", s.id === "screen-" + currentTab));
 }
 
+/* Die Punkte zeigen sich nur, wenn sie gebraucht werden: beim Start, während
+   des Wischens und drei Sekunden nach einem Wechsel. Danach schrumpft die
+   Pille wieder auf die Reiter zusammen. */
+let punkteTimer = null;
+function punkteZeigen(dauer) {
+  document.body.classList.add("punkte");
+  clearTimeout(punkteTimer);
+  if (dauer) punkteTimer = setTimeout(() => document.body.classList.remove("punkte"), dauer);
+}
+
 /* Wischen über der Pille wechselt die Welt. Bewusst nur dort und nicht über
    dem ganzen Bildschirm: Im Inhalt bedeutet Wischen schon etwas anderes
-   (Muskelgruppe, Zeitraum, Tag). */
+   (Muskelgruppe, Zeitraum, Tag).
+
+   touch-action: none steht dafür im Stylesheet an der Leiste. Ohne das nimmt
+   der Browser die Geste als Seiten-Scroll an und bricht sie ab, bevor sie
+   hier ankommt – mit der Maus fällt das nicht auf, mit dem Finger geht dann
+   gar nichts. */
 function bereichWischenVerbinden() {
   const leiste = $(".tabbar");
   if (!leiste) return;
   let zug = null;
+  let gewischtBis = 0;
+
+  const zuruecksetzen = () => {
+    const inner = $("#tabbar-inner");
+    if (inner) { inner.style.transition = ""; inner.style.transform = ""; inner.style.opacity = ""; }
+  };
+
   leiste.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     zug = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, achse: null };
   });
+
   leiste.addEventListener("pointermove", (e) => {
     if (!zug || e.pointerId !== zug.id) return;
     const dx = e.clientX - zug.x, dy = e.clientY - zug.y;
     if (!zug.achse) {
-      if (Math.abs(dx) < 12) return;
+      if (Math.abs(dx) < 10) return;
       if (Math.abs(dx) <= Math.abs(dy) * 1.2) { zug = null; return; }
       zug.achse = "x";
-      leiste.setPointerCapture(e.pointerId);
+      punkteZeigen(0);   // während des Ziehens sichtbar lassen
+      try { leiste.setPointerCapture(e.pointerId); } catch (_) {}
     }
     e.preventDefault();
     const inner = $("#tabbar-inner");
     const rand = bereichIndex() + (dx < 0 ? 1 : -1);
+    // An den Enden zäh werden – so merkt man, dass es nicht weitergeht
     zug.dx = rand < 0 || rand >= BEREICHE.length ? dx * 0.25 : dx;
     if (inner) {
       inner.style.transition = "none";
@@ -723,17 +750,27 @@ function bereichWischenVerbinden() {
       inner.style.opacity = String(Math.max(0.35, 1 - Math.abs(zug.dx) / 160));
     }
   });
+
   const loslassen = () => {
     if (!zug) return;
     const { achse, dx } = zug;
     zug = null;
-    const inner = $("#tabbar-inner");
-    if (inner) { inner.style.transition = ""; inner.style.transform = ""; inner.style.opacity = ""; }
+    zuruecksetzen();
     if (achse !== "x") return;
+    // Nach einem Wisch darf der Reiter darunter nicht auch noch auslösen
+    gewischtBis = Date.now() + 400;
     if (Math.abs(dx) > 46) bereichWechseln(dx < 0 ? 1 : -1);
+    else punkteZeigen(3000);
   };
   leiste.addEventListener("pointerup", loslassen);
   leiste.addEventListener("pointercancel", loslassen);
+
+  leiste.addEventListener("click", (e) => {
+    if (Date.now() < gewischtBis) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
 }
 
 /* ═══════════════ Start-Tab ═══════════════ */
@@ -3239,7 +3276,9 @@ function zurueckNavigieren() {
   const ovs = $$(".overlay");
   if (ovs.length) {
     const oben = ovs[ovs.length - 1];
-    if (oben.classList.contains("workout-ov")) ACTIONS["minimize-workout"]();
+    // Der Scanner hält die Kamera – die muss beim Zurück wieder los
+    if (oben.classList.contains("scan-ov")) ACTIONS["essen-scan-zu"]();
+    else if (oben.classList.contains("workout-ov")) ACTIONS["minimize-workout"]();
     else if (oben.classList.contains("picker-ov")) ACTIONS["picker-cancel"]();
     else if (oben.classList.contains("plan-wo-ov")) ACTIONS["plan-wo-done"]();
     else { oben.remove(); render(); }
@@ -3383,6 +3422,7 @@ function render() {
 
 render();
 bereichWischenVerbinden();
+punkteZeigen(3000);
 pauseSignalVerbinden();
 alteErinnerungAufraeumen();
 histWischenVerbinden();

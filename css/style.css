@@ -54,9 +54,12 @@
   --tabbar-h: 56px;
   --tabbar-rand: 6px;
   --tabbar-luft: 10px;
-  /* Zeile mit den zwei Bereichspunkten über den Reitern */
+  /* Zeile mit den zwei Bereichspunkten über den Reitern. Sie zeigt sich nur
+     kurz nach einem Wechsel und geht dann wieder weg – deshalb steckt sie
+     bewusst NICHT in --tabbar-raum: Die Pille wächst nach oben, der
+     Seiteninhalt darunter bleibt ruhig stehen. */
   --tabbar-punkte: 15px;
-  --tabbar-raum: calc(var(--tabbar-h) + var(--tabbar-punkte) + 2 * var(--tabbar-rand) + var(--tabbar-luft));
+  --tabbar-raum: calc(var(--tabbar-h) + 2 * var(--tabbar-rand) + var(--tabbar-luft));
   --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* Feine Akzentlinie über Timer und Kennzahlen */
@@ -275,6 +278,10 @@ button.section-label.klapp:active { opacity: 0.6; }
   border-radius: 999px;
   box-shadow: var(--shadow);
   padding: var(--tabbar-rand);
+  /* Ohne das übernimmt der Browser die Wischgeste als Seiten-Scroll und
+     bricht sie ab, bevor sie hier ankommt. Mit der Maus fällt das nicht auf,
+     mit dem Finger geht gar nichts. */
+  touch-action: none;
 }
 
 .tabbar-inner {
@@ -323,7 +330,18 @@ button.section-label.klapp:active { opacity: 0.6; }
   justify-content: center;
   align-items: center;
   gap: 7px;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: height 0.22s ease, opacity 0.22s ease;
+}
+/* Sichtbar beim Start, während des Wischens und drei Sekunden nach einem
+   Wechsel. Danach ist die Pille wieder so klein wie möglich. */
+body.punkte .bereich-punkte {
   height: var(--tabbar-punkte);
+  opacity: 1;
+  pointer-events: auto;
 }
 .bereich-punkt {
   width: 6px;
@@ -510,6 +528,94 @@ button.section-label.klapp:active { opacity: 0.6; }
   font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
+
+/* Suchfeld und Scanner-Knopf nebeneinander */
+.such-zeile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.such-zeile .search-wrap { flex: 1; min-width: 0; }
+.scan-btn {
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.scan-btn svg { width: 22px; height: 22px; color: var(--accent); }
+
+/* ── Barcode-Scanner ─────────────────────────────────────── */
+
+.scan-ov .overlay-inner { padding: 0; max-width: none; }
+.scan-buehne {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: calc(var(--safe-top) + 20px) 20px calc(var(--safe-bottom) + 28px);
+}
+.scan-buehne video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Der Rahmen ist nur eine Zielhilfe – gelesen wird das ganze Bild. Enger
+   zuzuschneiden hieße, knapp danebengehaltene Codes zu verlieren. */
+.scan-rahmen {
+  position: relative;
+  width: min(78vw, 320px);
+  height: 190px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
+}
+.scan-rahmen span {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: scan-lauf 2.2s ease-in-out infinite;
+}
+@keyframes scan-lauf {
+  0%, 100% { transform: translateY(-80px); }
+  50% { transform: translateY(80px); }
+}
+.scan-hinweis {
+  position: relative;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.scan-buehne .btn { position: relative; }
+
+.ziel-zeile { margin-bottom: 12px; }
+.ziel-kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.ziel-kopf span { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.ziel-kopf em { font-style: normal; font-weight: 600; color: var(--ink-3); }
+.ziel-kopf b { font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.warn-text { color: var(--warn); }
 
 .feld-zwei {
   display: grid;

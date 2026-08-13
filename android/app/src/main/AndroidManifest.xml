@@ -50,4 +50,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Barcode-Scanner im Ernährungsteil. Gelesen wird im Gerät, es wird
+         kein Bild irgendwohin geschickt – nur die erkannte Ziffernfolge geht
+         als Suchanfrage an die Lebensmitteldatenbank. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

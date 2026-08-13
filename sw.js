@@ -1,5 +1,5 @@
 // Lumora Service Worker – App-Shell offline verfügbar halten
-const CACHE = "lumora-v30";
+const CACHE = "lumora-v31";
 const ASSETS = [
   "./",
   "index.html",

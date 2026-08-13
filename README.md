@@ -2,7 +2,7 @@
 
 Eine Progressive Web App (PWA) fürs Fitnessstudio und für den Küchentisch – inspiriert von Hevy und MacroFactor. Komplett offline-fähig, ohne Konto, ohne Server: **Alle Daten bleiben lokal auf deinem Gerät.**
 
-Die App hat **zwei Welten**: Training und Ernährung. Sie haben nichts miteinander zu tun, teilen keine Daten und liegen sogar in getrennten Speichern – geteilt werden nur das Aussehen und die Tab-Leiste. **Über die Leiste unten wischt man von der einen in die andere**; die zwei Punkte darüber zeigen, wo man ist, und sind selbst antippbar.
+Die App hat **zwei Welten**: Training und Ernährung. Sie haben nichts miteinander zu tun, teilen keine Daten und liegen sogar in getrennten Speichern – geteilt werden nur das Aussehen und die Tab-Leiste. **Über die Leiste unten wischt man von der einen in die andere**; die zwei Punkte darüber zeigen, wo man ist, und sind selbst antippbar. Drei Sekunden nach einem Wechsel blenden sie sich aus, damit die Pille so klein bleibt wie möglich.
 
 Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalität, bewusst ohne Hantel-Motiv. Alle Grafiken (App-Icons, Launcher, Splash, Store-Assets) entstehen aus derselben Formdefinition per `python3 scripts/make-icons.py`.
 
@@ -39,10 +39,11 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 
 - **Tagebuch nach Mahlzeiten**: Frühstück, Mittagessen, Abendessen, Snacks. Oben stehen Kalorien, das, was vom Tagesziel übrig ist, und drei Balken für Eiweiß, Kohlenhydrate und Fett. Durch die Tage wischt man wie durch die Zeiträume im Trainingsverlauf – nach vorn ist heute Schluss
 - **Lebensmittel aus Open Food Facts**: kostenlos, offen (Open Database License) und mit sehr guter Abdeckung deutscher Produkte. Gesucht wird über die deutsche Adresse, also mit deutschen Namen und deutschen Produkten zuerst. Kein Konto, kein Schlüssel; hinausgeschickt wird nur der Suchbegriff
-- **Barcode eintippen**: Die Ziffernfolge von der Packung ins Suchfeld – dann wird das Produkt direkt geholt, statt danach zu suchen
+- **Barcode scannen**: Kamera auf die Packung halten, fertig. Gelesen wird mit dem Code-Erkenner, den Android selbst mitbringt (`BarcodeDetector`) – keine zusätzliche Bibliothek, kein Bild verlässt das Gerät, nur die erkannte Ziffernfolge geht als Anfrage hinaus. Kennt die Datenbank den Code nicht, bietet die App an, das Lebensmittel anzulegen; der Code bleibt daran hängen und wird beim nächsten Mal ohne Netz gefunden. Wo es den Erkenner nicht gibt, erscheint der Knopf gar nicht erst – die Ziffern lassen sich auch eintippen
 - **Offline ist die Regel, nicht der Notfall**: 76 gängige Lebensmittel sind eingebaut (Richtwerte je 100 g bzw. ml), und alles, was einmal eingetragen wurde, bleibt in der eigenen Liste. Ohne Netz sucht die App darin weiter und sagt es auch. Die Datenbank ist eine Ergänzung, keine Voraussetzung
+- **Wenn die Datenbank klemmt**: großzügige Frist statt vorschnellem Aufgeben, ein zweiter Versuch über die internationale Adresse, und jede Antwort wird zum Suchbegriff gemerkt – ein gelöschtes Zeichen fragt nicht neu an. Scheitert es doch, nennt die App den Grund (bremst gerade / antwortet nicht) und bietet einen Knopf zum Wiederholen
 - **Eigene Lebensmittel** anlegen, mit Portionsgröße („1 Scheibe = 45 g"). Auch ein eingebautes Lebensmittel lässt sich korrigieren – die Änderung gilt danach überall, alte Einträge bleiben gültig
-- **Tagesziele** für Kalorien und die drei Nährstoffe. Reine Zielmarken: Die App rechnet nichts daraus und verrechnet sie mit nichts aus dem Training
+- **Tagesziele**: Die Kalorien sind die eine Zahl, die man setzt – die drei Nährstoffe hängen als **Anteil** daran. 30 % Eiweiß bleiben 30 % Eiweiß, egal ob man auf 1800 oder 2600 kcal geht; die Gramm-Zahl steht live daneben. Die Anteile ergeben immer 100 %: Ändert man einen, zieht die App die Differenz von den Kohlenhydraten ab (bzw. vom Fett, wenn man die Kohlenhydrate selbst anfasst). Gerundet wird auf volle Gramm – dass 30/40/30 dadurch nicht exakt die Kalorienzahl ergeben, steht als Hinweis dabei. Reine Zielmarken: Mit dem Training wird nichts davon verrechnet
 - **Verlauf** über 7, 30 oder 90 Tage: Durchschnitte und ein Balken je Tag, Tage über dem Ziel bernsteinfarben, die Ziellinie gestrichelt darüber
 
 ## Android-App & Play Store 🤖

@@ -123,8 +123,12 @@ function b(id, name, kcal, eiweiss, kh, fett, portName, portGramm, einheit) {
 function defaultEssen() {
   return {
     version: 1,
-    // Tagesziele. Die Vorgaben sind bewusst neutral – jeder setzt sie selbst.
-    ziele: { kcal: 2200, eiweiss: 160, kh: 240, fett: 70 },
+    /* Tagesziele. Die Kalorien sind die Zahl, die man setzt; die Nährstoffe
+       hängen als Anteil daran. Wer die Kalorien ändert, will nicht auch noch
+       drei Gramm-Zahlen nachrechnen – 30 % Eiweiß bleiben 30 % Eiweiß.
+       Gerundet wird auf volle Gramm; dass 30/40/30 dadurch nicht exakt die
+       Kalorienzahl ergeben, ist der Preis und in Kauf genommen. */
+    ziele: { kcal: 2200, eiweissP: 30, khP: 40, fettP: 30 },
     // Eigene Lebensmittel und alles, was schon einmal aus der Datenbank
     // geholt wurde. Was hier steht, funktioniert ohne Netz.
     lebensmittel: [],
@@ -133,12 +137,32 @@ function defaultEssen() {
   };
 }
 
+// Aus der ersten Fassung: feste Gramm-Ziele. Daraus die Anteile ausrechnen,
+// dann steht der Nutzer nach dem Update vor seinen gewohnten Zahlen.
+function migriereZiele(z) {
+  if (!z || z.eiweissP !== undefined) return;
+  const kcal = z.kcal > 0 ? z.kcal : 2200;
+  const anteil = (gramm, proKcal) =>
+    Math.round(((Number(gramm) || 0) * proKcal * 100) / kcal);
+  z.eiweissP = anteil(z.eiweiss, 4);
+  z.khP = anteil(z.kh, 4);
+  z.fettP = anteil(z.fett, 9);
+  // Summe glattziehen, damit nicht 97 % dastehen
+  const rest = 100 - z.eiweissP - z.khP - z.fettP;
+  z.khP = Math.max(0, z.khP + rest);
+  delete z.eiweiss; delete z.kh; delete z.fett;
+}
+
 function ladeEssen() {
   let e = defaultEssen();
   try {
     const raw = localStorage.getItem(LS_ESSEN);
     if (raw) {
       const p = JSON.parse(raw);
+      // Erst umrechnen, dann auffüllen: Andersherum stünden die Anteile aus
+      // den Standardwerten schon da, und die Umrechnung hielte den
+      // Altbestand für längst erledigt.
+      migriereZiele(p.ziele);
       e = Object.assign(defaultEssen(), p);
       e.ziele = Object.assign(defaultEssen().ziele, p.ziele || {});
     }
@@ -183,6 +207,24 @@ const tagKey = (d) => {
 
 const NAEHRWERTE = ["kcal", "eiweiss", "kh", "fett"];
 
+// Kalorien je Gramm – die üblichen Faustzahlen
+const PRO_GRAMM = { eiweiss: 4, kh: 4, fett: 9 };
+
+// Das Tagesziel eines Nährstoffs in Gramm, aus Kalorien und Anteil.
+// Volle Gramm, wie gewünscht – die Rundung nehmen wir in Kauf.
+function zielGramm(art) {
+  const z = ESSEN.ziele;
+  const p = Number(z[art + "P"]) || 0;
+  return Math.round(((Number(z.kcal) || 0) * p) / 100 / PRO_GRAMM[art]);
+}
+
+const zieleGramm = () => ({
+  kcal: Number(ESSEN.ziele.kcal) || 0,
+  eiweiss: zielGramm("eiweiss"),
+  kh: zielGramm("kh"),
+  fett: zielGramm("fett"),
+});
+
 // Werte eines Eintrags: Basiswerte gelten je 100 g, der Eintrag hat Gramm
 function eintragWerte(e) {
   const lm = lmById(e.lmId);
@@ -218,8 +260,10 @@ const tagEintraege = (key) => ESSEN.tage[key] || [];
    Grundlage. Was einmal benutzt wurde, liegt danach lokal. Ohne Netz sucht
    die App nur in der eigenen Liste und sagt das auch. */
 
-const OFF_SUCHE = "https://de.openfoodfacts.org/cgi/search.pl";
-const OFF_PRODUKT = "https://world.openfoodfacts.org/api/v2/product/";
+// Die deutsche Adresse liefert deutsche Namen und deutsche Produkte zuerst;
+// die internationale ist der Ausweichweg, wenn sie klemmt.
+const OFF_HOST_DE = "https://de.openfoodfacts.org";
+const OFF_HOST_WELT = "https://world.openfoodfacts.org";
 const OFF_FELDER = "code,product_name,product_name_de,generic_name_de,brands,quantity,serving_size,serving_quantity,nutriments";
 
 let offAbbruch = null;
@@ -261,48 +305,94 @@ function ausOff(p) {
   };
 }
 
-async function offAnfrage(url) {
-  if (offAbbruch) offAbbruch.abort();
-  const steuer = new AbortController();
-  offAbbruch = steuer;
-  // Die Suche bei OFF ist auf wenige Anfragen pro Minute begrenzt. Ein
-  // Mindestabstand ist keine Bremse, sondern Anstand.
-  const warten = Math.max(0, 1000 - (Date.now() - offLetzte));
-  if (warten) await new Promise((r) => setTimeout(r, warten));
-  if (steuer.signal.aborted) throw abbruchFehler();
-  offLetzte = Date.now();
-  // Die Volltextsuche bei OFF kann träge sein. Nach zwölf Sekunden ist die
-  // Frage beantwortet: heute nicht.
-  const uhr = setTimeout(() => steuer.abort(), 12000);
+/* Anfragen an OFF sind der wackeligste Teil der Ernährung: fremder Server,
+   Mobilfunk, und die Volltextsuche dort ist bekanntermaßen langsam. Deshalb
+   drei Vorkehrungen statt einer:
+
+   * großzügige Frist (20 s) – lieber warten als grundlos aufgeben,
+   * ein zweiter Versuch über die internationale Adresse, wenn die deutsche
+     nicht antwortet oder mit 429 (zu viele Anfragen) abwinkt,
+   * ein Gedächtnis: Jede Antwort wird zum Suchbegriff gemerkt. Wer ein
+     Zeichen löscht und wieder tippt, fragt nicht erneut an. */
+
+const OFF_FRIST = 20000;
+const offErinnerung = new Map();   // Suchbegriff → Treffer
+
+async function einAnfrage(url, signal) {
+  const uhr = setTimeout(() => steuerAbbrechen(signal), OFF_FRIST);
   try {
-    const res = await fetch(url, { signal: steuer.signal, headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(url, { signal, headers: { Accept: "application/json" } });
+    if (!res.ok) {
+      const e = new Error("HTTP " + res.status);
+      e.status = res.status;
+      throw e;
+    }
     return await res.json();
   } finally {
     clearTimeout(uhr);
   }
 }
 
-function abbruchFehler() {
-  const e = new Error("abgebrochen");
-  e.name = "AbortError";
-  return e;
+// Der AbortController hängt am Signal – so kommt die Frist an ihn heran
+const steuerZuSignal = new WeakMap();
+function steuerAbbrechen(signal) {
+  const st = steuerZuSignal.get(signal);
+  if (st) st.abort();
+}
+
+async function offAnfrage(pfad) {
+  if (offAbbruch) offAbbruch.abort();
+  const steuer = new AbortController();
+  offAbbruch = steuer;
+  steuerZuSignal.set(steuer.signal, steuer);
+
+  // Die Suche bei OFF ist auf wenige Anfragen pro Minute begrenzt. Ein
+  // Mindestabstand ist keine Bremse, sondern Anstand.
+  const warten = Math.max(0, 1000 - (Date.now() - offLetzte));
+  if (warten) await new Promise((r) => setTimeout(r, warten));
+  if (steuer.signal.aborted) throw abbruchFehler();
+  offLetzte = Date.now();
+
+  try {
+    return await einAnfrage(OFF_HOST_DE + pfad, steuer.signal);
+  } catch (e) {
+    if (e && e.name === "AbortError" && !steuer.signal.aborted) {
+      // Nicht der Nutzer war es, sondern die Frist
+    } else if (steuer.signal.aborted) {
+      throw e;   // eine neue Suche hat übernommen
+    }
+    // Zweiter Anlauf über die internationale Adresse
+    offLetzte = Date.now();
+    return einAnfrage(OFF_HOST_WELT + pfad, steuer.signal);
+  }
+}
+
+const istBarcode = (q) => /^\d{8,14}$/.test(q.trim());
+
+// Ein einzelnes Produkt über seine Nummer – der Weg des Scanners und der
+// eingetippten Ziffernfolge
+async function offProdukt(code) {
+  const d = await offAnfrage(`/api/v2/product/${encodeURIComponent(code)}.json?fields=${OFF_FELDER}`);
+  return d && d.status === 1 ? ausOff(d.product) : null;
 }
 
 async function offSuchen(begriff) {
   const q = begriff.trim();
   if (!q) return [];
-  // Reine Zahlenfolge? Das ist ein Barcode von der Packung – direkt abfragen.
-  if (/^\d{8,14}$/.test(q)) {
-    const d = await offAnfrage(`${OFF_PRODUKT}${q}.json?fields=${OFF_FELDER}`);
-    const lm = d && d.status === 1 ? ausOff(d.product) : null;
-    return lm ? [lm] : [];
+  if (offErinnerung.has(q)) return offErinnerung.get(q);
+  let treffer;
+  if (istBarcode(q)) {
+    const lm = await offProdukt(q);
+    treffer = lm ? [lm] : [];
+  } else {
+    const pfad = `/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process`
+      + `&json=1&page_size=24&lc=de&fields=${OFF_FELDER}`;
+    const d = await offAnfrage(pfad);
+    const roh = Array.isArray(d && d.products) ? d.products : [];
+    treffer = roh.map(ausOff).filter(Boolean).slice(0, 20);
   }
-  const url = `${OFF_SUCHE}?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process`
-    + `&json=1&page_size=24&lc=de&fields=${OFF_FELDER}`;
-  const d = await offAnfrage(url);
-  const roh = Array.isArray(d && d.products) ? d.products : [];
-  return roh.map(ausOff).filter(Boolean).slice(0, 20);
+  offErinnerung.set(q, treffer);
+  return treffer;
 }
 
 /* ═══════════════ Reiter „Heute" ═══════════════ */
@@ -336,7 +426,7 @@ function renderEssenTag() {
   if (!host) return;
   const eintraege = tagEintraege(essenTag);
   const s = summe(eintraege);
-  const z = ESSEN.ziele;
+  const z = zieleGramm();
   host.innerHTML = `
     <div class="screen-head">
       <div>
@@ -502,6 +592,8 @@ let lmSuche = "";
 let lmTreffer = [];        // aus der Datenbank
 let lmStatus = "";         // Hinweiszeile über den Treffern
 let lmSuchTimer = null;
+let lmLetzteSuche = "";    // wofür „Nochmal versuchen" gilt
+let lmFehler = false;
 
 // Wonach zuletzt gegriffen wurde, steht oben – das ist beim Essen fast immer
 // die richtige Reihenfolge.
@@ -522,8 +614,11 @@ function renderEssenLib() {
       <div class="screen-title">Lebensmittel</div>
       <button class="icon-btn" data-action="essen-neu" aria-label="Eigenes Lebensmittel">${icon("plus")}</button>
     </div>
-    <div class="search-wrap">${icon("search")}
-      <input class="search-input" data-input="lm-suche" value="${esc(lmSuche)}" placeholder="Suchen oder Barcode eintippen …" autocomplete="off">
+    <div class="such-zeile">
+      <div class="search-wrap">${icon("search")}
+        <input class="search-input" data-input="lm-suche" value="${esc(lmSuche)}" placeholder="Suchen oder Barcode eintippen …" autocomplete="off">
+      </div>
+      ${scannerMoeglich() ? `<button class="icon-btn scan-btn" data-action="essen-scannen" aria-label="Barcode scannen">${icon("barcode")}</button>` : ""}
     </div>
     <div id="lm-liste">${lmListe(eigen)}</div>`;
 }
@@ -535,6 +630,8 @@ function lmListe(eigen) {
       : `<p class="hint">Nichts gefunden. Such unten in der Datenbank oder leg dir das Lebensmittel selbst an.</p>`}
     <div class="section-label">Open Food Facts</div>
     ${lmStatus ? `<p class="hint">${esc(lmStatus)}</p>` : ""}
+    ${lmFehler ? `<button class="btn btn-ghost btn-compact" data-action="essen-nochmal" style="margin-bottom:8px">
+      ${icon("history")} Nochmal versuchen</button>` : ""}
     ${lmTreffer.map((l) => lmZeile(l, true)).join("")}`;
 }
 
@@ -554,41 +651,72 @@ function lmZeile(l, neu) {
 // Treffer aus der Datenbank liegen nur im Speicher, bis man sie benutzt
 const offCache = new Map();
 
+/* Eine Suche für beide Orte: den Reiter „Lebensmittel" und das Vollbild, das
+   aus einer Mahlzeit heraus aufgeht. Vorher stand das zweimal fast gleich da –
+   und ging zweimal fast gleich schief. */
+function lmListenZeichnen() {
+  const eigen = eigeneTreffer(lmSuche);
+  const html = lmListe(eigen);
+  const a = $("#lm-liste"), b = $("#lm-liste-ov");
+  if (a) a.innerHTML = html;
+  if (b) b.innerHTML = html;
+}
+
 function lmSucheSetzen(wert) {
   lmSuche = wert;
-  const liste = $("#lm-liste");
-  if (liste) liste.innerHTML = lmListe(eigeneTreffer(lmSuche));
   clearTimeout(lmSuchTimer);
   const q = wert.trim();
-  if (q.length < 3) {
+  if (q.length < 3 && !istBarcode(q)) {
     lmTreffer = [];
     lmStatus = q ? "Noch zu kurz – ab drei Zeichen wird gesucht." : "Tippe, um in der Datenbank zu suchen.";
-    if (liste) liste.innerHTML = lmListe(eigeneTreffer(lmSuche));
+    lmListenZeichnen();
+    return;
+  }
+  lmFehler = false;
+  lmStatus = "Wird gesucht …";
+  lmListenZeichnen();
+  // Etwas mehr Ruhe als beim Tippen üblich: Die Datenbank begrenzt Anfragen,
+  // und jeder Tastendruck eine eigene zu schicken wäre sinnlos wie unhöflich.
+  lmSuchTimer = setTimeout(() => lmSucheAusfuehren(q), 700);
+}
+
+async function lmSucheAusfuehren(q) {
+  lmLetzteSuche = q;
+  if (navigator.onLine === false) {
+    lmTreffer = [];
+    lmStatus = "Kein Netz – gesucht wird nur in deiner Liste.";
+    lmListenZeichnen();
     return;
   }
   lmStatus = "Wird gesucht …";
-  if (liste) liste.innerHTML = lmListe(eigeneTreffer(lmSuche));
-  lmSuchTimer = setTimeout(async () => {
-    if (navigator.onLine === false) {
-      lmTreffer = [];
-      lmStatus = "Kein Netz – gesucht wird nur in deiner Liste.";
-    } else {
-      try {
-        lmTreffer = await offSuchen(q);
-        lmTreffer.forEach((l) => offCache.set(l.id, l));
-        lmStatus = lmTreffer.length ? "" : "Nichts gefunden. Vielleicht als eigenes Lebensmittel anlegen?";
-      } catch (err) {
-        if (err && err.name === "AbortError") return;
-        lmTreffer = [];
-        lmStatus = "Die Datenbank ist gerade nicht erreichbar.";
-      }
-    }
-    const l2 = $("#lm-liste");
-    if (l2) l2.innerHTML = lmListe(eigeneTreffer(lmSuche));
-  }, 550);
+  lmListenZeichnen();
+  try {
+    lmTreffer = await offSuchen(q);
+    lmTreffer.forEach((l) => offCache.set(l.id, l));
+    lmStatus = lmTreffer.length ? "" : "Nichts gefunden. Vielleicht als eigenes Lebensmittel anlegen?";
+  } catch (err) {
+    if (err && err.name === "AbortError") return;   // eine neue Suche hat übernommen
+    lmTreffer = [];
+    // Den Grund nennen: Bei „zu viele Anfragen" hilft Warten, bei allem
+    // anderen ein zweiter Versuch – das ist ein Unterschied.
+    lmStatus = err && err.status === 429
+      ? "Die Datenbank bremst gerade (zu viele Anfragen). Gleich nochmal versuchen."
+      : "Die Datenbank antwortet nicht. Prüf die Verbindung – oder versuch es erneut.";
+    lmFehler = true;
+  }
+  lmListenZeichnen();
 }
 
+ACTIONS["essen-nochmal"] = () => {
+  const q = (lmLetzteSuche || lmSuche || "").trim();
+  if (!q) return;
+  offErinnerung.delete(q);
+  lmFehler = false;
+  lmSucheAusfuehren(q);
+};
+
 INPUTS["lm-suche"] = (el) => lmSucheSetzen(el.value);
+INPUTS["lm-suche-ov"] = (el) => lmSucheSetzen(el.value);
 
 /* ── Ein Lebensmittel antippen ───────────────────────────── */
 
@@ -681,72 +809,179 @@ ACTIONS["essen-suchen"] = (el) => {
       <div class="screen-title">${esc((MAHLZEITEN.find((m) => m.id === mz) || {}).label || "Hinzufügen")}</div>
       <button class="icon-btn" data-action="essen-neu" aria-label="Eigenes Lebensmittel">${icon("plus")}</button>
     </div>
-    <div class="search-wrap">${icon("search")}
-      <input class="search-input" data-input="lm-suche-ov" placeholder="Suchen oder Barcode eintippen …" autocomplete="off">
+    <div class="such-zeile">
+      <div class="search-wrap">${icon("search")}
+        <input class="search-input" data-input="lm-suche-ov" placeholder="Suchen oder Barcode eintippen …" autocomplete="off">
+      </div>
+      ${scannerMoeglich() ? `<button class="icon-btn scan-btn" data-action="essen-scannen" aria-label="Barcode scannen">${icon("barcode")}</button>` : ""}
     </div>
     <div id="lm-liste-ov"></div>`, "essen-ov");
   ov.dataset.mz = mz;
-  ovListeZeichnen();
+  lmListenZeichnen();
   const feld = ov.querySelector("input");
   if (feld) setTimeout(() => feld.focus(), 60);
 };
 
 ACTIONS["essen-suche-zu"] = () => { $(".essen-ov")?.remove(); };
 
-function ovListeZeichnen() {
-  const ziel = $("#lm-liste-ov");
-  if (ziel) ziel.innerHTML = lmListe(eigeneTreffer(lmSuche));
-}
+/* ── Barcode scannen ──────────────────────────────────────
+   Ohne zusätzliche Bibliothek: Die Kamera liefert Bilder, und das System
+   liest den Code – Android bringt dafür seit Jahren einen Erkenner mit
+   (BarcodeDetector). Das spart eine halbe Megabyte fremden Code und ist
+   schneller als alles, was in JavaScript nachgebaut wäre.
 
-INPUTS["lm-suche-ov"] = (el) => {
-  // Dieselbe Suche, nur ein anderer Behälter
-  const echt = $("#lm-liste");
-  lmSuche = el.value;
-  lmSucheSetzenOv(el.value);
-  if (echt) echt.innerHTML = lmListe(eigeneTreffer(lmSuche));
-};
+   Wo es das nicht gibt, sagt die App es klar und lässt einen die Ziffern
+   eintippen – die stehen ja unter jedem Strichcode. */
 
-function lmSucheSetzenOv(wert) {
-  clearTimeout(lmSuchTimer);
-  const q = wert.trim();
-  if (q.length < 3) {
-    lmTreffer = [];
-    lmStatus = q ? "Noch zu kurz – ab drei Zeichen wird gesucht." : "Tippe, um in der Datenbank zu suchen.";
-    ovListeZeichnen();
+const BARCODE_FORMATE = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "itf"];
+
+const scannerMoeglich = () =>
+  typeof window.BarcodeDetector === "function"
+  && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+let scanner = null;   // { strom, halt }
+
+ACTIONS["essen-scannen"] = () => scannerOeffnen();
+
+async function scannerOeffnen() {
+  if (!scannerMoeglich()) {
+    toast("Dieses Gerät kann keine Codes lesen – tipp die Ziffern ein");
     return;
   }
-  lmStatus = "Wird gesucht …";
-  ovListeZeichnen();
-  lmSuchTimer = setTimeout(async () => {
-    if (navigator.onLine === false) {
-      lmTreffer = [];
-      lmStatus = "Kein Netz – gesucht wird nur in deiner Liste.";
-    } else {
-      try {
-        lmTreffer = await offSuchen(q);
-        lmTreffer.forEach((l) => offCache.set(l.id, l));
-        lmStatus = lmTreffer.length ? "" : "Nichts gefunden. Vielleicht als eigenes Lebensmittel anlegen?";
-      } catch (err) {
-        if (err && err.name === "AbortError") return;
-        lmTreffer = [];
-        lmStatus = "Die Datenbank ist gerade nicht erreichbar.";
-      }
+  const ov = openOverlay(`
+    <div class="scan-buehne">
+      <video id="scan-video" playsinline muted autoplay></video>
+      <div class="scan-rahmen"><span></span></div>
+      <p class="scan-hinweis" id="scan-hinweis">Halte den Strichcode in den Rahmen</p>
+      <button class="btn btn-ghost" data-action="essen-scan-zu" style="max-width:280px">Abbrechen</button>
+    </div>`, "scan-ov");
+  ov.zurueck = () => scannerSchliessen();
+
+  const video = $("#scan-video");
+  let strom = null;
+  try {
+    strom = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
+      audio: false,
+    });
+  } catch (e) {
+    scannerSchliessen();
+    // Die häufigste Ursache ist eine abgelehnte Kamerafreigabe – das ist
+    // etwas anderes als „geht nicht" und gehört auch so gesagt.
+    toast(e && e.name === "NotAllowedError"
+      ? "Ohne Kamerafreigabe geht es nicht – in den Android-Einstellungen erlauben"
+      : "Die Kamera lässt sich nicht öffnen");
+    return;
+  }
+  if (!$(".scan-ov")) {   // in der Zwischenzeit abgebrochen
+    strom.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  // Ab hier hält die App die Kamera. Was jetzt noch schiefgeht, darf sie
+  // nicht mit sich reißen – eine offene Kamera hinter einem geschlossenen
+  // Bild ist das Unangenehmste, was diese Funktion anrichten kann.
+  scanner = { strom, halt: false };
+  let leser;
+  try {
+    video.srcObject = strom;
+    // Bewusst ohne Warten: Auf manchen Geräten wird dieses Versprechen nie
+    // eingelöst, und dann liefe der Scanner gar nicht erst los. Ist das Bild
+    // noch nicht da, scheitert die erste Erkennung – und die nächste kommt
+    // 220 ms später von allein.
+    video.play().catch(() => {});
+    try {
+      leser = new window.BarcodeDetector({ formats: BARCODE_FORMATE });
+    } catch (_) {
+      leser = new window.BarcodeDetector();
     }
-    ovListeZeichnen();
-  }, 550);
+  } catch (e) {
+    scannerSchliessen();
+    toast("Das Kamerabild lässt sich nicht anzeigen");
+    return;
+  }
+  const suchen = async () => {
+    if (!scanner || scanner.halt || !$(".scan-ov")) return;
+    try {
+      const codes = await leser.detect(video);
+      const code = codes && codes.find((c) => /^\d{8,14}$/.test(c.rawValue || ""));
+      if (code) {
+        scanner.halt = true;
+        tippen(true);
+        scannerSchliessen();
+        barcodeVerarbeiten(code.rawValue);
+        return;
+      }
+    } catch (_) {
+      // Einzelne Bilder scheitern immer mal – das ist kein Grund aufzuhören
+    }
+    setTimeout(suchen, 220);
+  };
+  suchen();
+}
+
+function scannerSchliessen() {
+  if (scanner) {
+    scanner.halt = true;
+    scanner.strom.getTracks().forEach((t) => t.stop());
+    scanner = null;
+  }
+  $(".scan-ov")?.remove();
+}
+
+ACTIONS["essen-scan-zu"] = () => scannerSchliessen();
+
+/* Nach dem Scan: erst in der eigenen Liste nachsehen (geht ohne Netz und ist
+   sofort da), sonst bei der Datenbank nachfragen. */
+async function barcodeVerarbeiten(code) {
+  const mahlzeit = ($(".essen-ov") || { dataset: {} }).dataset.mz;
+  const bekannt = alleLebensmittel().find((l) => l.barcode === code);
+  if (bekannt) {
+    lmHinzufuegen(bekannt, mahlzeit);
+    return;
+  }
+  if (navigator.onLine === false) {
+    toast("Kein Netz – der Code " + code + " ist noch nicht in deiner Liste");
+    return;
+  }
+  toast("Code " + code + " – wird nachgeschlagen …");
+  try {
+    const lm = await offProdukt(code);
+    if (lm) {
+      offCache.set(lm.id, lm);
+      lmDetail(lm, mahlzeit);
+    } else {
+      // Das kommt vor: Die Datenbank lebt von Beiträgen und kennt längst
+      // nicht jede Packung.
+      unbekannterCode(code, mahlzeit);
+    }
+  } catch (_) {
+    toast("Die Datenbank antwortet nicht – versuch es gleich nochmal");
+  }
+}
+
+async function unbekannterCode(code, mahlzeit) {
+  if (await appConfirm(
+    `Den Code ${code} kennt Open Food Facts nicht. Das Lebensmittel selbst anlegen?`,
+    { ok: "Anlegen", cancel: "Abbrechen" })) {
+    lmFormular(null, { barcode: code, mahlzeit });
+  }
 }
 
 /* ── Eigenes Lebensmittel anlegen und bearbeiten ─────────── */
 
 ACTIONS["essen-neu"] = () => lmFormular(null);
 
-function lmFormular(vorlage) {
+function lmFormular(vorlage, opt) {
   // Ein angepasstes Grundnahrungsmittel behält seine Kennung: Damit bleiben
   // alte Einträge im Tagebuch gültig und zeigen ab jetzt die neuen Werte.
+  const o = opt || {};
   const l = vorlage
     ? Object.assign({}, vorlage, { quelle: "eigen" })
     : { id: "e-" + uid(), name: "", marke: "", quelle: "eigen", einheit: "g",
-        kcal: 0, eiweiss: 0, kh: 0, fett: 0, portion: null };
+        kcal: 0, eiweiss: 0, kh: 0, fett: 0, portion: null,
+        // Nach einem Scan bleibt der Code am Lebensmittel hängen – beim
+        // nächsten Mal wird es dann ohne Netz sofort gefunden.
+        barcode: o.barcode || undefined };
   const feld = (k, label, wert, mode) => `
     <div class="field">
       <label for="lf-${k}">${label}</label>
@@ -793,43 +1028,121 @@ function lmFormular(vorlage) {
     bd.remove();
     renderEssenLib();
     toast("Gespeichert");
+    // Direkt nach einem Scan will man es auch eintragen, nicht nur anlegen
+    if (o.barcode) lmHinzufuegen(neu, o.mahlzeit);
   });
 }
 
-/* ── Tagesziele ──────────────────────────────────────────── */
+/* ── Tagesziele ────────────────────────────────────────────
+   Die Kalorien sind die eine Zahl, die man setzt. Die drei Nährstoffe hängen
+   als Anteil daran – 30 % Eiweiß bleiben 30 % Eiweiß, egal ob man auf 1800
+   oder 2600 kcal geht. Die Gramm-Zahl steht live darunter, damit man nicht
+   im Kopf rechnen muss.
+
+   Die Anteile müssen zusammen 100 % ergeben. Statt beim Speichern zu meckern,
+   zieht die App die Differenz von den Kohlenhydraten ab: Sie sind der Posten,
+   den man üblicherweise auffüllt, nachdem Eiweiß und Fett stehen. Wer die
+   Kohlenhydrate selbst anfasst, bekommt die Differenz beim Fett abgezogen. */
+
+const ZIEL_ARTEN = [
+  { k: "eiweiss", label: "Eiweiß" },
+  { k: "kh", label: "Kohlenhydrate" },
+  { k: "fett", label: "Fett" },
+];
 
 ACTIONS["essen-ziele"] = () => {
-  const z = ESSEN.ziele;
-  const feld = (k, label, wert) => `
-    <div class="field">
-      <label for="z-${k}">${label}</label>
-      <input id="z-${k}" data-z="${k}" type="text" inputmode="numeric" value="${wert}">
-    </div>`;
-  const bd = openSheet(`
-    <div class="sheet-title">Tagesziele
-      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
-    </div>
-    ${feld("kcal", "Kalorien (kcal)", z.kcal)}
-    <div class="feld-zwei">
-      ${feld("eiweiss", "Eiweiß (g)", z.eiweiss)}
-      ${feld("kh", "Kohlenhydrate (g)", z.kh)}
-      ${feld("fett", "Fett (g)", z.fett)}
-    </div>
-    <p class="hint" style="margin:4px 2px 14px">Die Ziele sind reine Zielmarken – die App rechnet nichts daraus und
-      vergleicht sie mit nichts aus dem Training.</p>
-    <button class="btn" data-ziele="1">${icon("check")} Speichern</button>
-  `);
-  bd.querySelector("[data-ziele]").addEventListener("click", () => {
-    for (const k of NAEHRWERTE) {
-      const el = bd.querySelector(`[data-z="${k}"]`);
-      const n = parseInt(el ? el.value : "", 10);
-      if (Number.isFinite(n) && n >= 0) ESSEN.ziele[k] = n;
+  const stand = {
+    kcal: Number(ESSEN.ziele.kcal) || 0,
+    eiweiss: Number(ESSEN.ziele.eiweissP) || 0,
+    kh: Number(ESSEN.ziele.khP) || 0,
+    fett: Number(ESSEN.ziele.fettP) || 0,
+  };
+  const bd = openSheet("");
+
+  // Nach einer Änderung die restlichen Anteile so nachziehen, dass die Summe
+  // wieder 100 ergibt – zuerst am Ausgleichsposten, dann am dritten Wert.
+  const ausgleichen = (geaendert) => {
+    stand[geaendert] = Math.max(0, Math.min(100, Math.round(stand[geaendert])));
+    const reihe = geaendert === "kh" ? ["fett", "eiweiss"] : ["kh", "fett", "eiweiss"];
+    for (const k of reihe) {
+      if (k === geaendert) continue;
+      const fehlt = 100 - (stand.eiweiss + stand.kh + stand.fett);
+      if (!fehlt) break;
+      stand[k] = Math.max(0, stand[k] + fehlt);
     }
-    speichereEssen();
-    bd.remove();
-    renderEssenTag();
-    renderEssenVerlauf();
-    toast("Ziele gespeichert");
+  };
+
+  const zeichne = () => {
+    const summeP = stand.eiweiss + stand.kh + stand.fett;
+    const gramm = (k) => Math.round((stand.kcal * stand[k]) / 100 / PRO_GRAMM[k]);
+    bd.querySelector(".sheet").innerHTML = `
+      <div class="sheet-grip"></div>
+      <div class="sheet-title">Tagesziele
+        <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+      </div>
+      <div class="field">
+        <label for="z-kcal">Kalorien am Tag</label>
+        <input id="z-kcal" data-kcal="1" type="text" inputmode="numeric" value="${stand.kcal}">
+      </div>
+      <div class="section-label" style="margin-top:14px">Verteilung</div>
+      ${ZIEL_ARTEN.map(({ k, label }) => `
+        <div class="ziel-zeile">
+          <div class="ziel-kopf">
+            <span>${label} <em>in %</em></span>
+            <b>${gramm(k)} g</b>
+          </div>
+          <div class="stepper">
+            <button class="stepper-btn" data-p="${k}" data-d="-1" aria-label="${label} verringern">−</button>
+            <input class="stepper-val" data-pv="${k}" type="text" inputmode="numeric" value="${stand[k]}" aria-label="${label} in Prozent">
+            <button class="stepper-btn" data-p="${k}" data-d="1" aria-label="${label} erhöhen">+</button>
+          </div>
+        </div>`).join("")}
+      <p class="hint ${summeP === 100 ? "" : "warn-text"}" style="margin:2px 2px 14px">
+        ${summeP === 100
+          ? `Summe 100 % · ${gramm("eiweiss") * 4 + gramm("kh") * 4 + gramm("fett") * 9} kcal nach Rundung auf volle Gramm`
+          : `Summe ${summeP} % – wird beim Ändern automatisch auf 100 % gebracht`}
+      </p>
+      <button class="btn" data-ziele="1">${icon("check")} Speichern</button>`;
+  };
+  zeichne();
+
+  const kcalLesen = () => {
+    const el = bd.querySelector("[data-kcal]");
+    const n = parseInt(el ? el.value : "", 10);
+    if (Number.isFinite(n) && n >= 0) stand.kcal = n;
+  };
+
+  bd.addEventListener("input", (e) => {
+    if (e.target.matches("[data-kcal]")) { kcalLesen(); zeichne(); bd.querySelector("[data-kcal]").focus(); }
+  });
+
+  bd.addEventListener("click", (e) => {
+    const stufe = e.target.closest("[data-p]");
+    if (stufe) {
+      kcalLesen();
+      stand[stufe.dataset.p] += 5 * +stufe.dataset.d;
+      ausgleichen(stufe.dataset.p);
+      zeichne();
+      return;
+    }
+    if (e.target.closest("[data-ziele]")) {
+      kcalLesen();
+      const feld = (k) => {
+        const el = bd.querySelector(`[data-pv="${k}"]`);
+        const n = parseInt(el ? el.value : "", 10);
+        if (Number.isFinite(n) && n >= 0) stand[k] = n;
+      };
+      ZIEL_ARTEN.forEach(({ k }) => feld(k));
+      ausgleichen("eiweiss");
+      ESSEN.ziele = {
+        kcal: stand.kcal, eiweissP: stand.eiweiss, khP: stand.kh, fettP: stand.fett,
+      };
+      speichereEssen();
+      bd.remove();
+      renderEssenTag();
+      renderEssenVerlauf();
+      toast("Ziele gespeichert");
+    }
   });
 };
 
@@ -881,7 +1194,7 @@ function renderEssenVerlauf() {
   const getrackt = tage.filter((t) => !t.leer);
   const mittel = (k) => getrackt.length
     ? getrackt.reduce((a, t) => a + t.summe[k], 0) / getrackt.length : 0;
-  const z = ESSEN.ziele;
+  const z = zieleGramm();
   host.innerHTML = `
     <div class="screen-head">
       <div class="screen-title">Ernährung im Verlauf</div>
