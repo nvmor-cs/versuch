@@ -128,6 +128,17 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Liegt ein Blatt darüber, steht die Seite still – festgehalten an der
+   Stelle, an der sie gerade war (top: -Scrollhöhe, aus dem Skript). Ohne das
+   scrollte beim Wischen im Blatt die Liste dahinter weg. */
+body.blatt-offen {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: none; }
 
@@ -967,12 +978,20 @@ body.rest-an .screen { padding-bottom: calc(var(--tabbar-raum) + var(--safe-bott
   padding-bottom: var(--tastatur, 0px);
   transition: padding-bottom 0.16s ease;
   animation: dim 0.16s ease;
+  /* Dass die Seite dahinter stillsteht, besorgt body.blatt-offen im Skript –
+     bewusst nicht per touch-action: none. Das würde in manchen WebViews auch
+     die Geste im Blatt selbst schlucken, und dann ließe sich erst recht
+     nichts mehr scrollen. */
+  overscroll-behavior: contain;
 }
 @keyframes dim { from { opacity: 0; } to { opacity: 1; } }
 
 .sheet {
   width: 100%;
   transition: transform 0.2s ease;
+  /* Hier drin wird gescrollt – und nur hier. contain hält den Schwung im
+     Blatt, statt ihn am Ende an die Seite weiterzureichen. */
+  overscroll-behavior: contain;
   max-width: 560px;
   max-height: calc(88dvh - var(--tastatur, 0px));
   background: var(--surface);

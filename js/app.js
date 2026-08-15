@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.2.1";
+const APP_VERSION = "3.2.2";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -798,6 +798,36 @@ function openOverlay(html, cls) {
   return ov;
 }
 ACTIONS["close-overlay"] = (el) => { el.closest(".overlay")?.remove(); render(); };
+
+/* ═══════════════ Seite festhalten ═══════════════
+   Liegt ein Blatt oder ein Overlay über der Seite, darf die Seite darunter
+   nicht mitwandern. Mit CSS allein war das nicht zu halten: Fing der Finger
+   an einer Stelle an, an der es im Blatt gerade nichts zu scrollen gab, nahm
+   die Liste dahinter die Geste an – man wischte im Blatt und schob in
+   Wahrheit die Lebensmittel darunter weg, statt zu den Nährwerten zu kommen.
+
+   Deshalb wird der Hintergrund festgestellt (position: fixed), sobald etwas
+   darüber liegt, und beim Schließen an genau derselben Stelle wieder
+   freigegeben. Der Beobachter hängt am <body> und nicht an den einzelnen
+   Blättern: Die werden an vielen Stellen einfach entfernt – so gibt es
+   keinen Weg, der das Freigeben vergessen könnte. */
+
+let seitenPos = 0;
+function seitensperrePruefen() {
+  const offen = !!document.querySelector(".backdrop, .overlay");
+  const gesperrt = document.body.classList.contains("blatt-offen");
+  if (offen === gesperrt) return;
+  if (offen) {
+    seitenPos = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = `-${seitenPos}px`;
+    document.body.classList.add("blatt-offen");
+  } else {
+    document.body.classList.remove("blatt-offen");
+    document.body.style.top = "";
+    window.scrollTo(0, seitenPos);
+  }
+}
+new MutationObserver(seitensperrePruefen).observe(document.body, { childList: true });
 
 /* ═══════════════ Tabs ═══════════════ */
 
