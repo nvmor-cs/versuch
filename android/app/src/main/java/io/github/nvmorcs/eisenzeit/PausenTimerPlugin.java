@@ -323,13 +323,19 @@ public class PausenTimerPlugin extends Plugin {
 
     /* ═══════════════ Signal planen, auslösen, absagen ═══════════════ */
 
+    /* Immer über den Anwendungskontext: Der Empfänger, die Activity und ein
+       verzögerter Aufruf sollen dieselbe Datei sehen – und nichts davon soll
+       eine Activity am Leben halten. */
     static SharedPreferences prefs(Context ctx) {
-        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        return ctx.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
     /** Handler und Alarm auf eine bereits eingetragene Pause ansetzen. */
     private void armieren(String pauseId, long ziel) {
-        Context ctx = getContext();
+        // Anwendungskontext: Der wartende Aufruf und der Alarm überdauern die
+        // Pause; an einer Activity festzuhalten hieße, sie so lange am Leben
+        // zu halten, auch wenn Android sie längst abbauen will.
+        Context ctx = getContext().getApplicationContext();
         long inMs = Math.max(0, ziel - System.currentTimeMillis());
 
         if (geplant != null) handler.removeCallbacks(geplant);
@@ -357,7 +363,7 @@ public class PausenTimerPlugin extends Plugin {
     }
 
     private void signalAbsagen() {
-        Context ctx = getContext();
+        Context ctx = getContext().getApplicationContext();
         prefs(ctx).edit().remove(K_PAUSE).remove(K_ZIEL).remove(K_WEG).apply();
         if (geplant != null) {
             handler.removeCallbacks(geplant);

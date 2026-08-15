@@ -140,7 +140,7 @@ function defaultEssen() {
 // Aus der ersten Fassung: feste Gramm-Ziele. Daraus die Anteile ausrechnen,
 // dann steht der Nutzer nach dem Update vor seinen gewohnten Zahlen.
 function migriereZiele(z) {
-  if (!z || z.eiweissP !== undefined) return;
+  if (!z || typeof z !== "object" || z.eiweissP !== undefined) return;
   const kcal = z.kcal > 0 ? z.kcal : 2200;
   const anteil = (gramm, proKcal) =>
     Math.round(((Number(gramm) || 0) * proKcal * 100) / kcal);
@@ -153,19 +153,73 @@ function migriereZiele(z) {
   delete z.eiweiss; delete z.kh; delete z.fett;
 }
 
+/* Fremddaten in Form bringen – dieselbe Regel wie im Trainingsteil (siehe
+   bereinigeDB): Was aus localStorage oder einem Backup kommt, ist erst einmal
+   nur JSON. Ein Lebensmittel ohne Namen, eine Zahl als Text oder ein Tag,
+   hinter dem statt einer Liste ein Wort steht, brachte die Anzeige zum
+   Absturz – und der Zustand war da schon gespeichert. */
+const TAG_MUSTER = /^\d{4}-\d{2}-\d{2}$/;
+
+function bereinigeLebensmittel(l) {
+  if (!l || typeof l !== "object" || !istId(l.id)) return null;
+  const p = l.portion;
+  const gramm = p && Number.isFinite(+p.gramm) ? +p.gramm : 0;
+  return {
+    id: l.id,
+    name: alsText(l.name, 90) || "Lebensmittel",
+    marke: alsText(l.marke, 60),
+    quelle: ausAuswahl(l.quelle, ["eigen", "basis", "off"], "eigen"),
+    einheit: ausAuswahl(l.einheit, ["g", "ml"], "g"),
+    barcode: /^\d{6,14}$/.test(String(l.barcode || "")) ? String(l.barcode) : undefined,
+    kcal: Math.max(0, alsZahl(l.kcal)),
+    eiweiss: Math.max(0, alsZahl(l.eiweiss)),
+    kh: Math.max(0, alsZahl(l.kh)),
+    fett: Math.max(0, alsZahl(l.fett)),
+    portion: gramm > 0 ? { name: alsText(p.name, 24) || "Portion", gramm } : null,
+    benutzt: l.benutzt ? alsZahl(l.benutzt, 0) : undefined,
+  };
+}
+
+function bereinigeEssen(roh) {
+  const e = Object.assign(defaultEssen(), roh && typeof roh === "object" ? roh : {});
+  migriereZiele(e.ziele);
+  const z = Object.assign(defaultEssen().ziele, e.ziele && typeof e.ziele === "object" ? e.ziele : {});
+  e.ziele = {
+    kcal: Math.min(20000, Math.max(0, Math.round(alsZahl(z.kcal, 2200)))),
+    eiweissP: Math.min(100, Math.max(0, Math.round(alsZahl(z.eiweissP, 30)))),
+    khP: Math.min(100, Math.max(0, Math.round(alsZahl(z.khP, 40)))),
+    fettP: Math.min(100, Math.max(0, Math.round(alsZahl(z.fettP, 30)))),
+  };
+  e.lebensmittel = alsListe(e.lebensmittel).map(bereinigeLebensmittel).filter(Boolean);
+
+  const tage = {};
+  const roheTage = e.tage && typeof e.tage === "object" ? e.tage : {};
+  for (const [tag, liste] of Object.entries(roheTage)) {
+    if (!TAG_MUSTER.test(tag)) continue;
+    const eintraege = alsListe(liste).map((x) => {
+      if (!x || typeof x !== "object" || !istId(x.lmId)) return null;
+      const menge = alsZahl(x.menge, 0);
+      if (!(menge > 0)) return null;
+      return {
+        id: istId(x.id) ? x.id : uid(),
+        lmId: x.lmId,
+        mahlzeit: ausAuswahl(x.mahlzeit, MAHLZEITEN.map((m) => m.id), "sn"),
+        menge,
+      };
+    }).filter(Boolean);
+    if (eintraege.length) tage[tag] = eintraege;
+  }
+  e.tage = tage;
+  e.version = 1;
+  return e;
+}
+
 function ladeEssen() {
   let e = defaultEssen();
   try {
     const raw = localStorage.getItem(LS_ESSEN);
-    if (raw) {
-      const p = JSON.parse(raw);
-      // Erst umrechnen, dann auffüllen: Andersherum stünden die Anteile aus
-      // den Standardwerten schon da, und die Umrechnung hielte den
-      // Altbestand für längst erledigt.
-      migriereZiele(p.ziele);
-      e = Object.assign(defaultEssen(), p);
-      e.ziele = Object.assign(defaultEssen().ziele, p.ziele || {});
-    }
+    // bereinigeEssen rechnet dabei auch alte Gramm-Ziele in Anteile um
+    if (raw) e = bereinigeEssen(JSON.parse(raw));
   } catch (_) {
     try { localStorage.setItem(LS_ESSEN + ".corrupt", localStorage.getItem(LS_ESSEN) || ""); } catch (__) {}
   }
@@ -185,7 +239,7 @@ function lmById(id) {
 }
 
 function alleLebensmittel() {
-  const eigen = ESSEN.lebensmittel;
+  const eigen = Array.isArray(ESSEN.lebensmittel) ? ESSEN.lebensmittel : [];
   const ids = new Set(eigen.map((l) => l.id));
   return eigen.concat(ESSEN_BASIS.filter((l) => !ids.has(l.id)));
 }
@@ -503,7 +557,7 @@ function mahlzeitBlock(m, alle) {
   return `
     <div class="section-label">${m.label}<span class="mz-kcal">${Math.round(s.kcal)} kcal</span></div>
     ${drin.map((e) => eintragZeile(e)).join("")}
-    <button class="btn btn-ghost btn-compact mz-add" data-action="essen-suchen" data-mz="${m.id}">
+    <button class="btn btn-ghost btn-compact mz-add" data-action="essen-suchen" data-mz="${esc(m.id)}">
       ${icon("plus")} Hinzufügen</button>`;
 }
 
@@ -513,12 +567,12 @@ function eintragZeile(e) {
   const einheit = lm ? lm.einheit : "g";
   return `
     <div class="lm-zeile">
-      <button class="lm-haupt" data-action="essen-eintrag" data-id="${e.id}">
+      <button class="lm-haupt" data-action="essen-eintrag" data-id="${esc(e.id)}">
         <span class="lm-name">${esc(lm ? lm.name : "Unbekannt")}${lm && lm.marke ? ` <span class="lm-marke">${esc(lm.marke)}</span>` : ""}</span>
-        <span class="lm-sub">${fmtKg(e.menge)} ${einheit} · E ${Math.round(w.eiweiss)} · KH ${Math.round(w.kh)} · F ${Math.round(w.fett)}</span>
+        <span class="lm-sub">${fmtKg(e.menge)} ${esc(einheit)} · E ${Math.round(w.eiweiss)} · KH ${Math.round(w.kh)} · F ${Math.round(w.fett)}</span>
       </button>
       <span class="lm-kcal">${Math.round(w.kcal)}</span>
-      <button class="mini-btn danger" data-action="essen-loeschen" data-id="${e.id}" aria-label="Eintrag löschen">${icon("x")}</button>
+      <button class="mini-btn danger" data-action="essen-loeschen" data-id="${esc(e.id)}" aria-label="Eintrag löschen">${icon("x")}</button>
     </div>`;
 }
 
@@ -561,7 +615,7 @@ function mengeSheet(lm, menge, mahlzeit, fertig) {
   if (!lm) return;
   let m = Number(menge) || 0;
   const e = lm.einheit;
-  const je100 = `Je 100 ${e}: ${Math.round(lm.kcal)} kcal · E ${fmtKg(lm.eiweiss)} g `
+  const je100 = `Je 100 ${esc(e)}: ${Math.round(lm.kcal)} kcal · E ${fmtKg(lm.eiweiss)} g `
     + `· KH ${fmtKg(lm.kh)} g · F ${fmtKg(lm.fett)} g`;
 
   const bd = openSheet(`
@@ -570,22 +624,22 @@ function mengeSheet(lm, menge, mahlzeit, fertig) {
     </div>
     ${lm.marke ? `<p class="hint" style="margin:-6px 2px 10px">${esc(lm.marke)}</p>` : ""}
     <div class="stepper-group">
-      <div class="stepper-label">Wie viel hast du gegessen? (${e})</div>
+      <div class="stepper-label">Wie viel hast du gegessen? (${esc(e)})</div>
       <div class="stepper">
         <button class="stepper-btn" data-m="-1" aria-label="weniger">−</button>
         <input class="stepper-val" type="text" inputmode="decimal" id="menge-feld"
-               value="${esc(String(fmtKg(m)))}" aria-label="Menge in ${e}">
+               value="${esc(String(fmtKg(m)))}" aria-label="Menge in ${esc(e)}">
         <button class="stepper-btn" data-m="1" aria-label="mehr">+</button>
       </div>
     </div>
     ${lm.portion ? `<button class="btn btn-soft btn-compact" data-p="1" style="margin-bottom:10px">
-      1 ${esc(lm.portion.name)} = ${fmtKg(lm.portion.gramm)} ${e}</button>` : ""}
+      1 ${esc(lm.portion.name)} = ${fmtKg(lm.portion.gramm)} ${esc(e)}</button>` : ""}
     <div class="werte-gitter" id="menge-werte"></div>
     <p class="hint" style="margin:-6px 2px 14px">${esc(je100)}</p>
     <div class="settings-row">
       <div class="lbl">Mahlzeit</div>
       <select id="mz-feld">
-        ${MAHLZEITEN.map((x) => `<option value="${x.id}" ${x.id === (mahlzeit || "fr") ? "selected" : ""}>${x.label}</option>`).join("")}
+        ${MAHLZEITEN.map((x) => `<option value="${esc(x.id)}" ${x.id === (mahlzeit || "fr") ? "selected" : ""}>${x.label}</option>`).join("")}
       </select>
     </div>
     <div class="sheet-fuss">
@@ -711,7 +765,7 @@ function lmListe() {
   const gruppen = lmGruppen(lmSuche);
   return `
     ${gruppen.length ? gruppen.map((g) => `
-      <div class="section-label">${g.titel}</div>
+      <div class="section-label">${esc(g.titel)}</div>
       ${g.eintraege.map((l) => lmZeile(l)).join("")}`).join("")
       : `<p class="hint">Nichts gefunden. Such unten in der Datenbank oder leg dir das Lebensmittel selbst an.</p>`}
     <div class="section-label">Open Food Facts</div>
@@ -726,7 +780,7 @@ function lmZeile(l, neu) {
     <button class="row" data-action="essen-lm" data-id="${esc(l.id)}" data-neu="${neu ? 1 : 0}">
       <span class="row-main">
         <span class="row-title">${esc(l.name)}</span>
-        <span class="row-sub">${l.marke ? esc(l.marke) + " · " : ""}${Math.round(l.kcal)} kcal je 100 ${l.einheit}
+        <span class="row-sub">${l.marke ? esc(l.marke) + " · " : ""}${Math.round(l.kcal)} kcal je 100 ${esc(l.einheit)}
           · E ${fmtKg(l.eiweiss)} · KH ${fmtKg(l.kh)} · F ${fmtKg(l.fett)}</span>
       </span>
       ${l.quelle === "eigen" ? `<span class="badge">eigen</span>` : ""}
@@ -823,7 +877,7 @@ function lmDetail(lm, mahlzeit) {
          ["KH", fmtKg(lm.kh) + " g"], ["Fett", fmtKg(lm.fett) + " g"]]
         .map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}
     </div>
-    <p class="hint" style="margin:0 2px 14px">Werte je 100 ${lm.einheit}${
+    <p class="hint" style="margin:0 2px 14px">Werte je 100 ${esc(lm.einheit)}${
       lm.quelle === "basis" ? " · gerundeter Richtwert" : lm.quelle === "off" ? " · aus Open Food Facts" : ""}</p>
     <button class="btn" data-t="add">${icon("plus")} Zu ${esc(tagLabel(essenTag).toLowerCase())} hinzufügen</button>
     <button class="btn btn-ghost" data-t="edit" style="margin-top:8px">${icon("edit")} ${eigen ? "Bearbeiten" : "Werte anpassen"}</button>
@@ -1078,7 +1132,7 @@ function lmFormular(vorlage, opt) {
   const feld = (k, label, wert, mode) => `
     <div class="field">
       <label for="lf-${k}">${label}</label>
-      <input id="lf-${k}" data-f="${k}" type="text" ${mode ? `inputmode="${mode}"` : ""} value="${esc(wert)}" autocomplete="off">
+      <input id="lf-${k}" data-f="${esc(k)}" type="text" ${mode ? `inputmode="${mode}"` : ""} value="${esc(wert)}" autocomplete="off">
     </div>`;
   const bd = openSheet(`
     <div class="sheet-title">${vorlage ? "Werte anpassen" : "Eigenes Lebensmittel"}
@@ -1114,7 +1168,7 @@ function lmFormular(vorlage, opt) {
       <div class="field">
         <label for="lf-mahlzeit">Mahlzeit</label>
         <select id="lf-mahlzeit" data-f="mahlzeit">
-          ${MAHLZEITEN.map((x) => `<option value="${x.id}" ${x.id === (o.mahlzeit || vorschlagMahlzeit()) ? "selected" : ""}>${x.label}</option>`).join("")}
+          ${MAHLZEITEN.map((x) => `<option value="${esc(x.id)}" ${x.id === (o.mahlzeit || vorschlagMahlzeit()) ? "selected" : ""}>${x.label}</option>`).join("")}
         </select>
       </div>
     </div>
@@ -1124,7 +1178,7 @@ function lmFormular(vorlage, opt) {
     </div>
   `, { fest: true });
   // Vorschau: Sobald Werte und Menge dastehen, zeigt die Zeile, was das ergibt
-  const v = (k) => (bd.querySelector(`[data-f="${k}"]`) || {}).value || "";
+  const v = (k) => (bd.querySelector(`[data-f="${esc(k)}"]`) || {}).value || "";
   const vorschau = () => {
     const zeile = bd.querySelector("#lf-vorschau");
     if (!zeile) return;
@@ -1206,7 +1260,7 @@ ACTIONS["essen-ziele"] = () => {
     </div>
     <div class="field">
       <label for="z-kcal">Kalorien am Tag</label>
-      <input id="z-kcal" data-kcal="1" type="text" inputmode="numeric" value="${stand.kcal}" autocomplete="off">
+      <input id="z-kcal" data-kcal="1" type="text" inputmode="numeric" value="${esc(stand.kcal)}" autocomplete="off">
     </div>
     <div class="section-label" style="margin-top:14px">Verteilung</div>
     ${ZIEL_ARTEN.map(({ k, label }) => `
@@ -1216,10 +1270,10 @@ ACTIONS["essen-ziele"] = () => {
           <b id="zg-${k}">–</b>
         </div>
         <div class="stepper">
-          <button class="stepper-btn" data-p="${k}" data-d="-1" aria-label="${label} verringern">−</button>
-          <input class="stepper-val" data-pv="${k}" type="text" inputmode="numeric"
-                 value="${stand[k]}" aria-label="${label} in Prozent">
-          <button class="stepper-btn" data-p="${k}" data-d="1" aria-label="${label} erhöhen">+</button>
+          <button class="stepper-btn" data-p="${esc(k)}" data-d="-1" aria-label="${label} verringern">−</button>
+          <input class="stepper-val" data-pv="${esc(k)}" type="text" inputmode="numeric"
+                 value="${esc(stand[k])}" aria-label="${label} in Prozent">
+          <button class="stepper-btn" data-p="${esc(k)}" data-d="1" aria-label="${label} erhöhen">+</button>
         </div>
       </div>`).join("")}
     <p class="hint" id="ziel-summe" style="margin:2px 2px 14px"></p>
@@ -1229,7 +1283,7 @@ ACTIONS["essen-ziele"] = () => {
 
   const feldK = bd.querySelector("[data-kcal]");
   const feldP = {};
-  ZIEL_ARTEN.forEach(({ k }) => { feldP[k] = bd.querySelector(`[data-pv="${k}"]`); });
+  ZIEL_ARTEN.forEach(({ k }) => { feldP[k] = bd.querySelector(`[data-pv="${esc(k)}"]`); });
 
   const gramm = (k) => Math.round((stand.kcal * stand[k]) / 100 / PRO_GRAMM[k]);
 
@@ -1368,7 +1422,7 @@ function renderEssenVerlauf() {
       <div class="screen-title">Ernährung im Verlauf</div>
     </div>
     <div class="seg" role="tablist" aria-label="Zeitraum">
-      ${ESSEN_RANGES.map((x) => `<button role="tab" aria-selected="${x.id === essenRange}" class="${x.id === essenRange ? "active" : ""}" data-action="essen-range" data-r="${x.id}">${x.label}</button>`).join("")}
+      ${ESSEN_RANGES.map((x) => `<button role="tab" aria-selected="${x.id === essenRange}" class="${x.id === essenRange ? "active" : ""}" data-action="essen-range" data-r="${esc(x.id)}">${x.label}</button>`).join("")}
     </div>
     <div class="swipe-pane" id="essen-hist-pane">
       ${getrackt.length ? `

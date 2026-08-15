@@ -53,7 +53,14 @@ const MUSKEL_ART = {
   "Ganzkörper": { fig: "vorn",   teil: "*",         zoom: "-223 -10 940" },
 };
 
+/* Das Ergebnis hängt allein an der Muskelgruppe – die Farbe kommt über eine
+   CSS-Variable dazu. In der Übungsliste stehen bis zu 180 Zeilen, aber nur 16
+   verschiedene Gruppen: einmal bauen reicht. */
+const svgVorrat = new Map();
+
 function muskelSvg(gruppe) {
+  const fertig = svgVorrat.get(gruppe);
+  if (fertig) return fertig;
   const art = MUSKEL_ART[gruppe] || MUSKEL_ART["Ganzkörper"];
   const f = FIGUREN[art.fig];
   const [zx, zy, zk] = art.zoom.split(" ").map(Number);
@@ -66,8 +73,10 @@ function muskelSvg(gruppe) {
 
   // Reihenfolge: erst die Farbfläche, dann die Zeichnung darüber – so
   // schneiden die weißen Linien den Muskel sauber ab.
-  return `<svg viewBox="${zx} ${zy} ${zk} ${zk}" aria-hidden="true" class="muskel-svg">
+  const svg = `<svg viewBox="${zx} ${zy} ${zk} ${zk}" aria-hidden="true" class="muskel-svg">
     <g fill="var(--m-aktiv)">${flaechen}</g>
     <image href="${f.bild}" x="0" y="0" width="${f.breite}" height="${f.hoehe}"/>
   </svg>`;
+  svgVorrat.set(gruppe, svg);
+  return svg;
 }

@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.1.3";
+const APP_VERSION = "3.2.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -177,15 +177,140 @@ function migrateMuskeln(liste) {
   return liste;
 }
 
+/* ═══════════════ Daten prüfen ═══════════════
+ *
+ * Alles, was aus localStorage oder aus einer Backup-Datei kommt, ist erst
+ * einmal nur JSON – nichts garantiert, dass es die erwartete Form hat. Eine
+ * abgebrochene Übertragung, ein von Hand bearbeitetes Backup oder ein Rest aus
+ * einer viel älteren Fassung reichten bisher, um die App unbrauchbar zu machen:
+ * Beim Zeichnen flog eine Ausnahme, und da der Zustand schon gespeichert war,
+ * ging es auch nach einem Neustart nicht weiter.
+ *
+ * Deshalb läuft alles Fremde durch diese Stelle. Sie wirft nichts weg, was sich
+ * retten lässt, und lässt nichts durch, was hinterher jemanden zum Stolpern
+ * bringt. Kennungen bekommen zusätzlich einen engen Zeichensatz: Sie landen in
+ * HTML-Attributen, und dort hat Markup nichts verloren.
+ */
+
+const SICHERE_ID = /^[A-Za-z0-9_.-]{1,64}$/;
+const istId = (v) => typeof v === "string" && SICHERE_ID.test(v);
+const alsId = (v) => (istId(v) ? v : null);
+const alsZahl = (v, ersatz = 0) => (Number.isFinite(+v) && v !== "" && v !== null ? +v : ersatz);
+const alsText = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
+const alsListe = (v) => (Array.isArray(v) ? v : []);
+const ausAuswahl = (v, erlaubt, ersatz) => (erlaubt.includes(v) ? v : ersatz);
+
+function bereinigeSatz(s) {
+  if (!s || typeof s !== "object") return null;
+  const neu = { w: alsZahl(s.w), r: alsZahl(s.r), t: alsZahl(s.t) };
+  if (s.done) neu.done = true;
+  return neu;
+}
+
+function bereinigeUebung(e) {
+  const id = alsId(e && e.exerciseId);
+  if (!id) return null;
+  const ex = { exerciseId: id, sets: alsListe(e.sets).map(bereinigeSatz).filter(Boolean) };
+  if (istId(e.superset)) ex.superset = e.superset;
+  return ex;
+}
+
+function bereinigeWorkout(w) {
+  if (!w || typeof w !== "object" || !istId(w.id)) return null;
+  const start = alsZahl(w.startedAt, 0);
+  if (!start) return null;   // ohne Zeitpunkt lässt sich nichts einordnen
+  const out = {
+    id: w.id,
+    name: alsText(w.name) || "Workout",
+    startedAt: start,
+    endedAt: alsZahl(w.endedAt, start),
+    durationSec: alsZahl(w.durationSec, 0),
+    exercises: alsListe(w.exercises).map(bereinigeUebung).filter(Boolean),
+  };
+  // Herkunft aus dem Plan – daran hängt der Vergleich von Geräteübungen
+  if (istId(w.planId)) out.planId = w.planId;
+  if (istId(w.woId)) out.woId = w.woId;
+  return out;
+}
+
+function bereinigePlan(p) {
+  if (!p || typeof p !== "object" || !istId(p.id)) return null;
+  return {
+    id: p.id,
+    name: alsText(p.name) || "Mein Plan",
+    createdAt: alsZahl(p.createdAt, Date.now()),
+    workouts: alsListe(p.workouts).map((w) => {
+      if (!w || typeof w !== "object") return null;
+      return {
+        id: istId(w.id) ? w.id : uid(),
+        name: alsText(w.name) || "Training",
+        exercises: alsListe(w.exercises).map((pe) => {
+          const id = alsId(pe && pe.exerciseId);
+          if (!id) return null;
+          const ex = { exerciseId: id, sets: Math.min(20, Math.max(1, Math.round(alsZahl(pe.sets, 3)))) };
+          if (istId(pe.superset)) ex.superset = pe.superset;
+          return ex;
+        }).filter(Boolean),
+      };
+    }).filter(Boolean),
+  };
+}
+
+function bereinigeEigeneUebung(e) {
+  if (!e || typeof e !== "object" || !istId(e.id)) return null;
+  return {
+    id: e.id,
+    name: alsText(e.name, 80) || "Übung",
+    muscle: ausAuswahl(e.muscle, MUSCLES, MUSCLES[0]),
+    equipment: ausAuswahl(e.equipment, EQUIPMENT, "Sonstiges"),
+    type: ausAuswahl(e.type, Object.keys(EXERCISE_TYPES), "weight_reps"),
+    alias: alsText(e.alias, 120),
+    custom: true,
+  };
+}
+
+/** Der eine Ort, an dem Fremddaten in die Form der App gebracht werden. */
+function bereinigeDB(roh) {
+  const db = Object.assign(defaultDB(), roh && typeof roh === "object" ? roh : {});
+  const st = Object.assign(defaultDB().settings,
+    db.settings && typeof db.settings === "object" ? db.settings : {});
+
+  st.restSecs = Math.min(600, Math.max(10, Math.round(alsZahl(st.restSecs, 90))));
+  st.autoRest = st.autoRest !== false;
+  st.coach = st.coach !== false;
+  st.geraeteGetrennt = st.geraeteGetrennt !== false;
+  st.restSignal = ausAuswahl(st.restSignal, ["beides", "ton", "vibration", "aus"], "beides");
+  st.accent = ausAuswahl(st.accent, ACCENTS.map((a) => a.id), ACCENT_DEFAULT);
+  st.lastBackupAt = st.lastBackupAt ? alsZahl(st.lastBackupAt, null) : null;
+  st.beobachtet = alsListe(st.beobachtet).filter(istId).slice(0, 5);
+  st.eingeklappt = alsListe(st.eingeklappt).filter((x) => typeof x === "string").slice(0, 20);
+  if (st.schemeV !== undefined) st.schemeV = alsZahl(st.schemeV, 0);
+
+  db.settings = st;
+  db.customExercises = alsListe(db.customExercises).map(bereinigeEigeneUebung).filter(Boolean);
+  db.workouts = alsListe(db.workouts).map(bereinigeWorkout).filter(Boolean);
+  db.plans = alsListe(db.plans).map(bereinigePlan).filter(Boolean);
+  db.activePlanId = alsId(db.activePlanId);
+  db.seeded = !!db.seeded;
+  db.version = 2;
+  return db;
+}
+
+/** Dasselbe für ein wiederhergestelltes laufendes Workout. */
+function bereinigeAktiv(roh) {
+  if (!roh || typeof roh !== "object") return null;
+  const w = bereinigeWorkout(Object.assign({ id: uid(), startedAt: Date.now() }, roh));
+  if (!w) return null;
+  // Beim laufenden Workout zählen auch die noch offenen Sätze
+  w.exercises = alsListe(roh.exercises).map(bereinigeUebung).filter(Boolean);
+  return w;
+}
+
 function loadDB() {
   let db = defaultDB();
   try {
     const raw = localStorage.getItem(LS_DB);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      db = Object.assign(defaultDB(), parsed);
-      db.settings = Object.assign(defaultDB().settings, parsed.settings || {});
-    }
+    if (raw) db = bereinigeDB(JSON.parse(raw));
   } catch (e) {
     // Defektes JSON sichern statt still zu überschreiben
     try { localStorage.setItem(LS_DB + ".corrupt", localStorage.getItem(LS_DB) || ""); } catch (_) {}
@@ -226,7 +351,7 @@ function applyAccent() {
 applyAccent();
 
 let active = null;
-try { active = JSON.parse(localStorage.getItem(LS_ACTIVE) || "null"); } catch (e) { active = null; }
+try { active = bereinigeAktiv(JSON.parse(localStorage.getItem(LS_ACTIVE) || "null")); } catch (e) { active = null; }
 const saveActive = () => {
   if (active) localStorage.setItem(LS_ACTIVE, JSON.stringify(active));
   else localStorage.removeItem(LS_ACTIVE);
@@ -710,7 +835,6 @@ const letzterTab = { training: "home", essen: "food-day" };
 
 const bereich = () => BEREICHE.find((b) => b.id === currentBereich) || BEREICHE[0];
 const bereichIndex = () => BEREICHE.findIndex((b) => b.id === currentBereich);
-const bereichVon = (tab) => (BEREICHE.find((b) => b.tabs.some((t) => t.id === tab)) || BEREICHE[0]).id;
 
 ACTIONS["tab"] = (el) => {
   // Auf demselben Reiter nichts tun – sonst klopft es bei jedem Tipp
@@ -746,12 +870,12 @@ function renderTabbar() {
   const inner = $("#tabbar-inner");
   inner.style.gridTemplateColumns = `repeat(${b.tabs.length}, 1fr)`;
   inner.innerHTML = b.tabs.map(
-    (t) => `<button class="tab-btn ${t.id === currentTab ? "active" : ""}" data-action="tab" data-tab="${t.id}" aria-label="${t.label}">${icon(t.ic)}<span>${t.label}</span></button>`
+    (t) => `<button class="tab-btn ${t.id === currentTab ? "active" : ""}" data-action="tab" data-tab="${esc(t.id)}" aria-label="${t.label}">${icon(t.ic)}<span>${t.label}</span></button>`
   ).join("");
   const punkte = $("#bereich-punkte");
   if (punkte) {
     punkte.innerHTML = BEREICHE.map((x) => `
-      <button class="bereich-punkt ${x.id === currentBereich ? "active" : ""}" data-action="bereich" data-b="${x.id}"
+      <button class="bereich-punkt ${x.id === currentBereich ? "active" : ""}" data-action="bereich" data-b="${esc(x.id)}"
         aria-label="${x.label}" aria-current="${x.id === currentBereich}"></button>`).join("");
   }
   $$(".screen").forEach((s) => s.classList.toggle("active", s.id === "screen-" + currentTab));
@@ -852,7 +976,7 @@ function istEingeklappt(id) {
 function sektion(id, titel, inhalt, kurz) {
   const zu = istEingeklappt(id);
   return `
-    <button class="section-label klapp${zu ? " zu" : ""}" data-action="sektion" data-sektion="${id}"
+    <button class="section-label klapp${zu ? " zu" : ""}" data-action="sektion" data-sektion="${esc(id)}"
             aria-expanded="${zu ? "false" : "true"}">
       <span class="klapp-titel">${esc(titel)}</span>
       ${zu && kurz ? `<span class="klapp-kurz">${esc(kurz)}</span>` : ""}
@@ -898,7 +1022,7 @@ ACTIONS["switch-plan"] = () => {
       <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
     </div>
     ${DB.plans.map((p) => `
-      <button class="row ${ap && ap.id === p.id ? "picked" : ""}" data-action="set-active-plan" data-id="${p.id}">
+      <button class="row ${ap && ap.id === p.id ? "picked" : ""}" data-action="set-active-plan" data-id="${esc(p.id)}">
         <span class="pick-check">${icon("check")}</span>
         <span class="row-main">
           <span class="row-title">${esc(p.name)}</span>
@@ -922,7 +1046,7 @@ function planCard(p) {
     <div class="plan-card">
       <div class="plan-card-head">
         <div class="ttl">${esc(p.name)}</div>
-        <button class="icon-btn plain" data-action="edit-plan" data-id="${p.id}" aria-label="Plan bearbeiten" style="width:32px;height:32px">${icon("edit")}</button>
+        <button class="icon-btn plain" data-action="edit-plan" data-id="${esc(p.id)}" aria-label="Plan bearbeiten" style="width:32px;height:32px">${icon("edit")}</button>
       </div>
       ${p.workouts.length ? p.workouts.map((w) => {
         const muscles = Array.from(new Set(w.exercises.map((e) => exById(e.exerciseId)?.muscle).filter(Boolean))).slice(0, 3).join(", ");
@@ -932,7 +1056,7 @@ function planCard(p) {
             <div class="row-title">${esc(w.name)}</div>
             <div class="row-sub">${w.exercises.length} Übungen${muscles ? " · " + esc(muscles) : ""}</div>
           </div>
-          <button class="btn btn-compact" data-action="start-plan" data-plan="${p.id}" data-wo="${w.id}">Start</button>
+          <button class="btn btn-compact" data-action="start-plan" data-plan="${esc(p.id)}" data-wo="${esc(w.id)}">Start</button>
         </div>`;
       }).join("") : `<div class="plan-wo-row"><span class="hint">Noch keine Trainings in diesem Plan.</span></div>`}
     </div>`;
@@ -949,7 +1073,7 @@ function renderPlans() {
     ${DB.plans.length ? DB.plans.map((p) => {
       const nEx = p.workouts.reduce((a, w) => a + w.exercises.length, 0);
       return `
-      <button class="row" data-action="open-plan" data-id="${p.id}">
+      <button class="row" data-action="open-plan" data-id="${esc(p.id)}">
         <span class="row-main">
           <span class="row-title">${esc(p.name)}</span>
           <span class="row-sub">${p.workouts.length} Trainings · ${nEx} Übungen</span>
@@ -986,28 +1110,28 @@ function renderPlanDetail(ov) {
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
       <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
-      <input class="screen-title" data-input="plan-titel" data-id="${p.id}" value="${esc(p.name)}"
+      <input class="screen-title" data-input="plan-titel" data-id="${esc(p.id)}" value="${esc(p.name)}"
         style="background:none;border:none;padding:0;width:100%;min-width:0" aria-label="Plan-Name">
     </div>
     ${isActive
       ? `<span class="badge badge-accent" style="margin-bottom:14px">${icon("check")} Aktiver Plan</span>`
-      : `<button class="btn btn-soft" data-action="set-active-plan" data-id="${p.id}" style="margin-bottom:14px">Als aktiven Plan setzen</button>`}
+      : `<button class="btn btn-soft" data-action="set-active-plan" data-id="${esc(p.id)}" style="margin-bottom:14px">Als aktiven Plan setzen</button>`}
     <div class="section-label">Trainings</div>
     ${p.workouts.length ? p.workouts.map((w, i) => {
       const names = w.exercises.slice(0, 3).map((e) => exName(e.exerciseId)).join(", ");
       return `
       <div class="row" style="cursor:default">
-        <div class="row-main" data-action="edit-plan-wo-direct" data-plan="${p.id}" data-i="${i}" style="cursor:pointer">
+        <div class="row-main" data-action="edit-plan-wo-direct" data-plan="${esc(p.id)}" data-i="${esc(i)}" style="cursor:pointer">
           <div class="row-title">${esc(w.name)}</div>
           <div class="row-sub">${w.exercises.length} Übungen${names ? " · " + esc(names) : ""}</div>
         </div>
-        <button class="btn btn-compact btn-ghost" data-action="edit-plan-wo-direct" data-plan="${p.id}" data-i="${i}">${icon("edit")} Bearbeiten</button>
+        <button class="btn btn-compact btn-ghost" data-action="edit-plan-wo-direct" data-plan="${esc(p.id)}" data-i="${esc(i)}">${icon("edit")} Bearbeiten</button>
       </div>`;
     }).join("") : `<p class="hint" style="padding:4px 0 10px">Noch keine Trainings – leg unten das erste an.</p>`}
-    <button class="btn btn-soft" data-action="plan-wo-neu" data-id="${p.id}" style="margin-top:12px">${icon("plus")} Training hinzufügen</button>
+    <button class="btn btn-soft" data-action="plan-wo-neu" data-id="${esc(p.id)}" style="margin-top:12px">${icon("plus")} Training hinzufügen</button>
     <p class="hint" style="margin-top:10px">Gestartet wird ein Training über den Start-Tab. Den Plan-Namen kannst du oben direkt überschreiben.</p>
     <div class="divider"></div>
-    <button class="btn btn-danger-soft" data-action="plan-loeschen" data-id="${p.id}">${icon("trash")} Plan löschen</button>
+    <button class="btn btn-danger-soft" data-action="plan-loeschen" data-id="${esc(p.id)}">${icon("trash")} Plan löschen</button>
   `;
 }
 
@@ -1072,14 +1196,14 @@ function renderPlanEditor(ov) {
     <div class="section-label">Trainings in diesem Plan</div>
     <div id="plan-wo-liste">
     ${draftPlan.workouts.length ? draftPlan.workouts.map((w, i) => `
-      <div class="row" style="cursor:default" data-i="${i}">
+      <div class="row" style="cursor:default" data-i="${esc(i)}">
         <button class="drag-handle" aria-label="Training verschieben">${icon("grip")}</button>
-        <div class="row-main" data-action="edit-plan-wo" data-i="${i}" style="cursor:pointer">
+        <div class="row-main" data-action="edit-plan-wo" data-i="${esc(i)}" style="cursor:pointer">
           <div class="row-title">${esc(w.name || "Training " + (i + 1))}</div>
           <div class="row-sub">${w.exercises.length} Übungen · ${w.exercises.reduce((a, e) => a + (e.sets || 0), 0)} Sätze</div>
         </div>
-        <button class="mini-btn" data-action="edit-plan-wo" data-i="${i}" aria-label="Bearbeiten">${icon("edit")}</button>
-        <button class="mini-btn danger" data-action="plan-wo-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
+        <button class="mini-btn" data-action="edit-plan-wo" data-i="${esc(i)}" aria-label="Bearbeiten">${icon("edit")}</button>
+        <button class="mini-btn danger" data-action="plan-wo-del" data-i="${esc(i)}" aria-label="Entfernen">${icon("x")}</button>
       </div>`).join("") : `<p class="hint" style="padding:4px 0 12px">Noch keine Trainings – füge z. B. „Push", „Pull" und „Beine" hinzu.</p>`}
     </div>
     <button class="btn btn-soft" data-action="plan-add-wo">${icon("plus")} Training hinzufügen</button>
@@ -1157,15 +1281,15 @@ function renderPlanWoEditor(ov) {
     <div class="section-label">Übungen &amp; Sätze</div>
     <div class="card" style="padding:6px 14px">
       ${w.exercises.length ? w.exercises.map((pe, i) => `
-        <div class="plan-ex-row" data-i="${i}">
+        <div class="plan-ex-row" data-i="${esc(i)}">
           <button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>
           <div class="nm">${ssInfo[i] ? `<span class="ss-tag">${ssInfo[i].letter}${ssInfo[i].pos}</span>` : ""}${esc(exName(pe.exerciseId))}<small>${esc(exById(pe.exerciseId)?.muscle || "")}</small></div>
-          <input type="text" inputmode="numeric" value="${pe.sets}" data-input="plan-sets" data-i="${i}" aria-label="Sätze">
+          <input type="text" inputmode="numeric" value="${esc(pe.sets)}" data-input="plan-sets" data-i="${esc(i)}" aria-label="Sätze">
           <span class="hint">Sätze</span>
-          <button class="mini-btn danger" data-action="plan-ex-del" data-i="${i}" aria-label="Entfernen">${icon("x")}</button>
+          <button class="mini-btn danger" data-action="plan-ex-del" data-i="${esc(i)}" aria-label="Entfernen">${icon("x")}</button>
         </div>
         ${i < w.exercises.length - 1 ? `
-        <button class="ss-link ${verbunden(i) ? "on" : ""}" data-action="plan-ex-superset" data-i="${i}">
+        <button class="ss-link ${verbunden(i) ? "on" : ""}" data-action="plan-ex-superset" data-i="${esc(i)}">
           ${icon(verbunden(i) ? "unlink" : "link")}
           ${verbunden(i) ? "Supersatz – trennen" : "Zum Supersatz verbinden"}
         </button>` : ""}`).join("") : `<p class="hint" style="padding:12px 0">Noch keine Übungen in diesem Training.</p>`}
@@ -1224,7 +1348,7 @@ function filterNachbar(aktuell, richtung) {
 
 function chipsHtml(aktiv, action) {
   return MUSCLE_FILTER.map((m) =>
-    `<button class="chip ${m === aktiv ? "active" : ""}" data-action="${action}" data-m="${esc(m)}">${esc(m)}</button>`).join("");
+    `<button class="chip ${m === aktiv ? "active" : ""}" data-action="${esc(action)}" data-m="${esc(m)}">${esc(m)}</button>`).join("");
 }
 
 // Nur die Markierung umsetzen, ohne die Leiste neu zu bauen. Wichtig: Ein
@@ -1273,7 +1397,7 @@ function filteredExercises() {
 
 function exerciseRow(e, extra) {
   return `
-    <button class="row" data-action="${extra ? extra.action : "open-exercise"}" data-id="${e.id}">
+    <button class="row" data-action="${extra ? extra.action : "open-exercise"}" data-id="${esc(e.id)}">
       ${extra && extra.pick ? `<span class="pick-check">${icon("check")}</span>` : ""}
       <span class="muscle-dot">${muscleIcon(e.muscle)}</span>
       <span class="row-main">
@@ -1340,8 +1464,8 @@ function openExerciseForm(exId) {
       <select id="cx-equip">${EQUIPMENT.map((m) => `<option ${ex && ex.equipment === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
     <div class="field"><label for="cx-type">Erfassung</label>
       <select id="cx-type">${Object.entries(EXERCISE_TYPES).map(([k, v]) =>
-        `<option value="${k}" ${ex && ex.type === k ? "selected" : ""}>${v.label}</option>`).join("")}</select></div>
-    <button class="btn" data-action="save-exercise" data-id="${ex ? ex.id : ""}">Speichern</button>
+        `<option value="${esc(k)}" ${ex && ex.type === k ? "selected" : ""}>${v.label}</option>`).join("")}</select></div>
+    <button class="btn" data-action="save-exercise" data-id="${esc(ex ? ex.id : "")}">Speichern</button>
   `);
 }
 
@@ -1403,7 +1527,7 @@ function openExerciseDetail(exId) {
     <div class="overlay-head">
       <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
       <div class="screen-title">${esc(ex.name)}</div>
-      ${ex.custom ? `<button class="icon-btn" data-action="edit-exercise" data-id="${ex.id}" aria-label="Bearbeiten">${icon("edit")}</button>` : ""}
+      ${ex.custom ? `<button class="icon-btn" data-action="edit-exercise" data-id="${esc(ex.id)}" aria-label="Bearbeiten">${icon("edit")}</button>` : ""}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
       <span class="badge badge-accent">${esc(ex.muscle)}</span>
@@ -1431,7 +1555,7 @@ function openExerciseDetail(exId) {
           <span style="color:var(--ink-3);width:22px">${i + 1}.</span><span>${fmtSet(ex.type, s)}</span></div>`).join("")}
       </div>`).join("")
       : `<div class="empty">${icon("dumbbell")}<h3>Noch keine Einträge</h3><p>Tracke die Übung in einem Workout, dann erscheint hier deine Entwicklung.</p></div>`}
-    ${ex.custom ? `<button class="btn btn-danger-soft" data-action="delete-exercise" data-id="${ex.id}">${icon("trash")} Übung löschen</button>` : ""}
+    ${ex.custom ? `<button class="btn btn-danger-soft" data-action="delete-exercise" data-id="${esc(ex.id)}">${icon("trash")} Übung löschen</button>` : ""}
   `, "ex-detail-ov");
 }
 
@@ -1488,7 +1612,7 @@ function renderPickerList() {
     .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.alias || "").toLowerCase().includes(q))
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
   $("#picker-list").innerHTML = list.map((e) => `
-    <button class="row ${pickerState.selected.has(e.id) ? "picked" : ""}" data-action="picker-toggle" data-id="${e.id}">
+    <button class="row ${pickerState.selected.has(e.id) ? "picked" : ""}" data-action="picker-toggle" data-id="${esc(e.id)}">
       <span class="pick-check">${icon("check")}</span>
       <span class="muscle-dot">${muscleIcon(e.muscle)}</span>
       <span class="row-main">
@@ -1661,14 +1785,14 @@ function woExerciseBlock(ex, xi) {
   const kopf = `${ss ? `<div class="ss-head">${icon("link")} Supersatz ${ss.letter} · Übung ${ss.pos} von ${ss.size}</div>` : ""}`;
 
   return `
-    <div class="wo-item" data-xi="${xi}">
-      <div class="exercise-block ${ss ? "in-superset" : ""} ${offen ? "" : "zu"}" data-xi="${xi}">
+    <div class="wo-item" data-xi="${esc(xi)}">
+      <div class="exercise-block ${ss ? "in-superset" : ""} ${offen ? "" : "zu"}" data-xi="${esc(xi)}">
         ${kopf}
         ${offen ? woKopfOffen(ex, xi, griff) : woKopfZu(ex, xi, type)}
         ${offen ? woSaetze(ex, xi, type) : ""}
       </div>
       ${nächste ? `
-      <button class="ss-link ${verbunden ? "on" : ""}" data-action="wo-superset" data-xi="${xi}">
+      <button class="ss-link ${verbunden ? "on" : ""}" data-action="wo-superset" data-xi="${esc(xi)}">
         ${icon(verbunden ? "unlink" : "link")}
         ${verbunden ? "Supersatz – trennen" : "Mit nächster Übung verbinden"}
       </button>` : ""}
@@ -1679,9 +1803,9 @@ function woKopfOffen(ex, xi, griff) {
   return `
     <div class="exercise-block-head">
       ${griff}
-      <button class="name" data-action="open-exercise" data-id="${ex.exerciseId}">${esc(exName(ex.exerciseId))}</button>
-      <button class="mini-btn" data-action="wo-open-ex" data-xi="${xi}" aria-label="Übung zuklappen">${icon("chevU")}</button>
-      <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${xi}" aria-label="Übung entfernen">${icon("x")}</button>
+      <button class="name" data-action="open-exercise" data-id="${esc(ex.exerciseId)}">${esc(exName(ex.exerciseId))}</button>
+      <button class="mini-btn" data-action="wo-open-ex" data-xi="${esc(xi)}" aria-label="Übung zuklappen">${icon("chevU")}</button>
+      <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${esc(xi)}" aria-label="Übung entfernen">${icon("x")}</button>
     </div>`;
 }
 
@@ -1694,12 +1818,12 @@ function woKopfZu(ex, xi, type) {
   return `
     <div class="exercise-block-head zu">
       <button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>
-      <button class="ex-zu" data-action="wo-open-ex" data-xi="${xi}">
+      <button class="ex-zu" data-action="wo-open-ex" data-xi="${esc(xi)}">
         <span class="ex-zu-name">${esc(exName(ex.exerciseId))}</span>
         <span class="ex-zu-stand">${stand}</span>
       </button>
       <button class="ex-zu-chev ${fertig === ex.sets.length ? "fertig" : ""}"
-        data-action="wo-open-ex" data-xi="${xi}" aria-label="Übung aufklappen">
+        data-action="wo-open-ex" data-xi="${esc(xi)}" aria-label="Übung aufklappen">
         ${fertig === ex.sets.length ? icon("check") : icon("chevD")}</button>
     </div>`;
 }
@@ -1716,7 +1840,7 @@ function woSaetze(ex, xi, type) {
       : si === curIdx ? currentSetCard(type, ex, xi, si, prev, andernorts)
       : queuedSetRow(si, xi)).join("")}
     ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
-    <button class="add-set-btn" data-action="wo-add-set" data-xi="${xi}">+ Satz hinzufügen</button>`;
+    <button class="add-set-btn" data-action="wo-add-set" data-xi="${esc(xi)}">+ Satz hinzufügen</button>`;
 }
 
 // Ein Tipp auf den Kopf klappt auf – oder zu, wenn die Übung schon offen war
@@ -1725,7 +1849,7 @@ ACTIONS["wo-open-ex"] = (el) => {
   offeneUebung = xi === offeneUebungIndex() ? ALLE_ZU : xi;
   renderWoExercises();
   if (offeneUebung !== ALLE_ZU) {
-    $(`.wo-item[data-xi="${xi}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    $(`.wo-item[data-xi="${esc(xi)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 };
 
@@ -1767,12 +1891,12 @@ ACTIONS["wo-superset"] = (el) => {
 function doneSetRow(type, s, si, xi) {
   return `
     <div class="done-set">
-      <button class="done-set-main" data-action="wo-undo-set" data-xi="${xi}" data-si="${si}" title="Satz zurückholen">
+      <button class="done-set-main" data-action="wo-undo-set" data-xi="${esc(xi)}" data-si="${esc(si)}" title="Satz zurückholen">
         <span class="done-check">${icon("check")}</span>
         <span class="done-no">Satz ${si + 1}</span>
         <b>${fmtSet(type, s)}</b>
       </button>
-      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${xi}" data-si="${si}" aria-label="Satz löschen">${icon("x")}</button>
+      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="Satz löschen">${icon("x")}</button>
     </div>`;
 }
 
@@ -1782,7 +1906,7 @@ function queuedSetRow(si, xi) {
     <div class="queued-set">
       <span class="q-no">Satz ${si + 1}</span>
       <span class="q-lbl">geplant</span>
-      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${xi}" data-si="${si}" aria-label="Geplanten Satz entfernen">${icon("x")}</button>
+      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="Geplanten Satz entfernen">${icon("x")}</button>
     </div>`;
 }
 
@@ -1805,19 +1929,19 @@ function currentSetCard(type, ex, xi, si, prev, andernorts) {
     if (s.t == null) s.t = p && p.t ? p.t : lastDone && lastDone.t ? lastDone.t : 60;
   }
   saveActive();
-  const d = `data-xi="${xi}" data-si="${si}"`;
+  const d = `data-xi="${esc(xi)}" data-si="${esc(si)}"`;
   const stepper = (label, field, inputHtml) => `
     <div class="stepper-group">
       <div class="stepper-label">${label}</div>
       <div class="stepper">
-        <button class="stepper-btn" data-action="wo-step" data-f="${field}" data-d="-1" ${d} aria-label="${label} verringern">−</button>
+        <button class="stepper-btn" data-action="wo-step" data-f="${esc(field)}" data-d="-1" ${d} aria-label="${label} verringern">−</button>
         ${inputHtml}
-        <button class="stepper-btn" data-action="wo-step" data-f="${field}" data-d="1" ${d} aria-label="${label} erhöhen">+</button>
+        <button class="stepper-btn" data-action="wo-step" data-f="${esc(field)}" data-d="1" ${d} aria-label="${label} erhöhen">+</button>
       </div>
     </div>`;
-  const wInput = `<input class="stepper-val" type="text" inputmode="decimal" data-input="set-w" ${d} value="${String(s.w).replace(".", ",")}" aria-label="Gewicht in kg">`;
-  const rInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-r" ${d} value="${s.r}" aria-label="Wiederholungen">`;
-  const tInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-t" ${d} value="${fmtClock(s.t)}" aria-label="Zeit">`;
+  const wInput = `<input class="stepper-val" type="text" inputmode="decimal" data-input="set-w" ${d} value="${esc(String(s.w).replace(".", ","))}" aria-label="Gewicht in kg">`;
+  const rInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-r" ${d} value="${esc(s.r)}" aria-label="Wiederholungen">`;
+  const tInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-t" ${d} value="${esc(fmtClock(s.t))}" aria-label="Zeit">`;
   return `
     <div class="current-set">
       <div class="current-set-head">
@@ -1891,7 +2015,7 @@ ACTIONS["wo-step"] = (el) => {
   if (f === "w") s.w = Math.max(0, Math.round(((s.w || 0) + dir * 2.5) * 100) / 100);
   if (f === "r") s.r = Math.max(0, (s.r || 0) + dir);
   if (f === "t") s.t = Math.max(15, (s.t || 0) + dir * 15);
-  const inp = $(`[data-input="set-${f}"][data-xi="${xi}"][data-si="${si}"]`);
+  const inp = $(`[data-input="set-${f}"][data-xi="${esc(xi)}"][data-si="${esc(si)}"]`);
   if (inp) inp.value = f === "w" ? String(s.w).replace(".", ",") : f === "t" ? fmtClock(s.t) : s.r;
   saveActive();
 };
@@ -1919,7 +2043,7 @@ ACTIONS["wo-complete-set"] = (el) => {
   if (weiter >= 0) {
     offeneUebung = weiter;   // die nächste Übung der Runde aufklappen
     renderWoExercises();
-    const block = $(`.wo-item[data-xi="${weiter}"]`);
+    const block = $(`.wo-item[data-xi="${esc(weiter)}"]`);
     if (block) block.scrollIntoView({ behavior: "smooth", block: "start" });
     toast("Weiter mit " + exName(active.exercises[weiter].exerciseId));
     return;
@@ -2582,7 +2706,7 @@ function renderHistory() {
   $("#screen-history").innerHTML = `
     <div class="screen-head"><div class="screen-title">Verlauf</div></div>
     <div class="seg" role="tablist" aria-label="Zeitraum">
-      ${HIST_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === histRange}" class="${r.id === histRange ? "active" : ""}" data-action="hist-range" data-r="${r.id}">${r.label}</button>`).join("")}
+      ${HIST_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === histRange}" class="${r.id === histRange ? "active" : ""}" data-action="hist-range" data-r="${esc(r.id)}">${r.label}</button>`).join("")}
     </div>
     <div class="swipe-pane" id="hist-pane">
     <div class="section-label">${range.title}</div>
@@ -2633,8 +2757,8 @@ function beobachtetBlock() {
       return `
       <div class="card chart-card">
         <h3>
-          <button class="watch-name" data-action="open-exercise" data-id="${id}">${esc(exName(id))}</button>
-          <button class="mini-btn danger" data-action="watch-del" data-id="${id}" aria-label="Aus der Übersicht nehmen">${icon("x")}</button>
+          <button class="watch-name" data-action="open-exercise" data-id="${esc(id)}">${esc(exName(id))}</button>
+          <button class="mini-btn danger" data-action="watch-del" data-id="${esc(id)}" aria-label="Aus der Übersicht nehmen">${icon("x")}</button>
         </h3>
         <div class="chart-sub">${
           typ === "time" ? "Beste Zeit" : typ === "reps" ? "Meiste Wiederholungen" : "Bestes Gewicht"
@@ -2667,7 +2791,7 @@ ACTIONS["watch-del"] = (el) => {
 
 function historyRow(w) {
   return `
-    <button class="row" data-action="open-workout" data-id="${w.id}">
+    <button class="row" data-action="open-workout" data-id="${esc(w.id)}">
       <span class="row-main">
         <span class="row-title">${esc(w.name)}</span>
         <span class="row-sub">${fmtDate(w.startedAt)} · ${fmtDur(w.durationSec)} · ${workoutSets(w)} Sätze</span>
@@ -2699,8 +2823,8 @@ function openWorkoutDetail(id) {
         ${ex.sets.map((s, i) => `<div style="display:flex;gap:10px;font-variant-numeric:tabular-nums;padding:2px 0">
           <span style="color:var(--ink-3);width:22px">${i + 1}.</span><span>${fmtSet(exType(ex.exerciseId), s)}</span></div>`).join("")}
       </div>`).join("")}
-    <button class="btn btn-soft" data-action="repeat-workout" data-id="${w.id}">Workout wiederholen</button>
-    <button class="btn btn-danger-soft" data-action="delete-workout" data-id="${w.id}" style="margin-top:10px">${icon("trash")} Löschen</button>
+    <button class="btn btn-soft" data-action="repeat-workout" data-id="${esc(w.id)}">Workout wiederholen</button>
+    <button class="btn btn-danger-soft" data-action="delete-workout" data-id="${esc(w.id)}" style="margin-top:10px">${icon("trash")} Löschen</button>
   `, "wo-detail-ov");
 }
 
@@ -2878,7 +3002,7 @@ ACTIONS["open-settings"] = () => {
       <div class="accent-picker" role="radiogroup" aria-label="Akzentfarbe">
         ${ACCENTS.map((a) => `
           <button class="accent-dot ${a.id === (s.accent || ACCENT_DEFAULT) ? "active" : ""}"
-            data-action="set-accent" data-a="${a.id}"
+            data-action="set-accent" data-a="${esc(a.id)}"
             style="--dot:${a.dot};--dot-ink:${a.ink}"
             role="radio" aria-checked="${a.id === (s.accent || ACCENT_DEFAULT)}"
             aria-label="${a.name}">${icon("check")}</button>`).join("")}
@@ -2888,7 +3012,7 @@ ACTIONS["open-settings"] = () => {
       <div class="lbl">Signal am Pausenende<small>Klingelt auch, wenn das Handy in der Tasche steckt</small></div>
       <select data-input="rest-signal">
         ${[["beides","Ton + Vibration"],["ton","Nur Ton"],["vibration","Nur Vibration"],["aus","Aus"]]
-          .map(([v,t]) => `<option value="${v}" ${v === (s.restSignal || "beides") ? "selected" : ""}>${t}</option>`).join("")}
+          .map(([v,t]) => `<option value="${esc(v)}" ${v === (s.restSignal || "beides") ? "selected" : ""}>${t}</option>`).join("")}
       </select>
     </div>
     <div class="settings-row">
@@ -2904,7 +3028,7 @@ ACTIONS["open-settings"] = () => {
       <div class="lbl">Pausendauer</div>
       <select data-input="rest-secs">
         ${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((v) =>
-          `<option value="${v}" ${v === s.restSecs ? "selected" : ""}>${v < 60 ? v + " s" : fmtClock(v) + " Min."}</option>`).join("")}
+          `<option value="${esc(v)}" ${v === s.restSecs ? "selected" : ""}>${v < 60 ? v + " s" : fmtClock(v) + " Min."}</option>`).join("")}
       </select>
     </div>
     <div class="divider"></div>
@@ -3143,10 +3267,14 @@ function upgradePlans(plans) {
 }
 
 async function restoreBackup(text) {
-  let data;
+  let data, geprueft;
   try {
     data = JSON.parse(text);
     if (!Array.isArray(data.workouts) || !Array.isArray(data.plans)) throw new Error("Format");
+    // In Form bringen, BEVOR irgendetwas davon übernommen wird: Eine
+    // abgebrochene Übertragung oder ein von Hand bearbeitetes Backup darf die
+    // App nicht in einen Zustand bringen, aus dem sie nicht mehr herauskommt.
+    geprueft = bereinigeDB(data);
   } catch (e) {
     toast("Das ist kein gültiges Lumora-Backup");
     return;
@@ -3154,9 +3282,10 @@ async function restoreBackup(text) {
 
   const hasOwnData = DB.workouts.length > 0 || DB.customExercises.length > 0;
   const anz = (n, ein, viele) => n + " " + (n === 1 ? ein : viele);
-  const essenTage = data.essen && data.essen.tage ? Object.keys(data.essen.tage).length : 0;
-  const summary = `${anz(data.workouts.length, "Workout", "Workouts")}, `
-    + `${anz(data.plans.length, "Plan", "Pläne")}`
+  const essenTage = data.essen && data.essen.tage && typeof data.essen.tage === "object"
+    ? Object.keys(data.essen.tage).length : 0;
+  const summary = `${anz(geprueft.workouts.length, "Workout", "Workouts")}, `
+    + `${anz(geprueft.plans.length, "Plan", "Pläne")}`
     + (essenTage ? ` und ${anz(essenTage, "Ernährungstag", "Ernährungstage")}` : "")
     + " gefunden.";
 
@@ -3168,10 +3297,11 @@ async function restoreBackup(text) {
     return;
   }
 
+  // upgradePlans fängt Backups aus der Zeit ab, als ein Plan EIN Training war
   const incoming = {
-    plans: upgradePlans(data.plans),
-    workouts: data.workouts || [],
-    customExercises: migrateMuskeln(data.customExercises || []),
+    plans: bereinigeDB({ plans: upgradePlans(data.plans) }).plans,
+    workouts: geprueft.workouts,
+    customExercises: migrateMuskeln(geprueft.customExercises),
   };
 
   if (mode === "merge") {
@@ -3183,14 +3313,11 @@ async function restoreBackup(text) {
     DB.customExercises = DB.customExercises.concat(
       incoming.customExercises.filter((e) => !haveE.has(e.id)));
   } else {
-    DB = Object.assign(defaultDB(), data, incoming, { seeded: true });
-  }
-  if (data.settings) {
+    DB = Object.assign(geprueft, incoming, { seeded: true });
     // Ein Backup ohne schemeV stammt aus der Zeit vor dem neuen Farbschema.
-    // Der Schlüssel darf dann nicht aus den aktuellen Einstellungen überleben,
-    // sonst hält migrateScheme die alte Akzentfarbe für schon migriert.
-    if (data.settings.schemeV === undefined) delete DB.settings.schemeV;
-    DB.settings = Object.assign(DB.settings, data.settings);
+    // Der Schlüssel darf dann nicht aus den aktuellen Einstellungen
+    // überleben, sonst hält migrateScheme die alte Akzentfarbe für migriert.
+    if (!data.settings || data.settings.schemeV === undefined) delete DB.settings.schemeV;
   }
   migrateScheme(DB.settings);
 
@@ -3211,14 +3338,15 @@ async function restoreBackup(text) {
    Mittagessen, das niemand gegessen hat. */
 function essenWiederherstellen(daten, mode) {
   if (typeof ESSEN !== "object" || !daten || typeof daten !== "object") return;
+  // Erst in Form bringen (siehe bereinigeEssen), dann übernehmen
+  const geprueft = bereinigeEssen(daten);
   if (mode !== "merge") {
-    ESSEN = Object.assign(defaultEssen(), daten);
-    ESSEN.ziele = Object.assign(defaultEssen().ziele, daten.ziele || {});
+    ESSEN = geprueft;
   } else {
     const da = new Set(ESSEN.lebensmittel.map((l) => l.id));
     ESSEN.lebensmittel = ESSEN.lebensmittel.concat(
-      (daten.lebensmittel || []).filter((l) => l && !da.has(l.id)));
-    for (const [tag, liste] of Object.entries(daten.tage || {})) {
+      geprueft.lebensmittel.filter((l) => !da.has(l.id)));
+    for (const [tag, liste] of Object.entries(geprueft.tage)) {
       if (!ESSEN.tage[tag] || !ESSEN.tage[tag].length) ESSEN.tage[tag] = liste;
     }
   }
@@ -3470,16 +3598,47 @@ function safeAreaFallback() {
 safeAreaFallback();
 setTimeout(safeAreaFallback, 800);
 
+/* Gezeichnet wird nur, was man sieht.
+ *
+ * Ein voller Durchlauf über alle sieben Bildschirme kostet gemessen rund
+ * 40 ms – davon allein 30 ms die Übungsliste mit ihren 180 Piktogrammen. Das
+ * bei jedem Reiterwechsel und jedem abgehakten Satz zu zahlen war auf dem
+ * Handy als Ruckler zu sehen, obwohl sechs der sieben Bildschirme gar nicht
+ * zu sehen waren.
+ *
+ * Deshalb merkt sich render(), welche Bildschirme veraltet sind, und zeichnet
+ * sofort nur den aktuellen. Die übrigen kommen dran, wenn man sie aufruft –
+ * für den Betrachter ist das nicht zu unterscheiden, denn jeder Bildschirm
+ * baut sich ohnehin vollständig aus dem Zustand auf. */
+function bildschirmZeichner() {
+  const z = {
+    home: renderHome, plans: renderPlans,
+    exercises: renderExercises, history: renderHistory,
+  };
+  // Das Ernährungsmodul lädt nach app.js – beim allerersten render() ist es
+  // noch nicht da.
+  if (typeof renderEssenTag === "function") {
+    z["food-day"] = renderEssenTag;
+    z["food-lib"] = renderEssenLib;
+    z["food-hist"] = renderEssenVerlauf;
+  }
+  return z;
+}
+
+let veraltet = new Set();
+
+function sichtbarenZeichnen() {
+  const z = bildschirmZeichner();
+  if (!veraltet.has(currentTab) || !z[currentTab]) return;
+  veraltet.delete(currentTab);
+  z[currentTab]();
+}
+
 function render() {
   renderTabbar();
-  renderHome();
-  renderPlans();
-  renderExercises();
-  renderHistory();
+  veraltet = new Set(Object.keys(bildschirmZeichner()));
+  sichtbarenZeichnen();
   renderResumeBar();
-  // Das Ernährungsmodul lädt nach app.js. Beim ersten render() ist es noch
-  // nicht da – es zeichnet sich dann selbst, sobald es soweit ist.
-  if (typeof renderEssen === "function") renderEssen();
 }
 
 render();
