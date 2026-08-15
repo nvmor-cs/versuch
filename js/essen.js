@@ -1134,64 +1134,83 @@ function lmFormular(vorlage, opt) {
       <label for="lf-${k}">${label}</label>
       <input id="lf-${k}" data-f="${esc(k)}" type="text" ${mode ? `inputmode="${mode}"` : ""} value="${esc(wert)}" autocomplete="off">
     </div>`;
+
+  /* Reihenfolge nach Wichtigkeit: Was zählt, ist die gegessene Menge – die
+     steht deshalb gleich unter dem Namen und in einem großen Feld. Die
+     Nährwerte darunter interessieren, aber man liest sie eher, als dass man
+     sie ändert; sie stehen kompakt in einem eigenen, ruhigeren Abschnitt. */
   const bd = openSheet(`
     <div class="sheet-title">${vorlage ? "Werte anpassen" : "Eigenes Lebensmittel"}
       <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
     </div>
     ${feld("name", "Name", l.name)}
-    ${feld("marke", "Marke (optional)", l.marke || "")}
-    <div class="field">
-      <label for="lf-einheit">Bezug</label>
-      <select id="lf-einheit" data-f="einheit">
-        <option value="g" ${l.einheit === "g" ? "selected" : ""}>je 100 g</option>
-        <option value="ml" ${l.einheit === "ml" ? "selected" : ""}>je 100 ml</option>
-      </select>
-    </div>
-    <div class="feld-zwei">
-      ${feld("kcal", "kcal", fmtKg(l.kcal), "decimal")}
-      ${feld("eiweiss", "Eiweiß (g)", fmtKg(l.eiweiss), "decimal")}
-      ${feld("kh", "Kohlenhydrate (g)", fmtKg(l.kh), "decimal")}
-      ${feld("fett", "Fett (g)", fmtKg(l.fett), "decimal")}
-    </div>
-    <div class="feld-zwei">
-      ${feld("pname", "Portion heißt", l.portion ? l.portion.name : "")}
-      ${feld("pgramm", "Portion hat", l.portion ? fmtKg(l.portion.gramm) : "", "decimal")}
-    </div>
-    <div class="section-label">Gleich eintragen</div>
-    <p class="hint" style="margin:-4px 2px 10px">Optional: Wie viel hast du davon gegessen? Leer lassen,
-      wenn du die Werte nur speichern willst.</p>
+
+    <div class="section-label" style="margin-top:18px">Gegessen</div>
     <div class="feld-zwei">
       <div class="field">
-        <label for="lf-menge">Menge</label>
-        <input id="lf-menge" data-f="menge" type="text" inputmode="decimal" placeholder="z. B. 150" autocomplete="off">
+        <label for="lf-menge">Menge (<span id="lf-einheit-label">${l.einheit}</span>)</label>
+        <input id="lf-menge" data-f="menge" class="feld-gross" type="text" inputmode="decimal"
+               placeholder="z. B. 150" autocomplete="off">
       </div>
       <div class="field">
         <label for="lf-mahlzeit">Mahlzeit</label>
-        <select id="lf-mahlzeit" data-f="mahlzeit">
+        <select id="lf-mahlzeit" data-f="mahlzeit" class="feld-gross">
           ${MAHLZEITEN.map((x) => `<option value="${esc(x.id)}" ${x.id === (o.mahlzeit || vorschlagMahlzeit()) ? "selected" : ""}>${x.label}</option>`).join("")}
         </select>
       </div>
     </div>
-    <p class="hint" id="lf-vorschau" style="margin:-6px 2px 12px"></p>
+    <p class="hint" id="lf-vorschau" style="margin:-6px 2px 4px"></p>
+
+    <div class="section-label">Nährwerte</div>
+    <div class="feld-block">
+      <div class="field">
+        <label for="lf-einheit">Bezug</label>
+        <select id="lf-einheit" data-f="einheit">
+          <option value="g" ${l.einheit === "g" ? "selected" : ""}>je 100 g</option>
+          <option value="ml" ${l.einheit === "ml" ? "selected" : ""}>je 100 ml</option>
+        </select>
+      </div>
+      <div class="feld-zwei">
+        ${feld("kcal", "kcal", fmtKg(l.kcal), "decimal")}
+        ${feld("eiweiss", "Eiweiß (g)", fmtKg(l.eiweiss), "decimal")}
+        ${feld("kh", "Kohlenhydrate (g)", fmtKg(l.kh), "decimal")}
+        ${feld("fett", "Fett (g)", fmtKg(l.fett), "decimal")}
+      </div>
+      ${feld("marke", "Marke (optional)", l.marke || "")}
+      <div class="feld-zwei">
+        ${feld("pname", "Portion heißt", l.portion ? l.portion.name : "")}
+        ${feld("pgramm", "Portion hat", l.portion ? fmtKg(l.portion.gramm) : "", "decimal")}
+      </div>
+    </div>
+
     <div class="sheet-fuss">
       <button class="btn" data-speichern="1">${icon("check")} Speichern</button>
     </div>
   `, { fest: true });
+
   // Vorschau: Sobald Werte und Menge dastehen, zeigt die Zeile, was das ergibt
-  const v = (k) => (bd.querySelector(`[data-f="${esc(k)}"]`) || {}).value || "";
+  const v = (k) => (bd.querySelector(`[data-f="${k}"]`) || {}).value || "";
   const vorschau = () => {
+    const einheit = v("einheit") === "ml" ? "ml" : "g";
+    const marke = bd.querySelector("#lf-einheit-label");
+    if (marke) marke.textContent = einheit;
     const zeile = bd.querySelector("#lf-vorschau");
     if (!zeile) return;
     const menge = parseNum(v("menge"));
     const kcal = parseNum(v("kcal"));
-    if (!(menge > 0) || !Number.isFinite(kcal)) { zeile.textContent = ""; return; }
+    if (!(menge > 0) || !Number.isFinite(kcal)) {
+      // Leer lassen ist erlaubt – dann werden nur die Werte gespeichert
+      zeile.textContent = "Leer lassen, wenn du die Werte nur speichern willst.";
+      return;
+    }
     const f = menge / 100;
     const g = (k) => Math.round((parseNum(v(k)) || 0) * f);
-    zeile.textContent = `${fmtKg(menge)} ${v("einheit") === "ml" ? "ml" : "g"} = `
-      + `${Math.round(kcal * f)} kcal · E ${g("eiweiss")} g · KH ${g("kh")} g · F ${g("fett")} g`;
+    zeile.textContent = `${fmtKg(menge)} ${einheit} = ${Math.round(kcal * f)} kcal `
+      + `· E ${g("eiweiss")} g · KH ${g("kh")} g · F ${g("fett")} g`;
   };
   bd.addEventListener("input", vorschau);
   bd.addEventListener("change", vorschau);
+  vorschau();
 
   bd.querySelector("[data-speichern]").addEventListener("click", () => {
     const num = (k) => { const n = parseNum(v(k)); return Number.isFinite(n) && n >= 0 ? n : 0; };

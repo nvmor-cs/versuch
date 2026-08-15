@@ -617,6 +617,33 @@ body.punkte .bereich-punkte {
 .ziel-kopf b { font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .warn-text { color: var(--warn); }
 
+/* Das entscheidende Feld darf größer sein als die Beiwerke. */
+.field input.feld-gross, .field select.feld-gross {
+  font-size: 22px;
+  font-weight: 800;
+  padding: 12px 14px;
+  font-variant-numeric: tabular-nums;
+}
+.field select.feld-gross { font-size: 17px; font-weight: 700; }
+
+/* Nährwerte: interessieren, sind aber nicht der Grund, warum man das Blatt
+   öffnet. Ein leicht abgesetzter Block mit kleineren Feldern – zu lesen und
+   zu ändern, ohne den Blick zu ziehen. */
+.feld-block {
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 12px 12px 2px;
+  margin-bottom: 6px;
+}
+.feld-block .field { margin-bottom: 10px; }
+.feld-block .field label { font-size: 11px; color: var(--ink-3); }
+.feld-block .field input, .feld-block .field select {
+  padding: 9px 12px;
+  font-size: 15px;
+  background: var(--surface);
+}
+
 .feld-zwei {
   display: grid;
   grid-template-columns: 1fr 1fr;
