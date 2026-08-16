@@ -33,6 +33,7 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 - **Android-Zurücktaste** navigiert innerhalb der App: erst Dialoge, dann Vollbild-Ansichten, dann aus der Ernährung zurück ins Training, dann zum Start-Tab – die App schließt sich erst beim zweiten Zurück
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
 - **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. **Wischen über der Pille wechselt zwischen Training und Ernährung**, die zwei Punkte darüber zeigen die Welt an und sind auch antippbar. Beim Wechsel gibt es einen kurzen haptischen Stups, beim abgeschlossenen Satz einen kräftigeren – bewusst nur an diesen beiden Stellen, damit sie etwas bedeuten. Gestartet wird immer im Training: Dort liegt die Leiste für ein laufendes Workout, und dorthin führt auch die Zurücktaste
+- **Deutsch und Englisch**: umschaltbar in den Einstellungen, ohne Neustart – die ganze Oberfläche wechselt sofort, samt Übungsnamen, Muskelgruppen, Geräten, Lebensmitteln des Grundvorrats, Datums- und Zahlenformat. Übersetzt wird über die Kennung, nicht über den Text: Was du selbst benannt hast – deine Pläne, Trainings, eigenen Übungen und Lebensmittel – bleibt so stehen, wie du es geschrieben hast. Voreingestellt ist Deutsch
 - **Dunkles Design**: tiefes Nachtblau als Grund (`#111827`), Karten eine Stufe heller (`#1F2937`), dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Blau, Grün, Bernstein, Rot, Magenta oder Weiß. Erledigte Sätze sind grün, Rekorde bernsteinfarben, Löschen rot – Farbe hat immer eine Bedeutung
 
 ## Ernährung 🥗
@@ -56,7 +57,7 @@ Die App ist als natives Android-Projekt (Capacitor) vorbereitet:
 - **`android/`** – das komplette Android-Studio-Projekt (App-ID `io.github.nvmorcs.eisenzeit` – bleibt bewusst unverändert, denn an ihr hängt die installierte App samt Daten)
 - **GitHub Actions → „Android Build"** – baut per Klick eine installierbare `app-debug.apk` und (mit Signier-Secrets) die signierte `app-release.aab` für den Play Store
 - **`store/`** – Schritt-für-Schritt-Anleitung ([PLAY_STORE.md](store/PLAY_STORE.md)), App-Icon 512×512, Funktionsgrafik 1024×500 und fertige Screenshots (1080×1920)
-- **`privacy.html`** – Datenschutzerklärung (über GitHub Pages als Pflicht-URL für den Store nutzbar)
+- **`privacy.html`** / **`privacy-en.html`** – Datenschutzerklärung auf Deutsch und Englisch (über GitHub Pages als Pflicht-URL für den Store nutzbar)
 
 Lokal bauen (Node + Android SDK nötig): `npm ci && npm run android:debug`
 
@@ -93,6 +94,7 @@ python3 -m http.server 8000
 - Datenhaltung in `localStorage`, inkl. laufendem Workout (übersteht Reloads). Training und Ernährung nutzen **getrennte Schlüssel** (`eisenzeit.db.v1` und `lumora.essen.v1`) – das Backup sichert und stellt beide wieder her
 - Service Worker cached die App-Shell für den Offline-Betrieb
 - Farbsystem über CSS-Custom-Properties; die Akzentfarbe hängt an einem `data-accent`-Attribut am Wurzelelement
+- Sprachen über `tr("deutscher Text")`: Die Quellsprache steht im Code, das Wörterbuch in `js/i18n.js` liefert die englische Fassung. Der Code bleibt damit lesbar, und fehlt eine Übersetzung, steht dort deutscher Text statt einer Lücke. Namen von Übungen, Lebensmitteln und Portionen hängen an ihrer Kennung, nicht am Text
 - Alle Grafiken werden aus `scripts/make-icons.py` generiert (Pillow), die Marke steckt zusätzlich als SVG-Pfad in `js/app.js`
 - Die Muskel-Highlights entstehen per Flutfüllung aus den Körperzeichnungen (`scripts/make-muscle-paths.py`) – Herkunft der Zeichnungen siehe [NOTICE.md](NOTICE.md)
 
@@ -100,6 +102,7 @@ python3 -m http.server 8000
 |---|---|
 | `index.html` | App-Gerüst, PWA-Meta, Service-Worker-Registrierung |
 | `css/style.css` | Design-Tokens und alle Komponenten |
+| `js/i18n.js` | Sprachen: `tr()`, Wörterbuch, englische Namen für Übungen und Lebensmittel |
 | `js/exercises.js` | Übungsbibliothek, Muskelgruppen und Beispielpläne |
 | `js/muscle-icons.js` | Zuordnung Muskelgruppe → Figur und Bildausschnitt |
 | `js/muscle-paths.js` | Erzeugte Muskelflächen (nicht von Hand ändern) |

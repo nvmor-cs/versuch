@@ -18,20 +18,23 @@
 <body>
   <div id="app">
     <main>
-      <section class="screen active" id="screen-home" aria-label="Start"></section>
-      <section class="screen" id="screen-plans" aria-label="Pläne"></section>
-      <section class="screen" id="screen-exercises" aria-label="Übungen"></section>
-      <section class="screen" id="screen-history" aria-label="Verlauf"></section>
+      <!-- Die Beschriftungen setzt js/app.js in der eingestellten Sprache
+           nach (siehe bildschirmBeschriften) – hier steht die Ausgangslage. -->
+      <section class="screen active" id="screen-home" data-label="Start"></section>
+      <section class="screen" id="screen-plans" data-label="Pläne"></section>
+      <section class="screen" id="screen-exercises" data-label="Übungen"></section>
+      <section class="screen" id="screen-history" data-label="Verlauf"></section>
       <!-- Ernährung: eigene Welt, eigener Speicher (js/essen.js) -->
-      <section class="screen" id="screen-food-day" aria-label="Ernährung heute"></section>
-      <section class="screen" id="screen-food-lib" aria-label="Lebensmittel"></section>
-      <section class="screen" id="screen-food-hist" aria-label="Ernährung im Verlauf"></section>
+      <section class="screen" id="screen-food-day" data-label="Ernährung heute"></section>
+      <section class="screen" id="screen-food-lib" data-label="Lebensmittel"></section>
+      <section class="screen" id="screen-food-hist" data-label="Ernährung im Verlauf"></section>
     </main>
-    <nav class="tabbar" aria-label="Hauptnavigation">
-      <div class="bereich-punkte" id="bereich-punkte" aria-label="Bereich wechseln"></div>
+    <nav class="tabbar" id="tabbar" data-label="Hauptnavigation">
+      <div class="bereich-punkte" id="bereich-punkte" data-label="Bereich wechseln"></div>
       <div class="tabbar-inner" id="tabbar-inner"></div>
     </nav>
   </div>
+  <script src="js/i18n.js"></script>
   <script src="js/exercises.js"></script>
   <script src="js/muscle-paths.js"></script>
   <script src="js/muscle-icons.js"></script>

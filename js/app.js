@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.3.0";
+const APP_VERSION = "3.4.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -43,8 +43,11 @@ const parseNum = (s) => {
   return v === "" ? NaN : parseFloat(v);
 };
 const fmtKg = (n) =>
-  Number.isFinite(n) ? n.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "–";
-const fmtVol = (n) => Math.round(n).toLocaleString("de-DE") + " kg";
+  Number.isFinite(n) ? n.toLocaleString(locale(), { maximumFractionDigits: 2 }) : "–";
+const fmtVol = (n) => Math.round(n).toLocaleString(locale()) + " kg";
+// Für Eingabefelder: das Dezimalzeichen der Sprache, damit die Zahl so
+// dasteht, wie man sie eintippen würde
+const fmtEingabe = (n) => String(n).replace(".", SPRACHE === "de" ? "," : ".");
 
 // "1:30" oder "90" → Sekunden
 const parseTimeStr = (s) => {
@@ -66,13 +69,13 @@ const fmtClock = (secs) => {
 };
 const fmtDur = (secs) => {
   const m = Math.round(secs / 60);
-  if (m < 60) return m + " Min.";
-  return Math.floor(m / 60) + " Std. " + (m % 60) + " Min.";
+  if (m < 60) return m + " " + tr("Min.");
+  return tr("{h} Std. {m} Min.", { h: Math.floor(m / 60), m: m % 60 });
 };
 const fmtDate = (ts) =>
-  new Date(ts).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+  new Date(ts).toLocaleDateString(locale(), { weekday: "short", day: "numeric", month: "short" });
 const fmtDateShort = (ts) =>
-  new Date(ts).toLocaleDateString("de-DE", { day: "numeric", month: "numeric" });
+  new Date(ts).toLocaleDateString(locale(), { day: "numeric", month: "numeric" });
 
 const weekStart = (ts) => {
   const d = new Date(ts);
@@ -138,7 +141,7 @@ function defaultDB() {
     // migrateScheme() setzt ihn, auch für eine frische Datenbank.
     settings: {
       restSecs: 90, autoRest: true, lastBackupAt: null,
-      accent: ACCENT_DEFAULT,
+      accent: ACCENT_DEFAULT, sprache: "de",
       // Übungen, deren Entwicklung im Verlauf-Tab dauerhaft mitläuft
       beobachtet: [],
       // Rückmeldung nach dem Workout (siehe coachTipps)
@@ -279,6 +282,7 @@ function bereinigeDB(roh) {
   st.autoRest = st.autoRest !== false;
   st.coach = st.coach !== false;
   st.geraeteGetrennt = st.geraeteGetrennt !== false;
+  st.sprache = ausAuswahl(st.sprache, SPRACHEN.map((x) => x.id), "de");
   st.accent = ausAuswahl(st.accent, ACCENTS.map((a) => a.id), ACCENT_DEFAULT);
   st.lastBackupAt = st.lastBackupAt ? alsZahl(st.lastBackupAt, null) : null;
   st.beobachtet = alsListe(st.beobachtet).filter(istId).slice(0, 5);
@@ -324,11 +328,14 @@ function loadDB() {
   db.version = 2;
   migrateScheme(db.settings);
   migrateMuskeln(db.customExercises);
+  // Vor dem Beispielplan: Der wird einmalig als eigene Daten angelegt und
+  // soll in der Sprache dastehen, die eingestellt ist.
+  spracheSetzen(db.settings.sprache);
   if (!db.seeded) {
     db.plans = SAMPLE_PLANS.map((p) => ({
-      id: uid(), name: p.name, createdAt: Date.now(),
+      id: uid(), name: tr(p.name), createdAt: Date.now(),
       workouts: p.workouts.map((w) => ({
-        id: uid(), name: w.name,
+        id: uid(), name: tr(w.name),
         exercises: w.exercises.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets })),
       })),
     }));
@@ -363,7 +370,7 @@ const saveActive = () => {
 
 const allExercises = () => EXERCISE_LIBRARY.concat(DB.customExercises);
 const exById = (id) => allExercises().find((e) => e.id === id) || null;
-const exName = (id) => exById(id) ? exById(id).name : "Gelöschte Übung";
+const exName = (id) => exById(id) ? tUebung(exById(id)) : tr("Gelöschte Übung");
 const exType = (id) => exById(id) ? exById(id).type : "weight_reps";
 
 // Sortierte Workouts (neueste zuerst)
@@ -442,7 +449,7 @@ const est1rm = (w, r) => (r > 1 ? w * (1 + r / 30) : w);
 
 function fmtSet(type, s) {
   if (type === "weight_reps") return fmtKg(s.w || 0) + " kg × " + (s.r || 0);
-  if (type === "reps") return (s.r || 0) + " Wdh.";
+  if (type === "reps") return tr("{n} Wdh.", { n: s.r || 0 });
   return fmtClock(s.t || 0);
 }
 
@@ -696,12 +703,12 @@ function appConfirm(msg, opts = {}) {
     const bd = document.createElement("div");
     bd.className = "backdrop";
     bd.innerHTML = `
-      <div class="sheet" role="alertdialog" aria-label="Bestätigung">
+      <div class="sheet" role="alertdialog" aria-label="${tr("Bestätigung")}">
         <div class="sheet-grip"></div>
         <p style="font-size:15px;font-weight:600;margin:4px 2px 18px">${esc(msg)}</p>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-ghost" data-c="0" style="flex:1">${esc(opts.cancel || "Abbrechen")}</button>
-          <button class="btn ${opts.danger ? "btn-danger-soft" : ""}" data-c="1" style="flex:1">${esc(opts.ok || "OK")}</button>
+          <button class="btn btn-ghost" data-c="0" style="flex:1">${esc(opts.cancel || tr("Abbrechen"))}</button>
+          <button class="btn ${opts.danger ? "btn-danger-soft" : ""}" data-c="1" style="flex:1">${esc(opts.ok || tr("OK"))}</button>
         </div>
       </div>`;
     const done = (v) => { bd.remove(); resolve(v); };
@@ -894,18 +901,25 @@ ACTIONS["bereich"] = (el) => {
   if (ziel >= 0 && ziel !== bereichIndex()) bereichWechseln(ziel - bereichIndex());
 };
 
+/* Die Beschriftungen der Bildschirme und der Leiste stehen im HTML als
+   data-label und werden hier zu aria-label in der eingestellten Sprache. Sie
+   sind nur für Vorlesehilfen da – sichtbar ist von ihnen nichts. */
+function bildschirmBeschriften() {
+  $$("[data-label]").forEach((el) => el.setAttribute("aria-label", tr(el.dataset.label)));
+}
+
 function renderTabbar() {
   const b = bereich();
   const inner = $("#tabbar-inner");
   inner.style.gridTemplateColumns = `repeat(${b.tabs.length}, 1fr)`;
   inner.innerHTML = b.tabs.map(
-    (t) => `<button class="tab-btn ${t.id === currentTab ? "active" : ""}" data-action="tab" data-tab="${esc(t.id)}" aria-label="${t.label}">${icon(t.ic)}<span>${t.label}</span></button>`
+    (x) => `<button class="tab-btn ${x.id === currentTab ? "active" : ""}" data-action="tab" data-tab="${esc(x.id)}" aria-label="${esc(tr(x.label))}">${icon(x.ic)}<span>${esc(tr(x.label))}</span></button>`
   ).join("");
   const punkte = $("#bereich-punkte");
   if (punkte) {
     punkte.innerHTML = BEREICHE.map((x) => `
       <button class="bereich-punkt ${x.id === currentBereich ? "active" : ""}" data-action="bereich" data-b="${esc(x.id)}"
-        aria-label="${x.label}" aria-current="${x.id === currentBereich}"></button>`).join("");
+        aria-label="${esc(tr(x.label))}" aria-current="${x.id === currentBereich}"></button>`).join("");
   }
   $$(".screen").forEach((s) => s.classList.toggle("active", s.id === "screen-" + currentTab));
 }
@@ -1023,23 +1037,23 @@ ACTIONS["sektion"] = (el) => {
 };
 
 function renderHome() {
-  const today = new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+  const today = new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
   const recent = workoutsDesc().slice(0, 3);
   const ap = activePlan();
   const planInhalt =
-    (ap ? planCard(ap) : `<p class="hint">Noch kein Plan – lege im Tab „Pläne" einen an.</p>`) +
-    (DB.plans.length > 1 ? `<button class="btn btn-ghost" data-action="switch-plan">${icon("plans")} Plan wechseln</button>` : "");
+    (ap ? planCard(ap) : `<p class="hint">${tr("Noch kein Plan – lege im Tab „Pläne\" einen an.")}</p>`) +
+    (DB.plans.length > 1 ? `<button class="btn btn-ghost" data-action="switch-plan">${icon("plans")} ${tr("Plan wechseln")}</button>` : "");
   $("#screen-home").innerHTML = `
     <div class="screen-head">
       <div>
         <div class="wordmark">${logoSvg()}Lumora</div>
         <div class="screen-title">${esc(today)}</div>
       </div>
-      <button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${icon("gear")}</button>
+      <button class="icon-btn" data-action="open-settings" aria-label="${tr("Einstellungen")}">${icon("gear")}</button>
     </div>
-    <button class="btn" data-action="start-empty">${icon("plus")} Leeres Workout starten</button>
-    ${sektion("plan", "Aktueller Plan", planInhalt, ap ? ap.name : "kein Plan")}
-    ${recent.length ? sektion("verlauf", "Zuletzt trainiert", recent.map(historyRow).join(""),
+    <button class="btn" data-action="start-empty">${icon("plus")} ${tr("Leeres Workout starten")}</button>
+    ${sektion("plan", tr("Aktueller Plan"), planInhalt, ap ? ap.name : tr("kein Plan"))}
+    ${recent.length ? sektion("verlauf", tr("Zuletzt trainiert"), recent.map(historyRow).join(""),
       fmtDateShort(recent[0].startedAt)) : ""}
   `;
 }
@@ -1047,15 +1061,15 @@ function renderHome() {
 ACTIONS["switch-plan"] = () => {
   const ap = activePlan();
   openSheet(`
-    <div class="sheet-title">Aktiven Plan wählen
-      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    <div class="sheet-title">${tr("Aktiven Plan wählen")}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
     </div>
     ${DB.plans.map((p) => `
       <button class="row ${ap && ap.id === p.id ? "picked" : ""}" data-action="set-active-plan" data-id="${esc(p.id)}">
         <span class="pick-check">${icon("check")}</span>
         <span class="row-main">
           <span class="row-title">${esc(p.name)}</span>
-          <span class="row-sub">${p.workouts.length} Trainings</span>
+          <span class="row-sub">${p.workouts.length} ${tr("Trainings")}</span>
         </span>
       </button>`).join("")}
   `);
@@ -1067,7 +1081,7 @@ ACTIONS["set-active-plan"] = (el) => {
   el.closest(".backdrop")?.remove();
   render();
   renderPlanDetail();
-  toast("Aktueller Plan gesetzt");
+  toast(tr("Aktueller Plan gesetzt"));
 };
 
 function planCard(p) {
@@ -1075,19 +1089,19 @@ function planCard(p) {
     <div class="plan-card">
       <div class="plan-card-head">
         <div class="ttl">${esc(p.name)}</div>
-        <button class="icon-btn plain" data-action="edit-plan" data-id="${esc(p.id)}" aria-label="Plan bearbeiten" style="width:32px;height:32px">${icon("edit")}</button>
+        <button class="icon-btn plain" data-action="edit-plan" data-id="${esc(p.id)}" aria-label="${tr("Plan bearbeiten")}" style="width:32px;height:32px">${icon("edit")}</button>
       </div>
       ${p.workouts.length ? p.workouts.map((w) => {
-        const muscles = Array.from(new Set(w.exercises.map((e) => exById(e.exerciseId)?.muscle).filter(Boolean))).slice(0, 3).join(", ");
+        const muscles = Array.from(new Set(w.exercises.map((e) => exById(e.exerciseId)?.muscle).filter(Boolean))).slice(0, 3).map(tMuskel).join(", ");
         return `
         <div class="plan-wo-row">
           <div class="row-main">
             <div class="row-title">${esc(w.name)}</div>
-            <div class="row-sub">${w.exercises.length} Übungen${muscles ? " · " + esc(muscles) : ""}</div>
+            <div class="row-sub">${w.exercises.length} ${tr("Übungen")}${muscles ? " · " + esc(muscles) : ""}</div>
           </div>
-          <button class="btn btn-compact" data-action="start-plan" data-plan="${esc(p.id)}" data-wo="${esc(w.id)}">Start</button>
+          <button class="btn btn-compact" data-action="start-plan" data-plan="${esc(p.id)}" data-wo="${esc(w.id)}">${tr("Start")}</button>
         </div>`;
-      }).join("") : `<div class="plan-wo-row"><span class="hint">Noch keine Trainings in diesem Plan.</span></div>`}
+      }).join("") : `<div class="plan-wo-row"><span class="hint">${tr("Noch keine Trainings in diesem Plan.")}</span></div>`}
     </div>`;
 }
 
@@ -1097,7 +1111,7 @@ function renderPlans() {
   const ap = activePlan();
   $("#screen-plans").innerHTML = `
     <div class="screen-head">
-      <div class="screen-title">Pläne</div>
+      <div class="screen-title">${tr("Pläne")}</div>
     </div>
     ${DB.plans.length ? DB.plans.map((p) => {
       const nEx = p.workouts.reduce((a, w) => a + w.exercises.length, 0);
@@ -1105,17 +1119,17 @@ function renderPlans() {
       <button class="row" data-action="open-plan" data-id="${esc(p.id)}">
         <span class="row-main">
           <span class="row-title">${esc(p.name)}</span>
-          <span class="row-sub">${p.workouts.length} Trainings · ${nEx} Übungen</span>
+          <span class="row-sub">${p.workouts.length} ${tr("Trainings")} · ${nEx} ${tr("Übungen")}</span>
         </span>
-        ${ap && ap.id === p.id ? `<span class="badge badge-accent">Aktiv</span>` : ""}
+        ${ap && ap.id === p.id ? `<span class="badge badge-accent">${tr("Aktiv")}</span>` : ""}
         <span class="chev">${icon("chevR")}</span>
       </button>`;
     }).join("") : `
       <div class="empty">${icon("plans")}
-        <h3>Noch keine Pläne</h3>
-        <p>Ein Plan bündelt mehrere Trainings – z. B. Push, Pull und Beine.</p>
+        <h3>${tr("Noch keine Pläne")}</h3>
+        <p>${tr("Ein Plan bündelt mehrere Trainings – z. B. Push, Pull und Beine.")}</p>
       </div>`}
-    <button class="btn btn-ghost" data-action="new-plan" style="margin-top:8px">${icon("plus")} Neuen Plan erstellen</button>
+    <button class="btn btn-ghost" data-action="new-plan" style="margin-top:8px">${icon("plus")} ${tr("Neuen Plan erstellen")}</button>
   `;
 }
 
@@ -1138,29 +1152,29 @@ function renderPlanDetail(ov) {
   const isActive = activePlan()?.id === p.id;
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
+      <button class="icon-btn plain" data-action="close-overlay" aria-label="${tr("Zurück")}">${icon("chevL")}</button>
       <input class="screen-title" data-input="plan-titel" data-id="${esc(p.id)}" value="${esc(p.name)}"
-        style="background:none;border:none;padding:0;width:100%;min-width:0" aria-label="Plan-Name">
+        style="background:none;border:none;padding:0;width:100%;min-width:0" aria-label="${tr("Plan-Name")}">
     </div>
     ${isActive
-      ? `<span class="badge badge-accent" style="margin-bottom:14px">${icon("check")} Aktiver Plan</span>`
-      : `<button class="btn btn-soft" data-action="set-active-plan" data-id="${esc(p.id)}" style="margin-bottom:14px">Als aktiven Plan setzen</button>`}
-    <div class="section-label">Trainings</div>
+      ? `<span class="badge badge-accent" style="margin-bottom:14px">${icon("check")} ${tr("Aktiver Plan")}</span>`
+      : `<button class="btn btn-soft" data-action="set-active-plan" data-id="${esc(p.id)}" style="margin-bottom:14px">${tr("Als aktiven Plan setzen")}</button>`}
+    <div class="section-label">${tr("Trainings")}</div>
     ${p.workouts.length ? p.workouts.map((w, i) => {
       const names = w.exercises.slice(0, 3).map((e) => exName(e.exerciseId)).join(", ");
       return `
       <div class="row" style="cursor:default">
         <div class="row-main" data-action="edit-plan-wo-direct" data-plan="${esc(p.id)}" data-i="${esc(i)}" style="cursor:pointer">
           <div class="row-title">${esc(w.name)}</div>
-          <div class="row-sub">${w.exercises.length} Übungen${names ? " · " + esc(names) : ""}</div>
+          <div class="row-sub">${w.exercises.length} ${tr("Übungen")}${names ? " · " + esc(names) : ""}</div>
         </div>
-        <button class="btn btn-compact btn-ghost" data-action="edit-plan-wo-direct" data-plan="${esc(p.id)}" data-i="${esc(i)}">${icon("edit")} Bearbeiten</button>
+        <button class="btn btn-compact btn-ghost" data-action="edit-plan-wo-direct" data-plan="${esc(p.id)}" data-i="${esc(i)}">${icon("edit")} ${tr("Bearbeiten")}</button>
       </div>`;
-    }).join("") : `<p class="hint" style="padding:4px 0 10px">Noch keine Trainings – leg unten das erste an.</p>`}
-    <button class="btn btn-soft" data-action="plan-wo-neu" data-id="${esc(p.id)}" style="margin-top:12px">${icon("plus")} Training hinzufügen</button>
-    <p class="hint" style="margin-top:10px">Gestartet wird ein Training über den Start-Tab. Den Plan-Namen kannst du oben direkt überschreiben.</p>
+    }).join("") : `<p class="hint" style="padding:4px 0 10px">${tr("Noch keine Trainings – leg unten das erste an.")}</p>`}
+    <button class="btn btn-soft" data-action="plan-wo-neu" data-id="${esc(p.id)}" style="margin-top:12px">${icon("plus")} ${tr("Training hinzufügen")}</button>
+    <p class="hint" style="margin-top:10px">${tr("Gestartet wird ein Training über den Start-Tab. Den Plan-Namen kannst du oben direkt überschreiben.")}</p>
     <div class="divider"></div>
-    <button class="btn btn-danger-soft" data-action="plan-loeschen" data-id="${esc(p.id)}">${icon("trash")} Plan löschen</button>
+    <button class="btn btn-danger-soft" data-action="plan-loeschen" data-id="${esc(p.id)}">${icon("trash")} ${tr("Plan löschen")}</button>
   `;
 }
 
@@ -1176,13 +1190,13 @@ ACTIONS["edit-plan-wo-direct"] = (el) => {
 ACTIONS["plan-loeschen"] = async (el) => {
   const pl = DB.plans.find((x) => x.id === el.dataset.id);
   if (!pl) return;
-  if (!(await appConfirm(`Plan „${pl.name}" wirklich löschen? Bereits getrackte Workouts bleiben erhalten.`,
-                         { ok: "Löschen", danger: true }))) return;
+  if (!(await appConfirm(tr("Plan „{name}\" wirklich löschen? Bereits getrackte Workouts bleiben erhalten.", { name: pl.name }),
+                         { ok: tr("Löschen"), danger: true }))) return;
   DB.plans = DB.plans.filter((x) => x.id !== pl.id);
   if (DB.activePlanId === pl.id) DB.activePlanId = (DB.plans[0] || {}).id || null;
   saveDB();
   $(".plan-detail-ov")?.remove();
-  toast("Plan gelöscht");
+  toast(tr("Plan gelöscht"));
   render();
 };
 
@@ -1214,29 +1228,29 @@ function renderPlanEditor(ov) {
   const isNew = !DB.plans.some((p) => p.id === draftPlan.id);
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
-      <div class="screen-title">${isNew ? "Neuer Plan" : "Plan bearbeiten"}</div>
-      <button class="btn btn-compact" data-action="save-plan">Speichern</button>
+      <button class="icon-btn plain" data-action="close-overlay" aria-label="${tr("Zurück")}">${icon("chevL")}</button>
+      <div class="screen-title">${isNew ? tr("Neuer Plan") : tr("Plan bearbeiten")}</div>
+      <button class="btn btn-compact" data-action="save-plan">${tr("Speichern")}</button>
     </div>
     <div class="field">
-      <label for="plan-name">Name des Plans</label>
-      <input id="plan-name" data-input="plan-name" value="${esc(draftPlan.name)}" placeholder="z. B. Push / Pull / Beine" autocomplete="off">
+      <label for="plan-name">${tr("Name des Plans")}</label>
+      <input id="plan-name" data-input="plan-name" value="${esc(draftPlan.name)}" placeholder="${tr("z. B. Push / Pull / Beine")}" autocomplete="off">
     </div>
-    <div class="section-label">Trainings in diesem Plan</div>
+    <div class="section-label">${tr("Trainings in diesem Plan")}</div>
     <div id="plan-wo-liste">
     ${draftPlan.workouts.length ? draftPlan.workouts.map((w, i) => `
       <div class="row" style="cursor:default" data-i="${esc(i)}">
-        <button class="drag-handle" aria-label="Training verschieben">${icon("grip")}</button>
+        <button class="drag-handle" aria-label="${tr("Training verschieben")}">${icon("grip")}</button>
         <div class="row-main" data-action="edit-plan-wo" data-i="${esc(i)}" style="cursor:pointer">
-          <div class="row-title">${esc(w.name || "Training " + (i + 1))}</div>
-          <div class="row-sub">${w.exercises.length} Übungen · ${w.exercises.reduce((a, e) => a + (e.sets || 0), 0)} Sätze</div>
+          <div class="row-title">${esc(w.name || tr("Training {n}", { n: i + 1 }))}</div>
+          <div class="row-sub">${w.exercises.length} ${tr("Übungen")} · ${w.exercises.reduce((a, e) => a + (e.sets || 0), 0)} ${tr("Sätze")}</div>
         </div>
-        <button class="mini-btn" data-action="edit-plan-wo" data-i="${esc(i)}" aria-label="Bearbeiten">${icon("edit")}</button>
-        <button class="mini-btn danger" data-action="plan-wo-del" data-i="${esc(i)}" aria-label="Entfernen">${icon("x")}</button>
-      </div>`).join("") : `<p class="hint" style="padding:4px 0 12px">Noch keine Trainings – füge z. B. „Push", „Pull" und „Beine" hinzu.</p>`}
+        <button class="mini-btn" data-action="edit-plan-wo" data-i="${esc(i)}" aria-label="${tr("Bearbeiten")}">${icon("edit")}</button>
+        <button class="mini-btn danger" data-action="plan-wo-del" data-i="${esc(i)}" aria-label="${tr("Entfernen")}">${icon("x")}</button>
+      </div>`).join("") : `<p class="hint" style="padding:4px 0 12px">${tr("Noch keine Trainings – füge z. B. „Push\", „Pull\" und „Beine\" hinzu.")}</p>`}
     </div>
-    <button class="btn btn-soft" data-action="plan-add-wo">${icon("plus")} Training hinzufügen</button>
-    ${isNew ? "" : `<button class="btn btn-danger-soft" data-action="delete-plan" style="margin-top:10px">${icon("trash")} Plan löschen</button>`}
+    <button class="btn btn-soft" data-action="plan-add-wo">${icon("plus")} ${tr("Training hinzufügen")}</button>
+    ${isNew ? "" : `<button class="btn btn-danger-soft" data-action="delete-plan" style="margin-top:10px">${icon("trash")} ${tr("Plan löschen")}</button>`}
   `;
   const liste = $("#plan-wo-liste", ov);
   if (liste) {
@@ -1250,7 +1264,9 @@ function renderPlanEditor(ov) {
 ACTIONS["plan-wo-del"] = async (el) => {
   const i = +el.dataset.i;
   const w = draftPlan.workouts[i];
-  if (w.exercises.length && !(await appConfirm(`Training „${w.name || "Training " + (i + 1)}" aus dem Plan entfernen?`, { ok: "Entfernen", danger: true }))) return;
+  if (w.exercises.length && !(await appConfirm(
+    tr("Training „{name}\" aus dem Plan entfernen?", { name: w.name || tr("Training {n}", { n: i + 1 }) }),
+    { ok: tr("Entfernen"), danger: true }))) return;
   draftPlan.workouts.splice(i, 1);
   renderPlanEditor();
 };
@@ -1261,24 +1277,24 @@ ACTIONS["plan-add-wo"] = () => {
 ACTIONS["edit-plan-wo"] = (el) => openPlanWoEditor(+el.dataset.i);
 
 ACTIONS["save-plan"] = () => {
-  draftPlan.name = draftPlan.name.trim() || "Mein Plan";
-  draftPlan.workouts.forEach((w, i) => { w.name = (w.name || "").trim() || "Training " + (i + 1); });
+  draftPlan.name = draftPlan.name.trim() || tr("Mein Plan");
+  draftPlan.workouts.forEach((w, i) => { w.name = (w.name || "").trim() || tr("Training {n}", { n: i + 1 }); });
   const idx = DB.plans.findIndex((p) => p.id === draftPlan.id);
   if (idx >= 0) DB.plans[idx] = draftPlan;
   else DB.plans.push(draftPlan);
   saveDB();
   $(".plan-editor-ov")?.remove();
-  toast("Plan gespeichert");
+  toast(tr("Plan gespeichert"));
   render();
   renderPlanDetail();
 };
 ACTIONS["delete-plan"] = async () => {
-  if (!(await appConfirm(`Plan „${draftPlan.name}" wirklich löschen?`, { ok: "Löschen", danger: true }))) return;
+  if (!(await appConfirm(tr("Plan „{name}\" wirklich löschen?", { name: draftPlan.name }), { ok: tr("Löschen"), danger: true }))) return;
   DB.plans = DB.plans.filter((p) => p.id !== draftPlan.id);
   saveDB();
   $(".plan-editor-ov")?.remove();
   $(".plan-detail-ov")?.remove();
-  toast("Plan gelöscht");
+  toast(tr("Plan gelöscht"));
   render();
 };
 
@@ -1299,31 +1315,31 @@ function renderPlanWoEditor(ov) {
     !!w.exercises[i].superset && w.exercises[i].superset === (w.exercises[i + 1] || {}).superset;
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="plan-wo-done" aria-label="Zurück">${icon("chevL")}</button>
-      <div class="screen-title">Training bearbeiten</div>
-      <button class="btn btn-compact" data-action="plan-wo-done">Fertig</button>
+      <button class="icon-btn plain" data-action="plan-wo-done" aria-label="${tr("Zurück")}">${icon("chevL")}</button>
+      <div class="screen-title">${tr("Training bearbeiten")}</div>
+      <button class="btn btn-compact" data-action="plan-wo-done">${tr("Fertig")}</button>
     </div>
     <div class="field">
-      <label for="plan-wo-name">Name des Trainings</label>
-      <input id="plan-wo-name" data-input="plan-wo-name" value="${esc(w.name)}" placeholder="z. B. Push (Brust, Schultern, Trizeps)" autocomplete="off">
+      <label for="plan-wo-name">${tr("Name des Trainings")}</label>
+      <input id="plan-wo-name" data-input="plan-wo-name" value="${esc(w.name)}" placeholder="${tr("z. B. Push (Brust, Schultern, Trizeps)")}" autocomplete="off">
     </div>
-    <div class="section-label">Übungen &amp; Sätze</div>
+    <div class="section-label">${tr("Übungen &amp; Sätze")}</div>
     <div class="card" style="padding:6px 14px">
       ${w.exercises.length ? w.exercises.map((pe, i) => `
         <div class="plan-ex-row" data-i="${esc(i)}">
-          <button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>
-          <div class="nm">${ssInfo[i] ? `<span class="ss-tag">${ssInfo[i].letter}${ssInfo[i].pos}</span>` : ""}${esc(exName(pe.exerciseId))}<small>${esc(exById(pe.exerciseId)?.muscle || "")}</small></div>
-          <input type="text" inputmode="numeric" value="${esc(pe.sets)}" data-input="plan-sets" data-i="${esc(i)}" aria-label="Sätze">
-          <span class="hint">Sätze</span>
-          <button class="mini-btn danger" data-action="plan-ex-del" data-i="${esc(i)}" aria-label="Entfernen">${icon("x")}</button>
+          <button class="drag-handle" aria-label="${tr("Übung verschieben")}">${icon("grip")}</button>
+          <div class="nm">${ssInfo[i] ? `<span class="ss-tag">${ssInfo[i].letter}${ssInfo[i].pos}</span>` : ""}${esc(exName(pe.exerciseId))}<small>${esc(tMuskel(exById(pe.exerciseId)?.muscle || ""))}</small></div>
+          <input type="text" inputmode="numeric" value="${esc(pe.sets)}" data-input="plan-sets" data-i="${esc(i)}" aria-label="${tr("Sätze")}">
+          <span class="hint">${tr("Sätze")}</span>
+          <button class="mini-btn danger" data-action="plan-ex-del" data-i="${esc(i)}" aria-label="${tr("Entfernen")}">${icon("x")}</button>
         </div>
         ${i < w.exercises.length - 1 ? `
         <button class="ss-link ${verbunden(i) ? "on" : ""}" data-action="plan-ex-superset" data-i="${esc(i)}">
           ${icon(verbunden(i) ? "unlink" : "link")}
-          ${verbunden(i) ? "Supersatz – trennen" : "Zum Supersatz verbinden"}
-        </button>` : ""}`).join("") : `<p class="hint" style="padding:12px 0">Noch keine Übungen in diesem Training.</p>`}
+          ${verbunden(i) ? tr("Supersatz – trennen") : tr("Zum Supersatz verbinden")}
+        </button>` : ""}`).join("") : `<p class="hint" style="padding:12px 0">${tr("Noch keine Übungen in diesem Training.")}</p>`}
     </div>
-    <button class="btn btn-soft" data-action="plan-add-ex">${icon("plus")} Übungen hinzufügen</button>
+    <button class="btn btn-soft" data-action="plan-add-ex">${icon("plus")} ${tr("Übungen hinzufügen")}</button>
   `;
   const liste = $(".card", ov);
   if (liste) {
@@ -1377,7 +1393,7 @@ function filterNachbar(aktuell, richtung) {
 
 function chipsHtml(aktiv, action) {
   return MUSCLE_FILTER.map((m) =>
-    `<button class="chip ${m === aktiv ? "active" : ""}" data-action="${esc(action)}" data-m="${esc(m)}">${esc(m)}</button>`).join("");
+    `<button class="chip ${m === aktiv ? "active" : ""}" data-action="${esc(action)}" data-m="${esc(m)}">${esc(tMuskel(m))}</button>`).join("");
 }
 
 // Nur die Markierung umsetzen, ohne die Leiste neu zu bauen. Wichtig: Ein
@@ -1403,11 +1419,11 @@ function chipInSicht(leiste, sanft) {
 function renderExercises() {
   $("#screen-exercises").innerHTML = `
     <div class="screen-head">
-      <div class="screen-title">Übungen</div>
-      <button class="icon-btn" data-action="new-exercise" aria-label="Eigene Übung anlegen">${icon("plus")}</button>
+      <div class="screen-title">${tr("Übungen")}</div>
+      <button class="icon-btn" data-action="new-exercise" aria-label="${tr("Eigene Übung anlegen")}">${icon("plus")}</button>
     </div>
     <div class="search-wrap">${icon("search")}
-      <input class="search-input" data-input="ex-search" value="${esc(exSearch)}" placeholder="Übung suchen …" autocomplete="off">
+      <input class="search-input" data-input="ex-search" value="${esc(exSearch)}" placeholder="${tr("Übung suchen …")}" autocomplete="off">
     </div>
     <div class="chips" id="ex-chips">${chipsHtml(exFilter, "ex-filter")}</div>
     <div class="swipe-pane" id="ex-list"></div>
@@ -1420,8 +1436,11 @@ function filteredExercises() {
   const q = exSearch.trim().toLowerCase();
   return allExercises()
     .filter((e) => exFilter === "Alle" || e.muscle === exFilter)
-    .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.alias || "").toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+    .filter((e) => !q
+      || e.name.toLowerCase().includes(q)
+      || tUebung(e).toLowerCase().includes(q)
+      || (e.alias || "").toLowerCase().includes(q))
+    .sort((a, b) => tUebung(a).localeCompare(tUebung(b), locale()));
 }
 
 function exerciseRow(e, extra) {
@@ -1430,8 +1449,8 @@ function exerciseRow(e, extra) {
       ${extra && extra.pick ? `<span class="pick-check">${icon("check")}</span>` : ""}
       <span class="muscle-dot">${muscleIcon(e.muscle)}</span>
       <span class="row-main">
-        <span class="row-title">${esc(e.name)}</span>
-        <span class="row-sub">${esc(e.muscle)} · ${esc(e.equipment)}${e.custom ? " · Eigene" : ""}</span>
+        <span class="row-title">${esc(tUebung(e))}</span>
+        <span class="row-sub">${esc(tMuskel(e.muscle))} · ${esc(tGeraet(e.equipment))}${e.custom ? " · " + tr("Eigene") : ""}</span>
       </span>
       ${extra && extra.pick ? "" : `<span class="chev">${icon("chevR")}</span>`}
     </button>`;
@@ -1441,7 +1460,7 @@ function renderExerciseList() {
   const list = filteredExercises();
   $("#ex-list").innerHTML = list.length
     ? list.map((e) => exerciseRow(e)).join("")
-    : `<div class="empty">${icon("search")}<h3>Nichts gefunden</h3><p>Lege die Übung über das Plus oben rechts selbst an.</p></div>`;
+    : `<div class="empty">${icon("search")}<h3>${tr("Nichts gefunden")}</h3><p>${tr("Lege die Übung über das Plus oben rechts selbst an.")}</p></div>`;
 }
 
 ACTIONS["ex-filter"] = (el) => setExFilter(el.dataset.m);
@@ -1482,25 +1501,25 @@ ACTIONS["edit-exercise"] = (el) => openExerciseForm(el.dataset.id);
 function openExerciseForm(exId) {
   const ex = exId ? DB.customExercises.find((e) => e.id === exId) : null;
   openSheet(`
-    <div class="sheet-title">${ex ? "Übung bearbeiten" : "Eigene Übung"}
-      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    <div class="sheet-title">${ex ? tr("Übung bearbeiten") : tr("Eigene Übung")}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
     </div>
-    <div class="field"><label for="cx-name">Name</label>
-      <input id="cx-name" placeholder="z. B. Larsen Press" value="${esc(ex ? ex.name : "")}" autocomplete="off"></div>
-    <div class="field"><label for="cx-muscle">Muskelgruppe</label>
-      <select id="cx-muscle">${MUSCLES.map((m) => `<option ${ex && ex.muscle === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
-    <div class="field"><label for="cx-equip">Gerät</label>
-      <select id="cx-equip">${EQUIPMENT.map((m) => `<option ${ex && ex.equipment === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
-    <div class="field"><label for="cx-type">Erfassung</label>
+    <div class="field"><label for="cx-name">${tr("Name")}</label>
+      <input id="cx-name" placeholder="${tr("z. B. Larsen Press")}" value="${esc(ex ? ex.name : "")}" autocomplete="off"></div>
+    <div class="field"><label for="cx-muscle">${tr("Muskelgruppe")}</label>
+      <select id="cx-muscle">${MUSCLES.map((m) => `<option value="${esc(m)}" ${ex && ex.muscle === m ? "selected" : ""}>${esc(tMuskel(m))}</option>`).join("")}</select></div>
+    <div class="field"><label for="cx-equip">${tr("Gerät")}</label>
+      <select id="cx-equip">${EQUIPMENT.map((m) => `<option value="${esc(m)}" ${ex && ex.equipment === m ? "selected" : ""}>${esc(tGeraet(m))}</option>`).join("")}</select></div>
+    <div class="field"><label for="cx-type">${tr("Erfassung")}</label>
       <select id="cx-type">${Object.entries(EXERCISE_TYPES).map(([k, v]) =>
-        `<option value="${esc(k)}" ${ex && ex.type === k ? "selected" : ""}>${v.label}</option>`).join("")}</select></div>
-    <button class="btn" data-action="save-exercise" data-id="${esc(ex ? ex.id : "")}">Speichern</button>
+        `<option value="${esc(k)}" ${ex && ex.type === k ? "selected" : ""}>${tr(v.label)}</option>`).join("")}</select></div>
+    <button class="btn" data-action="save-exercise" data-id="${esc(ex ? ex.id : "")}">${tr("Speichern")}</button>
   `);
 }
 
 ACTIONS["save-exercise"] = (el) => {
   const name = $("#cx-name").value.trim();
-  if (!name) { toast("Bitte einen Namen eingeben"); return; }
+  if (!name) { toast(tr("Bitte einen Namen eingeben")); return; }
   const data = {
     name, muscle: $("#cx-muscle").value, equipment: $("#cx-equip").value,
     type: $("#cx-type").value, alias: "", custom: true,
@@ -1514,7 +1533,7 @@ ACTIONS["save-exercise"] = (el) => {
   saveDB();
   el.closest(".backdrop").remove();
   $(".ex-detail-ov")?.remove();
-  toast("Übung gespeichert");
+  toast(tr("Übung gespeichert"));
   render();
   if ($(".picker-ov")) renderPickerList();
 };
@@ -1522,11 +1541,11 @@ ACTIONS["save-exercise"] = (el) => {
 ACTIONS["delete-exercise"] = async (el) => {
   const ex = DB.customExercises.find((e) => e.id === el.dataset.id);
   if (!ex) return;
-  if (!(await appConfirm(`„${ex.name}" löschen? Bereits getrackte Workouts bleiben erhalten.`, { ok: "Löschen", danger: true }))) return;
+  if (!(await appConfirm(tr("„{name}\" löschen? Bereits getrackte Workouts bleiben erhalten.", { name: ex.name }), { ok: tr("Löschen"), danger: true }))) return;
   DB.customExercises = DB.customExercises.filter((e) => e.id !== ex.id);
   saveDB();
   $(".ex-detail-ov")?.remove();
-  toast("Übung gelöscht");
+  toast(tr("Übung gelöscht"));
   render();
 };
 
@@ -1549,42 +1568,42 @@ function openExerciseDetail(exId) {
   }
   const recLabel = rec
     ? ex.type === "weight_reps" ? fmtKg(rec.val) + " kg × " + (rec.set.r || 0)
-      : ex.type === "reps" ? rec.val + " Wdh." : fmtClock(rec.val)
+      : ex.type === "reps" ? tr("{n} Wdh.", { n: rec.val }) : fmtClock(rec.val)
     : null;
 
   openOverlay(`
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
-      <div class="screen-title">${esc(ex.name)}</div>
-      ${ex.custom ? `<button class="icon-btn" data-action="edit-exercise" data-id="${esc(ex.id)}" aria-label="Bearbeiten">${icon("edit")}</button>` : ""}
+      <button class="icon-btn plain" data-action="close-overlay" aria-label="${tr("Zurück")}">${icon("chevL")}</button>
+      <div class="screen-title">${esc(tUebung(ex))}</div>
+      ${ex.custom ? `<button class="icon-btn" data-action="edit-exercise" data-id="${esc(ex.id)}" aria-label="${tr("Bearbeiten")}">${icon("edit")}</button>` : ""}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-      <span class="badge badge-accent">${esc(ex.muscle)}</span>
-      <span class="badge badge-muted">${esc(ex.equipment)}</span>
-      <span class="badge badge-muted">${EXERCISE_TYPES[ex.type].label}</span>
-      ${ex.custom ? `<span class="badge badge-muted">Eigene Übung</span>` : ""}
+      <span class="badge badge-accent">${esc(tMuskel(ex.muscle))}</span>
+      <span class="badge badge-muted">${esc(tGeraet(ex.equipment))}</span>
+      <span class="badge badge-muted">${tr(EXERCISE_TYPES[ex.type].label)}</span>
+      ${ex.custom ? `<span class="badge badge-muted">${tr("Eigene Übung")}</span>` : ""}
     </div>
     ${rec ? `
       <div class="card" style="display:flex;gap:16px;align-items:center">
         <span class="badge badge-record" style="padding:8px">${icon("trophy")}</span>
         <div>
           <div style="font-weight:800;font-size:18px">${recLabel}</div>
-          <div class="hint">Bester Satz${best1rm ? " · geschätztes 1RM: " + fmtKg(Math.round(best1rm * 2) / 2) + " kg" : ""}</div>
+          <div class="hint">${best1rm ? tr("Bester Satz · geschätztes 1RM: {kg} kg", { kg: fmtKg(Math.round(best1rm * 2) / 2) }) : tr("Bester Satz")}</div>
         </div>
       </div>` : ""}
     <div class="card chart-card">
-      <h3>Entwicklung</h3>
-      <div class="chart-sub">${ex.type === "weight_reps" ? "Schwerster Satz (kg) pro Workout" : ex.type === "reps" ? "Beste Wiederholungszahl pro Workout" : "Längste Dauer pro Workout"}</div>
+      <h3>${tr("Entwicklung")}</h3>
+      <div class="chart-sub">${ex.type === "weight_reps" ? tr("Schwerster Satz (kg) pro Workout") : ex.type === "reps" ? tr("Beste Wiederholungszahl pro Workout") : tr("Längste Dauer pro Workout")}</div>
       <div class="chart-wrap">${progressChart(exId)}</div>
     </div>
-    ${hist.length ? `<div class="section-label">Historie</div>` + hist.map((h) => `
+    ${hist.length ? `<div class="section-label">${tr("Historie")}</div>` + hist.map((h) => `
       <div class="card" style="padding:12px 14px">
         <div class="row-sub" style="margin-bottom:6px">${fmtDate(h.w.startedAt)} · ${esc(h.w.name)}</div>
         ${h.sets.map((s, i) => `<div style="display:flex;gap:10px;font-variant-numeric:tabular-nums;padding:2px 0">
           <span style="color:var(--ink-3);width:22px">${i + 1}.</span><span>${fmtSet(ex.type, s)}</span></div>`).join("")}
       </div>`).join("")
-      : `<div class="empty">${icon("dumbbell")}<h3>Noch keine Einträge</h3><p>Tracke die Übung in einem Workout, dann erscheint hier deine Entwicklung.</p></div>`}
-    ${ex.custom ? `<button class="btn btn-danger-soft" data-action="delete-exercise" data-id="${esc(ex.id)}">${icon("trash")} Übung löschen</button>` : ""}
+      : `<div class="empty">${icon("dumbbell")}<h3>${tr("Noch keine Einträge")}</h3><p>${tr("Tracke die Übung in einem Workout, dann erscheint hier deine Entwicklung.")}</p></div>`}
+    ${ex.custom ? `<button class="btn btn-danger-soft" data-action="delete-exercise" data-id="${esc(ex.id)}">${icon("trash")} ${tr("Übung löschen")}</button>` : ""}
   `, "ex-detail-ov");
 }
 
@@ -1603,18 +1622,18 @@ function openExercisePicker(onDone, opt) {
   };
   const ov = openOverlay(`
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="picker-cancel" aria-label="Abbrechen">${icon("x")}</button>
-      <div class="screen-title">Übungen wählen</div>
-      <button class="icon-btn" data-action="new-exercise" aria-label="Eigene Übung">${icon("plus")}</button>
+      <button class="icon-btn plain" data-action="picker-cancel" aria-label="${tr("Abbrechen")}">${icon("x")}</button>
+      <div class="screen-title">${tr("Übungen wählen")}</div>
+      <button class="icon-btn" data-action="new-exercise" aria-label="${tr("Eigene Übung")}">${icon("plus")}</button>
     </div>
     <div class="search-wrap">${icon("search")}
-      <input class="search-input" data-input="picker-search" placeholder="Übung suchen …" autocomplete="off">
+      <input class="search-input" data-input="picker-search" placeholder="${tr("Übung suchen …")}" autocomplete="off">
     </div>
     <div class="chips" id="picker-chips"></div>
     <div class="swipe-pane" id="picker-list"></div>
     <div style="position:fixed;left:0;right:0;bottom:0;z-index:65;padding:12px 16px calc(var(--safe-bottom) + 14px);background:linear-gradient(transparent, var(--bg) 40%)">
       <div style="max-width:560px;margin:0 auto">
-        <button class="btn" data-action="picker-done" id="picker-done" disabled>Übungen hinzufügen</button>
+        <button class="btn" data-action="picker-done" id="picker-done" disabled>${tr("Übungen hinzufügen")}</button>
       </div>
     </div>
   `, "picker-ov");
@@ -1638,17 +1657,20 @@ function renderPickerList() {
   const q = pickerState.search.trim().toLowerCase();
   const list = allExercises()
     .filter((e) => pickerState.filter === "Alle" || e.muscle === pickerState.filter)
-    .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.alias || "").toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+    .filter((e) => !q
+      || e.name.toLowerCase().includes(q)
+      || tUebung(e).toLowerCase().includes(q)
+      || (e.alias || "").toLowerCase().includes(q))
+    .sort((a, b) => tUebung(a).localeCompare(tUebung(b), locale()));
   $("#picker-list").innerHTML = list.map((e) => `
     <button class="row ${pickerState.selected.has(e.id) ? "picked" : ""}" data-action="picker-toggle" data-id="${esc(e.id)}">
       <span class="pick-check">${icon("check")}</span>
       <span class="muscle-dot">${muscleIcon(e.muscle)}</span>
       <span class="row-main">
-        <span class="row-title">${esc(e.name)}</span>
-        <span class="row-sub">${esc(e.muscle)} · ${esc(e.equipment)}</span>
+        <span class="row-title">${esc(tUebung(e))}</span>
+        <span class="row-sub">${esc(tMuskel(e.muscle))} · ${esc(tGeraet(e.equipment))}</span>
       </span>
-    </button>`).join("") || `<p class="hint" style="padding:12px 4px">Nichts gefunden.</p>`;
+    </button>`).join("") || `<p class="hint" style="padding:12px 4px">${tr("Nichts gefunden.")}</p>`;
   updatePickerDone();
 }
 
@@ -1657,10 +1679,11 @@ function updatePickerDone() {
   const btn = $("#picker-done");
   if (!btn) return;
   btn.disabled = n === 0 && !pickerState.leerErlaubt;
-  const wort = pickerState.knopf || "hinzufügen";
-  btn.textContent = n === 0 ? (pickerState.leerErlaubt ? "Keine auswählen" : `Übungen ${wort}`)
-    : `${n} ${n === 1 ? "Übung" : "Übungen"} ${wort}`
-      + (pickerState.max ? ` (max. ${pickerState.max})` : "");
+  const wort = tr(pickerState.knopf || "hinzufügen");
+  btn.textContent = (n === 0
+    ? (pickerState.leerErlaubt ? tr("Keine auswählen") : tr("Übungen {wort}", { wort }))
+    : tr(n === 1 ? "{n} Übung {wort}" : "{n} Übungen {wort}", { n, wort }))
+    + (pickerState.max ? " " + tr("(max. {n})", { n: pickerState.max }) : "");
 }
 
 ACTIONS["picker-filter"] = (el) => setPickerFilter(el.dataset.m);
@@ -1685,7 +1708,7 @@ ACTIONS["picker-toggle"] = (el) => {
   if (pickerState.selected.has(id)) pickerState.selected.delete(id);
   else {
     if (pickerState.max && pickerState.selected.size >= pickerState.max) {
-      toast(`Höchstens ${pickerState.max} Übungen`);
+      toast(tr("Höchstens {n} Übungen", { n: pickerState.max }));
       return;
     }
     pickerState.selected.add(id);
@@ -1709,7 +1732,7 @@ const newSet = () => ({ w: null, r: null, t: null, done: false });
 
 function autoName() {
   const h = new Date().getHours();
-  return h < 11 ? "Morgen-Workout" : h < 15 ? "Mittags-Workout" : h < 19 ? "Nachmittags-Workout" : "Abend-Workout";
+  return tr(h < 11 ? "Morgen-Workout" : h < 15 ? "Mittags-Workout" : h < 19 ? "Nachmittags-Workout" : "Abend-Workout");
 }
 
 ACTIONS["start-empty"] = () => {
@@ -1741,7 +1764,7 @@ ACTIONS["start-plan"] = (el) => {
 
 function activeGuard() {
   if (!active) return false;
-  toast("Es läuft bereits ein Workout");
+  toast(tr("Es läuft bereits ein Workout"));
   openWorkoutScreen();
   return true;
 }
@@ -1758,19 +1781,19 @@ function renderWorkout(ov) {
   if (!ov || !active) return;
   $(".overlay-inner", ov).innerHTML = `
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="minimize-workout" aria-label="Minimieren">${icon("chevD")}</button>
+      <button class="icon-btn plain" data-action="minimize-workout" aria-label="${tr("Minimieren")}">${icon("chevD")}</button>
       <input class="screen-title" data-input="wo-name" value="${esc(active.name)}"
-        style="background:none;border:none;padding:0;width:100%;min-width:0" aria-label="Workout-Name">
-      <button class="btn btn-good btn-compact" data-action="finish-workout">Beenden</button>
+        style="background:none;border:none;padding:0;width:100%;min-width:0" aria-label="${tr("Workout-Name")}">
+      <button class="btn btn-good btn-compact" data-action="finish-workout">${tr("Beenden")}</button>
     </div>
     <div class="wo-meta">
-      <div><span>Dauer</span><b id="wo-dur">${fmtClock((Date.now() - active.startedAt) / 1000)}</b></div>
-      <div><span>Sätze</span><b id="wo-sets">0</b></div>
-      <div><span>Volumen</span><b id="wo-vol">0 kg</b></div>
+      <div><span>${tr("Dauer")}</span><b id="wo-dur">${fmtClock((Date.now() - active.startedAt) / 1000)}</b></div>
+      <div><span>${tr("Sätze")}</span><b id="wo-sets">0</b></div>
+      <div><span>${tr("Volumen")}</span><b id="wo-vol">0 kg</b></div>
     </div>
     <div id="wo-exercises"></div>
-    <button class="btn btn-soft" data-action="wo-add-ex">${icon("plus")} Übung hinzufügen</button>
-    <button class="btn btn-danger-soft" data-action="discard-workout" style="margin-top:10px">${icon("trash")} Workout verwerfen</button>
+    <button class="btn btn-soft" data-action="wo-add-ex">${icon("plus")} ${tr("Übung hinzufügen")}</button>
+    <button class="btn btn-danger-soft" data-action="discard-workout" style="margin-top:10px">${icon("trash")} ${tr("Workout verwerfen")}</button>
   `;
   renderWoExercises();
   updateWoMeta();
@@ -1800,7 +1823,7 @@ function renderWoExercises() {
   if (!host || !active) return;
   host.innerHTML = active.exercises.length
     ? active.exercises.map((ex, xi) => woExerciseBlock(ex, xi)).join("")
-    : `<div class="empty">${icon("dumbbell")}<h3>Leg los!</h3><p>Füge deine erste Übung hinzu.</p></div>`;
+    : `<div class="empty">${icon("dumbbell")}<h3>${tr("Leg los!")}</h3><p>${tr("Füge deine erste Übung hinzu.")}</p></div>`;
   woSortierbar();
 }
 
@@ -1810,8 +1833,8 @@ function woExerciseBlock(ex, xi) {
   const nächste = active.exercises[xi + 1];
   const verbunden = !!ex.superset && ex.superset === (nächste || {}).superset;
   const offen = xi === offeneUebungIndex();
-  const griff = `<button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>`;
-  const kopf = `${ss ? `<div class="ss-head">${icon("link")} Supersatz ${ss.letter} · Übung ${ss.pos} von ${ss.size}</div>` : ""}`;
+  const griff = `<button class="drag-handle" aria-label="${tr("Übung verschieben")}">${icon("grip")}</button>`;
+  const kopf = `${ss ? `<div class="ss-head">${icon("link")} ${tr("Supersatz {letter} · Übung {pos} von {size}", { letter: ss.letter, pos: ss.pos, size: ss.size })}</div>` : ""}`;
 
   return `
     <div class="wo-item" data-xi="${esc(xi)}">
@@ -1823,7 +1846,7 @@ function woExerciseBlock(ex, xi) {
       ${nächste ? `
       <button class="ss-link ${verbunden ? "on" : ""}" data-action="wo-superset" data-xi="${esc(xi)}">
         ${icon(verbunden ? "unlink" : "link")}
-        ${verbunden ? "Supersatz – trennen" : "Mit nächster Übung verbinden"}
+        ${verbunden ? tr("Supersatz – trennen") : tr("Mit nächster Übung verbinden")}
       </button>` : ""}
     </div>`;
 }
@@ -1833,8 +1856,8 @@ function woKopfOffen(ex, xi, griff) {
     <div class="exercise-block-head">
       ${griff}
       <button class="name" data-action="open-exercise" data-id="${esc(ex.exerciseId)}">${esc(exName(ex.exerciseId))}</button>
-      <button class="mini-btn" data-action="wo-open-ex" data-xi="${esc(xi)}" aria-label="Übung zuklappen">${icon("chevU")}</button>
-      <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${esc(xi)}" aria-label="Übung entfernen">${icon("x")}</button>
+      <button class="mini-btn" data-action="wo-open-ex" data-xi="${esc(xi)}" aria-label="${tr("Übung zuklappen")}">${icon("chevU")}</button>
+      <button class="mini-btn danger" data-action="wo-del-ex" data-xi="${esc(xi)}" aria-label="${tr("Übung entfernen")}">${icon("x")}</button>
     </div>`;
 }
 
@@ -1842,17 +1865,18 @@ function woKopfZu(ex, xi, type) {
   const fertig = ex.sets.filter((s) => s.done).length;
   const letzter = ex.sets.filter((s) => s.done).pop();
   const stand = fertig === ex.sets.length
-    ? `Fertig · ${ex.sets.length} Sätze`
-    : `${fertig}/${ex.sets.length} Sätze${letzter ? " · " + fmtSet(type, letzter) : ""}`;
+    ? tr("Fertig · {n} Sätze", { n: ex.sets.length })
+    : tr("{fertig}/{gesamt} Sätze", { fertig, gesamt: ex.sets.length })
+      + (letzter ? " · " + fmtSet(type, letzter) : "");
   return `
     <div class="exercise-block-head zu">
-      <button class="drag-handle" aria-label="Übung verschieben">${icon("grip")}</button>
+      <button class="drag-handle" aria-label="${tr("Übung verschieben")}">${icon("grip")}</button>
       <button class="ex-zu" data-action="wo-open-ex" data-xi="${esc(xi)}">
         <span class="ex-zu-name">${esc(exName(ex.exerciseId))}</span>
         <span class="ex-zu-stand">${stand}</span>
       </button>
       <button class="ex-zu-chev ${fertig === ex.sets.length ? "fertig" : ""}"
-        data-action="wo-open-ex" data-xi="${esc(xi)}" aria-label="Übung aufklappen">
+        data-action="wo-open-ex" data-xi="${esc(xi)}" aria-label="${tr("Übung aufklappen")}">
         ${fertig === ex.sets.length ? icon("check") : icon("chevD")}</button>
     </div>`;
 }
@@ -1868,8 +1892,8 @@ function woSaetze(ex, xi, type) {
       s.done ? doneSetRow(type, s, si, xi)
       : si === curIdx ? currentSetCard(type, ex, xi, si, prev, andernorts)
       : queuedSetRow(si, xi)).join("")}
-    ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} Alle ${ex.sets.length} Sätze abgeschlossen</div>` : ""}
-    <button class="add-set-btn" data-action="wo-add-set" data-xi="${esc(xi)}">+ Satz hinzufügen</button>`;
+    ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} ${tr("Alle {n} Sätze abgeschlossen", { n: ex.sets.length })}</div>` : ""}
+    <button class="add-set-btn" data-action="wo-add-set" data-xi="${esc(xi)}">${tr("+ Satz hinzufügen")}</button>`;
 }
 
 // Ein Tipp auf den Kopf klappt auf – oder zu, wenn die Übung schon offen war
@@ -1920,12 +1944,12 @@ ACTIONS["wo-superset"] = (el) => {
 function doneSetRow(type, s, si, xi) {
   return `
     <div class="done-set">
-      <button class="done-set-main" data-action="wo-undo-set" data-xi="${esc(xi)}" data-si="${esc(si)}" title="Satz zurückholen">
+      <button class="done-set-main" data-action="wo-undo-set" data-xi="${esc(xi)}" data-si="${esc(si)}" title="${tr("Satz zurückholen")}">
         <span class="done-check">${icon("check")}</span>
-        <span class="done-no">Satz ${si + 1}</span>
+        <span class="done-no">${tr("Satz {n}", { n: si + 1 })}</span>
         <b>${fmtSet(type, s)}</b>
       </button>
-      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="Satz löschen">${icon("x")}</button>
+      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="${tr("Satz löschen")}">${icon("x")}</button>
     </div>`;
 }
 
@@ -1933,9 +1957,9 @@ function doneSetRow(type, s, si, xi) {
 function queuedSetRow(si, xi) {
   return `
     <div class="queued-set">
-      <span class="q-no">Satz ${si + 1}</span>
-      <span class="q-lbl">geplant</span>
-      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="Geplanten Satz entfernen">${icon("x")}</button>
+      <span class="q-no">${tr("Satz {n}", { n: si + 1 })}</span>
+      <span class="q-lbl">${tr("geplant")}</span>
+      <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="${tr("Geplanten Satz entfernen")}">${icon("x")}</button>
     </div>`;
 }
 
@@ -1963,26 +1987,26 @@ function currentSetCard(type, ex, xi, si, prev, andernorts) {
     <div class="stepper-group">
       <div class="stepper-label">${label}</div>
       <div class="stepper">
-        <button class="stepper-btn" data-action="wo-step" data-f="${esc(field)}" data-d="-1" ${d} aria-label="${label} verringern">−</button>
+        <button class="stepper-btn" data-action="wo-step" data-f="${esc(field)}" data-d="-1" ${d} aria-label="${tr("{label} verringern", { label })}">−</button>
         ${inputHtml}
-        <button class="stepper-btn" data-action="wo-step" data-f="${esc(field)}" data-d="1" ${d} aria-label="${label} erhöhen">+</button>
+        <button class="stepper-btn" data-action="wo-step" data-f="${esc(field)}" data-d="1" ${d} aria-label="${tr("{label} erhöhen", { label })}">+</button>
       </div>
     </div>`;
-  const wInput = `<input class="stepper-val" type="text" inputmode="decimal" data-input="set-w" ${d} value="${esc(String(s.w).replace(".", ","))}" aria-label="Gewicht in kg">`;
-  const rInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-r" ${d} value="${esc(s.r)}" aria-label="Wiederholungen">`;
-  const tInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-t" ${d} value="${esc(fmtClock(s.t))}" aria-label="Zeit">`;
+  const wInput = `<input class="stepper-val" type="text" inputmode="decimal" data-input="set-w" ${d} value="${esc(fmtEingabe(s.w))}" aria-label="${tr("Gewicht in kg")}">`;
+  const rInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-r" ${d} value="${esc(s.r)}" aria-label="${tr("Wiederholungen")}">`;
+  const tInput = `<input class="stepper-val" type="text" inputmode="numeric" data-input="set-t" ${d} value="${esc(fmtClock(s.t))}" aria-label="${tr("Zeit")}">`;
   return `
     <div class="current-set">
       <div class="current-set-head">
-        <span class="cs-no">Satz ${si + 1} / ${ex.sets.length}</span>
-        <span class="cs-prev">${p ? "Letztes Mal: " + fmtSet(type, p)
-          : andernorts ? "Erstes Mal in diesem Training" : "Erster Eintrag"}</span>
-        <button class="mini-btn" data-action="wo-del-set" ${d} aria-label="Satz entfernen">${icon("x")}</button>
+        <span class="cs-no">${tr("Satz {n} / {gesamt}", { n: si + 1, gesamt: ex.sets.length })}</span>
+        <span class="cs-prev">${p ? tr("Letztes Mal: {satz}", { satz: fmtSet(type, p) })
+          : andernorts ? tr("Erstes Mal in diesem Training") : tr("Erster Eintrag")}</span>
+        <button class="mini-btn" data-action="wo-del-set" ${d} aria-label="${tr("Satz entfernen")}">${icon("x")}</button>
       </div>
-      ${type === "weight_reps" ? stepper("Gewicht (kg)", "w", wInput) + stepper("Wiederholungen", "r", rInput) : ""}
-      ${type === "reps" ? stepper("Wiederholungen", "r", rInput) : ""}
-      ${type === "time" ? stepper("Zeit (Min:Sek)", "t", tInput) : ""}
-      <button class="btn" data-action="wo-complete-set" ${d}>${icon("check")} Satz abschließen</button>
+      ${type === "weight_reps" ? stepper(tr("Gewicht (kg)"), "w", wInput) + stepper(tr("Wiederholungen"), "r", rInput) : ""}
+      ${type === "reps" ? stepper(tr("Wiederholungen"), "r", rInput) : ""}
+      ${type === "time" ? stepper(tr("Zeit (Min:Sek)"), "t", tInput) : ""}
+      <button class="btn" data-action="wo-complete-set" ${d}>${icon("check")} ${tr("Satz abschließen")}</button>
     </div>`;
 }
 
@@ -2013,7 +2037,7 @@ ACTIONS["wo-add-ex"] = () => {
 ACTIONS["wo-del-ex"] = async (el) => {
   const xi = +el.dataset.xi;
   const ex = active.exercises[xi];
-  if (ex.sets.some((s) => s.done) && !(await appConfirm(`„${exName(ex.exerciseId)}" mit abgehakten Sätzen entfernen?`, { ok: "Entfernen", danger: true }))) return;
+  if (ex.sets.some((s) => s.done) && !(await appConfirm(tr("„{name}\" mit abgehakten Sätzen entfernen?", { name: exName(ex.exerciseId) }), { ok: tr("Entfernen"), danger: true }))) return;
   active.exercises.splice(xi, 1);
   normalizeSupersets(active.exercises);
   saveActive();
@@ -2027,7 +2051,7 @@ ACTIONS["wo-add-set"] = (el) => {
 };
 ACTIONS["wo-del-set"] = (el) => {
   const ex = active.exercises[+el.dataset.xi];
-  if (ex.sets.length <= 1) { toast("Letzter Satz – entferne stattdessen die Übung"); return; }
+  if (ex.sets.length <= 1) { toast(tr("Letzter Satz – entferne stattdessen die Übung")); return; }
   ex.sets.splice(+el.dataset.si, 1);
   saveActive();
   renderWoExercises();
@@ -2045,7 +2069,7 @@ ACTIONS["wo-step"] = (el) => {
   if (f === "r") s.r = Math.max(0, (s.r || 0) + dir);
   if (f === "t") s.t = Math.max(15, (s.t || 0) + dir * 15);
   const inp = $(`[data-input="set-${f}"][data-xi="${esc(xi)}"][data-si="${esc(si)}"]`);
-  if (inp) inp.value = f === "w" ? String(s.w).replace(".", ",") : f === "t" ? fmtClock(s.t) : s.r;
+  if (inp) inp.value = f === "w" ? fmtEingabe(s.w) : f === "t" ? fmtClock(s.t) : s.r;
   saveActive();
 };
 
@@ -2054,8 +2078,8 @@ ACTIONS["wo-complete-set"] = (el) => {
   const ex = active.exercises[xi];
   const s = ex.sets[si];
   const type = exType(ex.exerciseId);
-  if ((type === "weight_reps" || type === "reps") && (!s.r || s.r <= 0)) { toast("Wiederholungen eintragen"); return; }
-  if (type === "time" && (!s.t || s.t <= 0)) { toast("Zeit eintragen, z. B. 1:30"); return; }
+  if ((type === "weight_reps" || type === "reps") && (!s.r || s.r <= 0)) { toast(tr("Wiederholungen eintragen")); return; }
+  if (type === "time" && (!s.t || s.t <= 0)) { toast(tr("Zeit eintragen, z. B. 1:30")); return; }
   if (type === "weight_reps" && s.w == null) s.w = 0;
   s.done = true;
   tippen(true);
@@ -2074,7 +2098,7 @@ ACTIONS["wo-complete-set"] = (el) => {
     renderWoExercises();
     const block = $(`.wo-item[data-xi="${esc(weiter)}"]`);
     if (block) block.scrollIntoView({ behavior: "smooth", block: "start" });
-    toast("Weiter mit " + exName(active.exercises[weiter].exerciseId));
+    toast(tr("Weiter mit {name}", { name: exName(active.exercises[weiter].exerciseId) }));
     return;
   }
   if (DB.settings.autoRest && type !== "time") {
@@ -2111,20 +2135,20 @@ ACTIONS["minimize-workout"] = () => {
 };
 
 ACTIONS["discard-workout"] = async () => {
-  if (!(await appConfirm("Workout wirklich verwerfen? Alle Eingaben gehen verloren.", { ok: "Verwerfen", danger: true }))) return;
+  if (!(await appConfirm(tr("Workout wirklich verwerfen? Alle Eingaben gehen verloren."), { ok: tr("Verwerfen"), danger: true }))) return;
   active = null;
   saveActive();
   stopRest();
   $(".workout-ov")?.remove();
   render();
-  toast("Workout verworfen");
+  toast(tr("Workout verworfen"));
 };
 
 ACTIONS["finish-workout"] = async () => {
   if (!active) return;
   const finished = {
     id: active.id,
-    name: active.name.trim() || "Workout",
+    name: active.name.trim() || tr("Workout"),
     startedAt: active.startedAt,
     endedAt: Date.now(),
     durationSec: Math.round((Date.now() - active.startedAt) / 1000),
@@ -2145,13 +2169,16 @@ ACTIONS["finish-workout"] = async () => {
       { exerciseId: ex.exerciseId, superset: ex.superset, sets: done });
   }
   if (!finished.exercises.length) {
-    if (await appConfirm("Keine abgehakten Sätze. Workout verwerfen?", { ok: "Verwerfen", danger: true })) {
+    if (await appConfirm(tr("Keine abgehakten Sätze. Workout verwerfen?"), { ok: tr("Verwerfen"), danger: true })) {
       active = null; saveActive(); stopRest();
       $(".workout-ov")?.remove(); render();
     }
     return;
   }
-  if (undone > 0 && !(await appConfirm(`${undone} nicht abgehakte${undone === 1 ? "r Satz wird" : " Sätze werden"} verworfen. Workout beenden?`, { ok: "Beenden" }))) return;
+  if (undone > 0 && !(await appConfirm(
+    tr(undone === 1 ? "{n} nicht abgehakter Satz wird verworfen. Workout beenden?"
+                    : "{n} nicht abgehakte Sätze werden verworfen. Workout beenden?", { n: undone }),
+    { ok: tr("Beenden") }))) return;
   if (!active) return;
 
   // Rekorde ermitteln (vor dem Speichern, gegen die bisherige Historie)
@@ -2193,11 +2220,11 @@ function planUnterschied(vorher, nachher) {
   const dazu = neu.filter((id) => !alt.includes(id)).length;
   const weg = alt.filter((id) => !neu.includes(id)).length;
   const teile = [];
-  if (dazu) teile.push(`${dazu} ${dazu === 1 ? "Übung" : "Übungen"} dazu`);
-  if (weg) teile.push(`${weg} ${weg === 1 ? "Übung" : "Übungen"} entfernt`);
+  if (dazu) teile.push(tr(dazu === 1 ? "{n} Übung dazu" : "{n} Übungen dazu", { n: dazu }));
+  if (weg) teile.push(tr(weg === 1 ? "{n} Übung entfernt" : "{n} Übungen entfernt", { n: weg }));
   if (!dazu && !weg) {
     const umsortiert = alt.join() !== neu.join();
-    teile.push(umsortiert ? "Reihenfolge geändert" : "Sätze geändert");
+    teile.push(umsortiert ? tr("Reihenfolge geändert") : tr("Sätze geändert"));
   }
   return teile.join(", ");
 }
@@ -2211,8 +2238,8 @@ async function planAbgleichen(h) {
 
   const was = planUnterschied(wo.exercises, h.exercises);
   const ok = await appConfirm(
-    `Du hast im Workout etwas verändert (${was}). Soll „${wo.name}" künftig so aussehen?`,
-    { ok: "Übernehmen", cancel: "Nur diesmal" });
+    tr("Du hast im Workout etwas verändert ({was}). Soll „{name}\" künftig so aussehen?", { was, name: wo.name }),
+    { ok: tr("Übernehmen"), cancel: tr("Nur diesmal") });
   if (!ok) return;
   wo.exercises = h.exercises.map((e) => ({
     exerciseId: e.exerciseId,
@@ -2221,7 +2248,7 @@ async function planAbgleichen(h) {
   }));
   saveDB();
   render();
-  toast(`„${wo.name}" aktualisiert`);
+  toast(tr("„{name}\" aktualisiert", { name: wo.name }));
 }
 
 /* ═══════════════ Coach ═══════════════
@@ -2249,9 +2276,9 @@ function coachTipps(w, prs) {
 
   // 1) Rekorde zuerst – das ist die stärkste Rückmeldung
   for (const p of prs.slice(0, 2)) {
-    tipps.push({ ton: "lob", text: p.first
-      ? `${p.name}: erste Marke gesetzt. Ab hier geht es aufwärts.`
-      : `${p.name}: neuer Bestwert. Sauber.` });
+    tipps.push({ ton: "lob", text: tr(p.first
+      ? "{name}: erste Marke gesetzt. Ab hier geht es aufwärts."
+      : "{name}: neuer Bestwert. Sauber.", { name: p.name }) });
   }
 
   // 2) Steigerung oder Rückgang gegenüber dem letzten Mal
@@ -2264,11 +2291,13 @@ function coachTipps(w, prs) {
     if (!damals) continue;
     const name = exName(ex.exerciseId);
     if (jetzt > damals) {
-      tipps.push({ ton: "lob", text:
-        `${name}: ${fmtKg(jetzt)} kg statt ${fmtKg(damals)} kg beim letzten Mal. Schöne Steigerung.` });
+      tipps.push({ ton: "lob", text: tr(
+        "{name}: {jetzt} kg statt {damals} kg beim letzten Mal. Schöne Steigerung.",
+        { name, jetzt: fmtKg(jetzt), damals: fmtKg(damals) }) });
     } else if (jetzt < damals * 0.92) {
-      tipps.push({ ton: "frage", text:
-        `${name}: ${fmtKg(jetzt)} kg, letztes Mal waren es ${fmtKg(damals)} kg. War das Absicht – oder steckt Müdigkeit dahinter?` });
+      tipps.push({ ton: "frage", text: tr(
+        "{name}: {jetzt} kg, letztes Mal waren es {damals} kg. War das Absicht – oder steckt Müdigkeit dahinter?",
+        { name, jetzt: fmtKg(jetzt), damals: fmtKg(damals) }) });
     }
   }
 
@@ -2287,8 +2316,9 @@ function coachTipps(w, prs) {
     const werte = reihe.map((e) => bestwert(typ, e));
     const wdh = reihe.map((e) => Math.max(...e.sets.map((x) => x.r || 0)));
     if (werte.every((v) => v === werte[0]) && wdh.every((v) => v === wdh[0]) && werte[0] > 0) {
-      tipps.push({ ton: "frage", text:
-        `Bei ${exName(ex.exerciseId)} liegst du seit drei Einheiten bei ${fmtKg(werte[0])} kg × ${wdh[0]}. Bist du da wirklich ans Limit gegangen?` });
+      tipps.push({ ton: "frage", text: tr(
+        "Bei {name} liegst du seit drei Einheiten bei {kg} kg × {r}. Bist du da wirklich ans Limit gegangen?",
+        { name: exName(ex.exerciseId), kg: fmtKg(werte[0]), r: wdh[0] }) });
     }
   }
 
@@ -2297,8 +2327,9 @@ function coachTipps(w, prs) {
     if (exType(ex.exerciseId) !== "weight_reps" || ex.sets.length < 3) continue;
     const gleich = ex.sets.every((x) => x.w === ex.sets[0].w && x.r === ex.sets[0].r);
     if (gleich && (ex.sets[0].r || 0) >= 12) {
-      tipps.push({ ton: "hinweis", text:
-        `${exName(ex.exerciseId)}: dreimal ${ex.sets[0].r} Wiederholungen ohne Einbruch. Da ist Luft für mehr Gewicht.` });
+      tipps.push({ ton: "hinweis", text: tr(
+        "{name}: dreimal {r} Wiederholungen ohne Einbruch. Da ist Luft für mehr Gewicht.",
+        { name: exName(ex.exerciseId), r: ex.sets[0].r }) });
     }
   }
 
@@ -2308,8 +2339,8 @@ function coachTipps(w, prs) {
     const a = workoutVolume(w), b2 = workoutVolume(vorherGleich);
     if (b2 > 0) {
       const proz = Math.round(((a - b2) / b2) * 100);
-      if (proz >= 8) tipps.push({ ton: "lob", text: `Gesamtvolumen ${proz} % über dem letzten „${w.name}". Das summiert sich.` });
-      else if (proz <= -15) tipps.push({ ton: "hinweis", text: `Gesamtvolumen ${Math.abs(proz)} % unter dem letzten „${w.name}" – kürzeres Training oder weniger Sätze?` });
+      if (proz >= 8) tipps.push({ ton: "lob", text: tr("Gesamtvolumen {proz} % über dem letzten „{name}\". Das summiert sich.", { proz, name: w.name }) });
+      else if (proz <= -15) tipps.push({ ton: "hinweis", text: tr("Gesamtvolumen {proz} % unter dem letzten „{name}\" – kürzeres Training oder weniger Sätze?", { proz: Math.abs(proz), name: w.name }) });
     }
   }
 
@@ -2323,29 +2354,29 @@ function coachBlock(w, prs) {
   const tipps = coachTipps(w, prs);
   if (!tipps.length) return "";
   const zeichen = { lob: "trophy", frage: "search", hinweis: "timer" };
-  return `<div class="section-label">Coach</div>` + tipps.map((t) => `
-    <div class="coach-zeile ${t.ton}">
-      <span class="coach-ic">${icon(zeichen[t.ton])}</span>
-      <span>${esc(t.text)}</span>
+  return `<div class="section-label">${tr("Coach")}</div>` + tipps.map((x) => `
+    <div class="coach-zeile ${x.ton}">
+      <span class="coach-ic">${icon(zeichen[x.ton])}</span>
+      <span>${esc(x.text)}</span>
     </div>`).join("");
 }
 
 function showSummary(w, prs) {
   openSheet(`
     <div class="summary-hero">
-      <div class="sub">Workout gespeichert</div>
+      <div class="sub">${tr("Workout gespeichert")}</div>
       <div class="big">${fmtVol(workoutVolume(w))}</div>
-      <div class="sub">${fmtDur(w.durationSec)} · ${workoutSets(w)} Sätze · ${w.exercises.length} Übungen</div>
+      <div class="sub">${fmtDur(w.durationSec)} · ${workoutSets(w)} ${tr("Sätze")} · ${w.exercises.length} ${tr("Übungen")}</div>
     </div>
-    ${prs.length ? `<div class="section-label">Neue Rekorde</div>` + prs.map((p) => `
+    ${prs.length ? `<div class="section-label">${tr("Neue Rekorde")}</div>` + prs.map((p) => `
       <div class="row" style="cursor:default">
-        <span class="badge badge-record">${icon("trophy")} ${p.first ? "Erste Marke" : "Rekord"}</span>
+        <span class="badge badge-record">${icon("trophy")} ${p.first ? tr("Erste Marke") : tr("Rekord")}</span>
         <span class="row-main"><span class="row-title">${esc(p.name)}</span></span>
-        <b style="font-variant-numeric:tabular-nums">${p.type === "weight_reps" ? fmtKg(p.val) + " kg" : p.type === "reps" ? p.val + " Wdh." : fmtClock(p.val)}</b>
+        <b style="font-variant-numeric:tabular-nums">${p.type === "weight_reps" ? fmtKg(p.val) + " kg" : p.type === "reps" ? tr("{n} Wdh.", { n: p.val }) : fmtClock(p.val)}</b>
       </div>`).join("") : ""}
     ${coachBlock(w, prs)}
     ${backupReminder()}
-    <button class="btn" data-action="close-sheet" style="margin-top:14px">Fertig</button>
+    <button class="btn" data-action="close-sheet" style="margin-top:14px">${tr("Fertig")}</button>
   `);
 }
 
@@ -2358,12 +2389,12 @@ function backupReminder() {
   return `
     <div class="card" style="display:flex;gap:12px;align-items:center;margin-top:16px">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:800;font-size:14px">Backup sichern</div>
+        <div style="font-weight:800;font-size:14px">${tr("Backup sichern")}</div>
         <div class="hint">${last
-          ? "Dein letztes Backup ist über zwei Wochen her."
-          : "Du hast noch kein Backup – so gehen deine Daten nie verloren."}</div>
+          ? tr("Dein letztes Backup ist über zwei Wochen her.")
+          : tr("Du hast noch kein Backup – so gehen deine Daten nie verloren.")}</div>
       </div>
-      <button class="btn btn-compact" data-action="export-data">Sichern</button>
+      <button class="btn btn-compact" data-action="export-data">${tr("Sichern")}</button>
     </div>`;
 }
 
@@ -2379,9 +2410,9 @@ function renderResumeBar() {
   bar.innerHTML = `
     <span style="flex:1;text-align:left;min-width:0">
       <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(active.name)}</span>
-      <span class="sub">Workout läuft · <span class="t">${fmtClock((Date.now() - active.startedAt) / 1000)}</span></span>
+      <span class="sub">${tr("Workout läuft ·")} <span class="t">${fmtClock((Date.now() - active.startedAt) / 1000)}</span></span>
     </span>
-    <span class="go">Weiter</span>`;
+    <span class="go">${tr("Weiter")}</span>`;
   document.body.appendChild(bar);
 }
 ACTIONS["resume-workout"] = () => openWorkoutScreen();
@@ -2476,8 +2507,8 @@ function startRest(secs, info) {
   bar.innerHTML = `
     <div class="time" id="rest-time"></div>
     <div class="bar"><i id="rest-fill"></i></div>
-    <button data-action="rest-plus">+15 s</button>
-    <button data-action="rest-skip">Fertig</button>`;
+    <button data-action="rest-plus">${tr("+15 s")}</button>
+    <button data-action="rest-skip">${tr("Fertig")}</button>`;
   document.body.appendChild(bar);
   document.body.classList.add("rest-an");
   rest.interval = setInterval(tickRest, 250);
@@ -2525,7 +2556,7 @@ function restDone() {
   if (PausenTimer && PausenTimer.pauseVorbei && id) {
     standKette = standKette.then(() => PausenTimer.pauseVorbei({ pauseId: id })).catch(() => {});
   }
-  toast("Pause vorbei – nächster Satz!");
+  toast(tr("Pause vorbei – nächster Satz!"));
 }
 
 // Die native Seite meldet das Ende. Das kann auch passiert sein, während die
@@ -2533,7 +2564,7 @@ function restDone() {
 function pauseSignalEmpfangen() {
   if (!rest) return;
   stopRest({ still: true });
-  toast("Pause vorbei – nächster Satz!");
+  toast(tr("Pause vorbei – nächster Satz!"));
 }
 
 let signalVerbunden = false;
@@ -2655,33 +2686,35 @@ function renderHistory() {
   const sets = ws.reduce((a, w) => a + workoutSets(w), 0);
 
   $("#screen-history").innerHTML = `
-    <div class="screen-head"><div class="screen-title">Verlauf</div></div>
-    <div class="seg" role="tablist" aria-label="Zeitraum">
-      ${HIST_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === histRange}" class="${r.id === histRange ? "active" : ""}" data-action="hist-range" data-r="${esc(r.id)}">${r.label}</button>`).join("")}
+    <div class="screen-head"><div class="screen-title">${tr("Verlauf")}</div></div>
+    <div class="seg" role="tablist" aria-label="${tr("Zeitraum")}">
+      ${HIST_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === histRange}" class="${r.id === histRange ? "active" : ""}" data-action="hist-range" data-r="${esc(r.id)}">${tr(r.label)}</button>`).join("")}
     </div>
     <div class="swipe-pane" id="hist-pane">
-    <div class="section-label">${range.title}</div>
+    <div class="section-label">${tr(range.title)}</div>
     <div class="stat-tiles">
-      <div class="stat-tile"><b>${ws.length}</b><span>Workouts</span></div>
-      <div class="stat-tile"><b>${sets}</b><span>Sätze</span></div>
-      <div class="stat-tile"><b>${fmtVol(vol)}</b><span>Volumen</span></div>
+      <div class="stat-tile"><b>${ws.length}</b><span>${tr("Workouts")}</span></div>
+      <div class="stat-tile"><b>${sets}</b><span>${tr("Sätze")}</span></div>
+      <div class="stat-tile"><b>${fmtVol(vol)}</b><span>${tr("Volumen")}</span></div>
     </div>
     <div class="card chart-card">
-      <h3>Volumen</h3>
+      <h3>${tr("Volumen")}</h3>
       <div class="chart-sub">${
-        histRange === "week" ? "Gewicht × Wiederholungen pro Tag, aktuelle Woche"
-        : histRange === "quarter" ? "Gewicht × Wiederholungen pro Woche, aktuelles Quartal"
-        : histRange === "year" ? "Gewicht × Wiederholungen pro Monat, aktuelles Jahr"
-        : "Gewicht × Wiederholungen pro " + (volumeBuckets("all").length && volumeBuckets("all")[0].end - volumeBuckets("all")[0].start > 32 * 86400000 ? "Jahr" : "Monat") + ", gesamte Historie"
+        histRange === "week" ? tr("Gewicht × Wiederholungen pro Tag, aktuelle Woche")
+        : histRange === "quarter" ? tr("Gewicht × Wiederholungen pro Woche, aktuelles Quartal")
+        : histRange === "year" ? tr("Gewicht × Wiederholungen pro Monat, aktuelles Jahr")
+        : volumeBuckets("all").length && volumeBuckets("all")[0].end - volumeBuckets("all")[0].start > 32 * 86400000
+          ? tr("Gewicht × Wiederholungen pro Jahr, gesamte Historie")
+          : tr("Gewicht × Wiederholungen pro Monat, gesamte Historie")
       }</div>
       <div class="chart-wrap">${volumeChart(histRange)}</div>
     </div>
     ${beobachtetBlock()}
-    <div class="section-label">Workouts</div>
+    <div class="section-label">${tr("Workouts")}</div>
     ${ws.length ? ws.map(historyRow).join("") : `
       <div class="empty">${icon("history")}
-        <h3>Nichts im Zeitraum</h3>
-        <p>${DB.workouts.length ? "In diesem Zeitraum wurde noch nicht trainiert." : "Starte dein erstes Workout über den Start-Tab."}</p>
+        <h3>${tr("Nichts im Zeitraum")}</h3>
+        <p>${DB.workouts.length ? tr("In diesem Zeitraum wurde noch nicht trainiert.") : tr("Starte dein erstes Workout über den Start-Tab.")}</p>
       </div>`}
     </div>
   `;
@@ -2701,7 +2734,7 @@ const beobachtet = () =>
 function beobachtetBlock() {
   const ids = beobachtet();
   return `
-    <div class="section-label">Übungen im Blick</div>
+    <div class="section-label">${tr("Übungen im Blick")}</div>
     ${ids.map((id) => {
       const typ = exType(id);
       const rek = recordFor(id);
@@ -2709,16 +2742,19 @@ function beobachtetBlock() {
       <div class="card chart-card">
         <h3>
           <button class="watch-name" data-action="open-exercise" data-id="${esc(id)}">${esc(exName(id))}</button>
-          <button class="mini-btn danger" data-action="watch-del" data-id="${esc(id)}" aria-label="Aus der Übersicht nehmen">${icon("x")}</button>
+          <button class="mini-btn danger" data-action="watch-del" data-id="${esc(id)}" aria-label="${tr("Aus der Übersicht nehmen")}">${icon("x")}</button>
         </h3>
-        <div class="chart-sub">${
-          typ === "time" ? "Beste Zeit" : typ === "reps" ? "Meiste Wiederholungen" : "Bestes Gewicht"
-        } pro Workout · alle Workouts${rek ? " · Rekord " + fmtSet(typ, rek.set) : ""}</div>
+        <div class="chart-sub">${(() => {
+          const was = typ === "time" ? tr("Beste Zeit") : typ === "reps" ? tr("Meiste Wiederholungen") : tr("Bestes Gewicht");
+          return rek
+            ? tr("{was} pro Workout · alle Workouts · Rekord {rek}", { was, rek: fmtSet(typ, rek.set) })
+            : tr("{was} pro Workout · alle Workouts", { was });
+        })()}</div>
         <div class="chart-wrap">${progressChart(id)}</div>
       </div>`;
     }).join("")}
-    ${ids.length === 0 ? `<p class="hint" style="padding:2px 0 10px">Noch keine ausgewählt. Wähle bis zu ${BEOBACHTET_MAX} Übungen – etwa Kniebeugen –, dann siehst du hier ihre Entwicklung über alle Workouts.</p>` : ""}
-    <button class="btn btn-soft" data-action="watch-pick">${icon(ids.length ? "edit" : "plus")} Übungen ${ids.length ? "ändern" : "wählen"}</button>`;
+    ${ids.length === 0 ? `<p class="hint" style="padding:2px 0 10px">${tr("Noch keine ausgewählt. Wähle bis zu {n} Übungen – etwa Kniebeugen –, dann siehst du hier ihre Entwicklung über alle Workouts.", { n: BEOBACHTET_MAX })}</p>` : ""}
+    <button class="btn btn-soft" data-action="watch-pick">${icon(ids.length ? "edit" : "plus")} ${ids.length ? tr("Übungen ändern") : tr("Übungen wählen")}</button>`;
 }
 
 ACTIONS["watch-pick"] = () => {
@@ -2745,7 +2781,7 @@ function historyRow(w) {
     <button class="row" data-action="open-workout" data-id="${esc(w.id)}">
       <span class="row-main">
         <span class="row-title">${esc(w.name)}</span>
-        <span class="row-sub">${fmtDate(w.startedAt)} · ${fmtDur(w.durationSec)} · ${workoutSets(w)} Sätze</span>
+        <span class="row-sub">${fmtDate(w.startedAt)} · ${fmtDur(w.durationSec)} · ${workoutSets(w)} ${tr("Sätze")}</span>
       </span>
       <span class="row-side"><b style="font-variant-numeric:tabular-nums">${fmtVol(workoutVolume(w))}</b></span>
       <span class="chev">${icon("chevR")}</span>
@@ -2759,14 +2795,14 @@ function openWorkoutDetail(id) {
   if (!w) return;
   openOverlay(`
     <div class="overlay-head">
-      <button class="icon-btn plain" data-action="close-overlay" aria-label="Zurück">${icon("chevL")}</button>
+      <button class="icon-btn plain" data-action="close-overlay" aria-label="${tr("Zurück")}">${icon("chevL")}</button>
       <div class="screen-title">${esc(w.name)}</div>
     </div>
-    <div class="hint" style="margin-bottom:12px">${new Date(w.startedAt).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
+    <div class="hint" style="margin-bottom:12px">${new Date(w.startedAt).toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
     <div class="stat-tiles">
-      <div class="stat-tile"><b>${fmtDur(w.durationSec)}</b><span>Dauer</span></div>
-      <div class="stat-tile"><b>${workoutSets(w)}</b><span>Sätze</span></div>
-      <div class="stat-tile"><b>${fmtVol(workoutVolume(w))}</b><span>Volumen</span></div>
+      <div class="stat-tile"><b>${fmtDur(w.durationSec)}</b><span>${tr("Dauer")}</span></div>
+      <div class="stat-tile"><b>${workoutSets(w)}</b><span>${tr("Sätze")}</span></div>
+      <div class="stat-tile"><b>${fmtVol(workoutVolume(w))}</b><span>${tr("Volumen")}</span></div>
     </div>
     ${w.exercises.map((ex) => `
       <div class="card" style="padding:12px 14px">
@@ -2774,13 +2810,13 @@ function openWorkoutDetail(id) {
         ${ex.sets.map((s, i) => `<div style="display:flex;gap:10px;font-variant-numeric:tabular-nums;padding:2px 0">
           <span style="color:var(--ink-3);width:22px">${i + 1}.</span><span>${fmtSet(exType(ex.exerciseId), s)}</span></div>`).join("")}
       </div>`).join("")}
-    <button class="btn btn-soft" data-action="repeat-workout" data-id="${esc(w.id)}">Workout wiederholen</button>
-    <button class="btn btn-danger-soft" data-action="delete-workout" data-id="${esc(w.id)}" style="margin-top:10px">${icon("trash")} Löschen</button>
+    <button class="btn btn-soft" data-action="repeat-workout" data-id="${esc(w.id)}">${tr("Workout wiederholen")}</button>
+    <button class="btn btn-danger-soft" data-action="delete-workout" data-id="${esc(w.id)}" style="margin-top:10px">${icon("trash")} ${tr("Löschen")}</button>
   `, "wo-detail-ov");
 }
 
 ACTIONS["repeat-workout"] = (el) => {
-  if (active) { toast("Es läuft bereits ein Workout"); return; }
+  if (active) { toast(tr("Es läuft bereits ein Workout")); return; }
   const w = DB.workouts.find((x) => x.id === el.dataset.id);
   if (!w) return;
   active = {
@@ -2797,17 +2833,16 @@ ACTIONS["repeat-workout"] = (el) => {
 };
 
 ACTIONS["delete-workout"] = async (el) => {
-  if (!(await appConfirm("Workout endgültig löschen?", { ok: "Löschen", danger: true }))) return;
+  if (!(await appConfirm(tr("Workout endgültig löschen?"), { ok: tr("Löschen"), danger: true }))) return;
   DB.workouts = DB.workouts.filter((w) => w.id !== el.dataset.id);
   saveDB();
   $(".wo-detail-ov")?.remove();
   render();
-  toast("Workout gelöscht");
+  toast(tr("Workout gelöscht"));
 };
 
 /* ═══════════════ Charts (SVG, eine Serie, Akzentfarbe) ═══════════════ */
 
-const MONTH_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 // Zeit-Buckets für die jeweilige Sicht: {start, end, label, show}
 function volumeBuckets(range) {
@@ -2828,7 +2863,7 @@ function volumeBuckets(range) {
   } else if (range === "year") {
     const y = new Date().getFullYear();
     for (let m = 0; m < 12; m++) {
-      buckets.push({ start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime(), label: MONTH_SHORT[m], show: m % 2 === 0 });
+      buckets.push({ start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime(), label: monatKurz(m), show: m % 2 === 0 });
     }
   } else {
     if (!DB.workouts.length) return [];
@@ -2842,7 +2877,7 @@ function volumeBuckets(range) {
     } else {
       let y = first.getFullYear(), m = first.getMonth();
       while (y < cur.getFullYear() || (y === cur.getFullYear() && m <= cur.getMonth())) {
-        buckets.push({ start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime(), label: MONTH_SHORT[m] + (m === 0 ? " " + String(y).slice(2) : ""), show: buckets.length % 2 === 0 });
+        buckets.push({ start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime(), label: monatKurz(m) + (m === 0 ? " " + String(y).slice(2) : ""), show: buckets.length % 2 === 0 });
         m++; if (m > 11) { m = 0; y++; }
       }
     }
@@ -2856,7 +2891,7 @@ function volumeChart(range) {
     DB.workouts.filter((w) => w.startedAt >= b.start && w.startedAt < b.end)
       .reduce((a, w) => a + workoutVolume(w), 0));
   if (!buckets.length || !vols.some((v) => v > 0)) {
-    return `<div class="chart-empty">Sobald du in diesem Zeitraum Workouts trackst, siehst du hier dein Volumen.</div>`;
+    return `<div class="chart-empty">${tr("Sobald du in diesem Zeitraum Workouts trackst, siehst du hier dein Volumen.")}</div>`;
   }
   const W = 320, H = 150, padL = 4, padR = 4, padT = 20, padB = 20;
   const max = Math.max(...vols, 1);
@@ -2884,13 +2919,13 @@ function volumeChart(range) {
     }
     // Direkte Beschriftung: Maximum und aktueller Zeitraum
     if (v > 0 && (i === maxIdx || i === curIdx)) {
-      out += `<text class="chart-value-text" x="${cx}" y="${y - 5}" text-anchor="middle">${v >= 1000 ? (Math.round(v / 100) / 10).toLocaleString("de-DE") + "k" : Math.round(v)}</text>`;
+      out += `<text class="chart-value-text" x="${cx}" y="${y - 5}" text-anchor="middle">${v >= 1000 ? (Math.round(v / 100) / 10).toLocaleString(locale()) + "k" : Math.round(v)}</text>`;
     }
     if (buckets[i].show) {
       out += `<text class="chart-axis-text" x="${cx}" y="${H - 5}" text-anchor="middle">${esc(buckets[i].label)}</text>`;
     }
   });
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Balkendiagramm: Trainingsvolumen">${out}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Balkendiagramm: Trainingsvolumen")}">${out}</svg>`;
 }
 
 function progressChart(exId) {
@@ -2905,7 +2940,7 @@ function progressChart(exId) {
   }
   const data = pts.slice(-20);
   if (data.length < 2) {
-    return `<div class="chart-empty">Nach mindestens zwei Workouts mit dieser Übung erscheint hier der Verlauf.</div>`;
+    return `<div class="chart-empty">${tr("Nach mindestens zwei Workouts mit dieser Übung erscheint hier der Verlauf.")}</div>`;
   }
   const W = 320, H = 150, padL = 34, padR = 12, padT = 14, padB = 20;
   const innerW = W - padL - padR, innerH = H - padT - padB;
@@ -2933,7 +2968,7 @@ function progressChart(exId) {
   out += `<text class="chart-value-text" x="${X(data.length - 1)}" y="${Y(lastP.val) - 9}" text-anchor="end">${fmtVal(lastP.val)}</text>`;
   out += `<text class="chart-axis-text" x="${padL}" y="${H - 5}">${fmtDateShort(data[0].date)}</text>`;
   out += `<text class="chart-axis-text" x="${W - padR}" y="${H - 5}" text-anchor="end">${fmtDateShort(lastP.date)}</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Liniendiagramm: Entwicklung über die Zeit">${out}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Liniendiagramm: Entwicklung über die Zeit")}">${out}</svg>`;
 }
 
 /* ═══════════════ Einstellungen ═══════════════ */
@@ -2941,68 +2976,75 @@ function progressChart(exId) {
 ACTIONS["open-settings"] = () => {
   const s = DB.settings;
   openSheet(`
-    <div class="sheet-title">Einstellungen
-      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    <div class="sheet-title">${tr("Einstellungen")}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
     </div>
     <div class="settings-row">
-      <div class="lbl">Pausen-Timer<small>Startet automatisch nach jedem abgehakten Satz</small></div>
-      <button class="switch ${s.autoRest ? "on" : ""}" data-action="toggle-autorest" role="switch" aria-checked="${s.autoRest}" aria-label="Pausen-Timer"></button>
+      <div class="lbl">${tr("Sprache")}<small>${tr("Sprache der App")}</small></div>
+      <select data-input="sprache" aria-label="${tr("Sprache")}">
+        ${SPRACHEN.map((x) => `<option value="${esc(x.id)}" ${x.id === SPRACHE ? "selected" : ""}>${esc(x.label)}</option>`).join("")}
+      </select>
     </div>
     <div class="settings-row">
-      <div class="lbl">Akzentfarbe<small id="accent-name">${esc(accentName())}</small></div>
-      <div class="accent-picker" role="radiogroup" aria-label="Akzentfarbe">
+      <div class="lbl">${tr("Pausen-Timer")}<small>${tr("Startet automatisch nach jedem abgehakten Satz")}</small></div>
+      <button class="switch ${s.autoRest ? "on" : ""}" data-action="toggle-autorest" role="switch" aria-checked="${s.autoRest}" aria-label="${tr("Pausen-Timer")}"></button>
+    </div>
+    <div class="settings-row">
+      <div class="lbl">${tr("Akzentfarbe")}<small id="accent-name">${esc(accentName())}</small></div>
+      <div class="accent-picker" role="radiogroup" aria-label="${tr("Akzentfarbe")}">
         ${ACCENTS.map((a) => `
           <button class="accent-dot ${a.id === (s.accent || ACCENT_DEFAULT) ? "active" : ""}"
             data-action="set-accent" data-a="${esc(a.id)}"
             style="--dot:${a.dot};--dot-ink:${a.ink}"
             role="radio" aria-checked="${a.id === (s.accent || ACCENT_DEFAULT)}"
-            aria-label="${a.name}">${icon("check")}</button>`).join("")}
+            aria-label="${esc(tr(a.name))}">${icon("check")}</button>`).join("")}
       </div>
     </div>
     <div class="settings-row">
-      <div class="lbl">Coach<small>Kurze Rückmeldung nach jedem Workout</small></div>
-      <button class="switch ${s.coach !== false ? "on" : ""}" data-action="toggle-coach" role="switch" aria-checked="${s.coach !== false}" aria-label="Coach"></button>
+      <div class="lbl">${tr("Coach")}<small>${tr("Kurze Rückmeldung nach jedem Workout")}</small></div>
+      <button class="switch ${s.coach !== false ? "on" : ""}" data-action="toggle-coach" role="switch" aria-checked="${s.coach !== false}" aria-label="${tr("Coach")}"></button>
     </div>
     <div class="settings-row">
-      <div class="lbl">Geräte je Training<small>Kabelzug und Maschinen nur mit demselben Training vergleichen – freie Gewichte immer</small></div>
-      <button class="switch ${s.geraeteGetrennt !== false ? "on" : ""}" data-action="toggle-geraete" role="switch" aria-checked="${s.geraeteGetrennt !== false}" aria-label="Geräte je Training"></button>
+      <div class="lbl">${tr("Geräte je Training")}<small>${tr("Kabelzug und Maschinen nur mit demselben Training vergleichen – freie Gewichte immer")}</small></div>
+      <button class="switch ${s.geraeteGetrennt !== false ? "on" : ""}" data-action="toggle-geraete" role="switch" aria-checked="${s.geraeteGetrennt !== false}" aria-label="${tr("Geräte je Training")}"></button>
     </div>
     <div class="settings-row">
-      <div class="lbl">Pausendauer</div>
+      <div class="lbl">${tr("Pausendauer")}</div>
       <select data-input="rest-secs">
         ${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((v) =>
-          `<option value="${esc(v)}" ${v === s.restSecs ? "selected" : ""}>${v < 60 ? v + " s" : fmtClock(v) + " Min."}</option>`).join("")}
+          `<option value="${esc(v)}" ${v === s.restSecs ? "selected" : ""}>${v < 60 ? v + " s" : tr("{n} Min.", { n: fmtClock(v) })}</option>`).join("")}
       </select>
     </div>
     <div class="divider"></div>
-    <div class="section-label" style="margin-top:0">Datensicherung</div>
+    <div class="section-label" style="margin-top:0">${tr("Datensicherung")}</div>
     <div class="settings-row">
-      <div class="lbl">Backup erstellen<small>${lastBackupLabel()}</small></div>
-      <button class="btn btn-compact" data-action="export-data">${icon("download")} Sichern</button>
+      <div class="lbl">${tr("Backup erstellen")}<small>${esc(lastBackupLabel())}</small></div>
+      <button class="btn btn-compact" data-action="export-data">${icon("download")} ${tr("Sichern")}</button>
     </div>
     <div class="settings-row">
-      <div class="lbl">Backup wiederherstellen<small>Nach einer Neuinstallation zurückholen</small></div>
-      <button class="btn btn-compact btn-ghost" data-action="import-data">${icon("upload")} Laden</button>
+      <div class="lbl">${tr("Backup wiederherstellen")}<small>${tr("Nach einer Neuinstallation zurückholen")}</small></div>
+      <button class="btn btn-compact btn-ghost" data-action="import-data">${icon("upload")} ${tr("Laden")}</button>
     </div>
-    <p class="hint" style="margin:10px 2px 0">Sichere dein Backup in Google Drive oder Dateien – dann kannst du es
-      jederzeit zurückholen. Zusätzlich sichert Android die App automatisch in deinem Google-Konto.</p>
+    <p class="hint" style="margin:10px 2px 0">${tr("Sichere dein Backup in Google Drive oder Dateien – dann kannst du es jederzeit zurückholen. Zusätzlich sichert Android die App automatisch in deinem Google-Konto.")}</p>
     <div class="divider"></div>
-    <button class="btn btn-danger-soft" data-action="wipe-data">${icon("trash")} Alle Daten löschen</button>
-    <p class="hint" style="margin-top:16px;text-align:center" id="ver-zeile">${APP_NAME} ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
+    <button class="btn btn-danger-soft" data-action="wipe-data">${icon("trash")} ${tr("Alle Daten löschen")}</button>
+    <p class="hint" style="margin-top:16px;text-align:center" id="ver-zeile">${APP_NAME} ${APP_VERSION} · ${tr("Deine Daten bleiben auf diesem Gerät.")}</p>
   `);
 };
 
 function lastBackupLabel() {
-  const t = DB.settings.lastBackupAt;
-  if (!t) return "Noch kein Backup erstellt";
-  const days = Math.floor((Date.now() - t) / 86400000);
-  const when = days === 0 ? "heute" : days === 1 ? "gestern" : "vor " + days + " Tagen";
-  return "Zuletzt " + when + " (" + fmtDate(t) + ")";
+  const ts = DB.settings.lastBackupAt;
+  if (!ts) return tr("Noch kein Backup erstellt");
+  const days = Math.floor((Date.now() - ts) / 86400000);
+  const datum = fmtDate(ts);
+  if (days === 0) return tr("Zuletzt heute ({datum})", { datum });
+  if (days === 1) return tr("Zuletzt gestern ({datum})", { datum });
+  return tr("Zuletzt vor {n} Tagen ({datum})", { n: days, datum });
 }
 
 function accentName() {
   const a = ACCENTS.find((x) => x.id === (DB.settings.accent || ACCENT_DEFAULT));
-  return a ? a.name : "Blau";
+  return a ? tr(a.name) : tr("Blau");
 }
 
 ACTIONS["set-accent"] = (el) => {
@@ -3074,17 +3116,17 @@ ACTIONS["export-data"] = async () => {
         path: name, data: json, directory: "CACHE", encoding: "utf8",
       });
       await Share.share({
-        title: "Lumora-Backup",
+        title: tr("Lumora-Backup"),
         url: uri,
-        dialogTitle: "Backup speichern",
+        dialogTitle: tr("Backup speichern"),
       });
       markBackupDone();
-      toast("Backup erstellt");
+      toast(tr("Backup erstellt"));
       return;
     } catch (e) {
       // Abbruch durch den Nutzer ist kein Fehler
       if (/cancel/i.test(String((e && e.message) || e))) return;
-      showBackupText(json, "Teilen hat nicht geklappt – hier ist dein Backup als Text:");
+      showBackupText(json, tr("Teilen hat nicht geklappt – hier ist dein Backup als Text:"));
       return;
     }
   }
@@ -3098,7 +3140,7 @@ ACTIONS["export-data"] = async () => {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     markBackupDone();
-    toast("Backup gespeichert");
+    toast(tr("Backup gespeichert"));
   } catch (e) {
     showBackupText(json);
   }
@@ -3107,12 +3149,12 @@ ACTIONS["export-data"] = async () => {
 // Letzter Ausweg: Backup als Text zum Kopieren
 function showBackupText(json, note) {
   openSheet(`
-    <div class="sheet-title">Backup als Text
-      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    <div class="sheet-title">${tr("Backup als Text")}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
     </div>
-    <p class="hint" style="margin-bottom:10px">${esc(note || "Kopiere den Text und sichere ihn, z. B. in einer Notiz.")}</p>
+    <p class="hint" style="margin-bottom:10px">${esc(note || tr("Kopiere den Text und sichere ihn, z. B. in einer Notiz."))}</p>
     <textarea id="backup-text" readonly rows="6" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;font-family:monospace">${esc(json)}</textarea>
-    <button class="btn" data-action="copy-backup" style="margin-top:12px">Text kopieren</button>
+    <button class="btn" data-action="copy-backup" style="margin-top:12px">${tr("Text kopieren")}</button>
   `);
 }
 
@@ -3126,24 +3168,24 @@ ACTIONS["copy-backup"] = async () => {
     document.execCommand("copy");
   }
   markBackupDone();
-  toast("In die Zwischenablage kopiert");
+  toast(tr("In die Zwischenablage kopiert"));
 };
 
 /* ── Backup: wiederherstellen ─────────────────────────────── */
 
 ACTIONS["import-data"] = () => {
   openSheet(`
-    <div class="sheet-title">Backup wiederherstellen
-      <button class="icon-btn plain" data-action="close-sheet" aria-label="Schließen">${icon("x")}</button>
+    <div class="sheet-title">${tr("Backup wiederherstellen")}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
     </div>
-    <p class="hint" style="margin-bottom:14px">Wähle deine Backup-Datei aus – oder füge den Backup-Text unten ein.</p>
-    <button class="btn" data-action="import-file">${icon("upload")} Datei auswählen</button>
+    <p class="hint" style="margin-bottom:14px">${tr("Wähle deine Backup-Datei aus – oder füge den Backup-Text unten ein.")}</p>
+    <button class="btn" data-action="import-file">${icon("upload")} ${tr("Datei auswählen")}</button>
     <div class="divider"></div>
     <div class="field">
-      <label for="restore-text">Backup-Text einfügen</label>
+      <label for="restore-text">${tr("Backup-Text einfügen")}</label>
       <textarea id="restore-text" rows="4" placeholder='{"version":2,"plans":[…' style="font-family:monospace;font-size:12px"></textarea>
     </div>
-    <button class="btn btn-ghost" data-action="import-paste">Aus Text wiederherstellen</button>
+    <button class="btn btn-ghost" data-action="import-paste">${tr("Aus Text wiederherstellen")}</button>
   `);
 };
 
@@ -3156,7 +3198,7 @@ ACTIONS["import-file"] = () => {
     if (!f) return;
     const rd = new FileReader();
     rd.onload = () => restoreBackup(String(rd.result));
-    rd.onerror = () => toast("Datei konnte nicht gelesen werden");
+    rd.onerror = () => toast(tr("Datei konnte nicht gelesen werden"));
     rd.readAsText(f);
   };
   inp.click();
@@ -3164,7 +3206,7 @@ ACTIONS["import-file"] = () => {
 
 ACTIONS["import-paste"] = () => {
   const txt = ($("#restore-text") || {}).value || "";
-  if (!txt.trim()) { toast("Bitte den Backup-Text einfügen"); return; }
+  if (!txt.trim()) { toast(tr("Bitte den Backup-Text einfügen")); return; }
   restoreBackup(txt);
 };
 
@@ -3187,24 +3229,26 @@ async function restoreBackup(text) {
     // App nicht in einen Zustand bringen, aus dem sie nicht mehr herauskommt.
     geprueft = bereinigeDB(data);
   } catch (e) {
-    toast("Das ist kein gültiges Lumora-Backup");
+    toast(tr("Das ist kein gültiges Lumora-Backup"));
     return;
   }
 
   const hasOwnData = DB.workouts.length > 0 || DB.customExercises.length > 0;
-  const anz = (n, ein, viele) => n + " " + (n === 1 ? ein : viele);
+  const anz = (n, ein, viele) => tr(n === 1 ? ein : viele, { n });
   const essenTage = data.essen && data.essen.tage && typeof data.essen.tage === "object"
     ? Object.keys(data.essen.tage).length : 0;
-  const summary = `${anz(geprueft.workouts.length, "Workout", "Workouts")}, `
-    + `${anz(geprueft.plans.length, "Plan", "Pläne")}`
-    + (essenTage ? ` und ${anz(essenTage, "Ernährungstag", "Ernährungstage")}` : "")
-    + " gefunden.";
+  const teile = {
+    workouts: anz(geprueft.workouts.length, "{n} Workout", "{n} Workouts"),
+    plaene: anz(geprueft.plans.length, "{n} Plan", "{n} Pläne"),
+    tage: anz(essenTage, "{n} Ernährungstag", "{n} Ernährungstage"),
+  };
+  const summary = tr(essenTage ? "{workouts}, {plaene} und {tage}" : "{workouts}, {plaene}", teile);
 
   let mode = "replace";
   if (hasOwnData) {
-    mode = await askRestoreMode(summary);
+    mode = await askRestoreMode(tr("{summary} gefunden.", { summary }));
     if (!mode) return;
-  } else if (!(await appConfirm(summary + " Jetzt wiederherstellen?", { ok: "Wiederherstellen" }))) {
+  } else if (!(await appConfirm(tr("{summary} gefunden. Jetzt wiederherstellen?", { summary }), { ok: tr("Wiederherstellen") }))) {
     return;
   }
 
@@ -3238,7 +3282,7 @@ async function restoreBackup(text) {
   applyAccent();
   $$(".backdrop").forEach((b) => b.remove());
   render();
-  toast(mode === "merge" ? "Backup zusammengeführt" : "Backup wiederhergestellt");
+  toast(mode === "merge" ? tr("Backup zusammengeführt") : tr("Backup wiederhergestellt"));
 }
 
 /* Die Ernährung wohnt in ihrem eigenen Speicher und darf nicht mitverwaltet
@@ -3269,12 +3313,12 @@ function essenWiederherstellen(daten, mode) {
 function askRestoreMode(summary) {
   return new Promise((resolve) => {
     const bd = openSheet(`
-      <div class="sheet-title">Wie wiederherstellen?</div>
-      <p class="hint" style="margin-bottom:14px">${esc(summary)} Du hast bereits eigene Daten in der App.</p>
-      <button class="btn" data-r="merge">Zusammenführen</button>
-      <p class="hint" style="margin:6px 2px 14px">Fehlende Workouts und Pläne werden ergänzt, vorhandene bleiben.</p>
-      <button class="btn btn-danger-soft" data-r="replace">Alles ersetzen</button>
-      <p class="hint" style="margin:6px 2px 0">Die aktuellen Daten in der App werden verworfen.</p>
+      <div class="sheet-title">${tr("Wie wiederherstellen?")}</div>
+      <p class="hint" style="margin-bottom:14px">${esc(tr("{summary} Du hast bereits eigene Daten in der App.", { summary }))}</p>
+      <button class="btn" data-r="merge">${tr("Zusammenführen")}</button>
+      <p class="hint" style="margin:6px 2px 14px">${tr("Fehlende Workouts und Pläne werden ergänzt, vorhandene bleiben.")}</p>
+      <button class="btn btn-danger-soft" data-r="replace">${tr("Alles ersetzen")}</button>
+      <p class="hint" style="margin:6px 2px 0">${tr("Die aktuellen Daten in der App werden verworfen.")}</p>
     `);
     bd.zurueck = () => { bd.remove(); resolve(null); };
     bd.addEventListener("click", (e) => {
@@ -3286,8 +3330,8 @@ function askRestoreMode(summary) {
 }
 
 ACTIONS["wipe-data"] = async () => {
-  if (!(await appConfirm("Wirklich ALLE Workouts, Pläne und Übungen löschen?", { ok: "Löschen", danger: true }))) return;
-  if (!(await appConfirm("Ganz sicher? Das kann nicht rückgängig gemacht werden.", { ok: "Endgültig löschen", danger: true }))) return;
+  if (!(await appConfirm(tr("Wirklich ALLE Workouts, Pläne und Übungen löschen?"), { ok: tr("Löschen"), danger: true }))) return;
+  if (!(await appConfirm(tr("Ganz sicher? Das kann nicht rückgängig gemacht werden."), { ok: tr("Endgültig löschen"), danger: true }))) return;
   localStorage.removeItem(LS_DB);
   localStorage.removeItem(LS_ACTIVE);
   DB = loadDB();
@@ -3295,7 +3339,7 @@ ACTIONS["wipe-data"] = async () => {
   active = null;
   $$(".backdrop").forEach((b) => b.remove());
   render();
-  toast("Alle Daten gelöscht");
+  toast(tr("Alle Daten gelöscht"));
 };
 
 /* ═══════════════ Eingabe-Delegation ═══════════════ */
@@ -3336,7 +3380,7 @@ document.addEventListener("blur", (e) => {
   if (!el.dataset || el.dataset.input !== "plan-titel") return;
   const pl = DB.plans.find((x) => x.id === el.dataset.id);
   if (pl && !pl.name.trim()) {
-    pl.name = "Mein Plan";
+    pl.name = tr("Mein Plan");
     saveDB();
     el.value = pl.name;
     render();
@@ -3346,6 +3390,18 @@ document.addEventListener("blur", (e) => {
 document.addEventListener("change", (e) => {
   const sek = e.target.closest('[data-input="rest-secs"]');
   if (sek) { DB.settings.restSecs = parseInt(sek.value, 10); saveDB(); }
+
+  // Sprache wechseln: Die ganze Oberfläche wird neu gezeichnet – auch das
+  // offene Einstellungsblatt, damit man den Wechsel sofort sieht.
+  const spr = e.target.closest('[data-input="sprache"]');
+  if (spr) {
+    DB.settings.sprache = spr.value;
+    saveDB();
+    spracheSetzen(spr.value);
+    render();
+    $(".backdrop")?.remove();
+    ACTIONS["open-settings"]();
+  }
 });
 
 /* ═══════════════ Android-Zurücktaste ═══════════════
@@ -3390,7 +3446,7 @@ function zurueckNavigieren() {
   // 6. Auf dem Start-Tab: erst beim zweiten Mal beenden
   if (Date.now() < beendenBereitBis) return false;
   beendenBereitBis = Date.now() + 2000;
-  toast(active ? "Workout läuft – nochmal für Beenden" : "Nochmal zurück zum Beenden");
+  toast(active ? tr("Workout läuft – nochmal für Beenden") : tr("Nochmal zurück zum Beenden"));
   return true;
 }
 
@@ -3538,6 +3594,7 @@ function sichtbarenZeichnen() {
 }
 
 function render() {
+  bildschirmBeschriften();
   renderTabbar();
   veraltet = new Set(Object.keys(bildschirmZeichner()));
   sichtbarenZeichnen();
