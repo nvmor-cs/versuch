@@ -1,6 +1,5 @@
 package io.github.nvmorcs.eisenzeit;
 
-import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -8,10 +7,6 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
-import android.provider.Settings;
-import android.media.AudioAttributes;
-import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,80 +21,61 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Die Satzpause – Anzeige in der Leiste und das Signal am Ende.
+ * Die Satzpause in der Benachrichtigungsleiste – als Anzeige, sonst nichts.
  *
- * <h3>Warum das hier komplett nativ liegt</h3>
+ * <h3>Kein Signal am Ende mehr</h3>
  *
- * Eine Meldung, deren Zeit sich sekündlich ändert, kann JavaScript nicht
- * nachschreiben: Die App liegt zwischendurch im Hintergrund und darf gar nicht
- * laufen. Android kann es selbst – setUsesChronometer zählt ab einem Zeitpunkt,
- * mit setChronometerCountDown herunter.
+ * Ton und Vibration zum Pausenende gab es hier einmal, in drei Anläufen, und
+ * zuverlässig wurde es keinen davon: mal kam die Meldung zu früh, mal blieb
+ * sie aus. Zu viele Stellen mussten dafür zusammenspielen, die Android
+ * jederzeit einzeln stillegen darf – ein Alarm, ein wartender Aufruf, eine
+ * schlafende App, dazu Erlaubnisse, die je nach Gerät anders gehandhabt
+ * werden. Was nicht verlässlich ist, ist als Signal nichts wert: Wer sich
+ * nicht darauf verlassen kann, schaut ohnehin nach.
  *
- * Wichtiger noch ist der zweite Grund. Zwei frühere Anläufe sind daran
- * gescheitert, dass sich zwei Seiten den Zustand geteilt haben: JavaScript
- * plante, sagte ab und plante neu, während die native Seite dasselbe tat. Weil
- * jeder Aufruf über die Brücke seine eigene Laufzeit hat, konnten sich zwei
- * Nachrichten überholen – ein „keine Pause mehr" traf nach dem „neue Pause"
- * ein und löschte sie. Ergebnis: mal kein Ton, mal einer mitten im nächsten
- * Satz. Je länger das Workout, desto mehr Nachrichten, desto wahrscheinlicher.
+ * Geblieben ist der Teil, der immer stimmt: eine stille Anzeige, in der
+ * Android selbst mitzählt. {@code setUsesChronometer} zählt ab einem
+ * Zeitpunkt, mit {@code setChronometerCountDown} herunter – ohne dass die App
+ * dafür laufen muss. Ein Blick auf den Sperrbildschirm genügt.
  *
- * <h3>Die Regeln, auf denen der Neubau steht</h3>
+ * <h3>Die Regeln, auf denen das steht</h3>
  *
  * <ol>
  *   <li><b>Ein Besitzer.</b> Der Zustand der Pause liegt hier und nur hier.
  *       JavaScript hält den Bildschirmbalken, sonst nichts.</li>
- *   <li><b>Eine Nachricht.</b> Es gibt nicht mehr „zeig Workout" und „zeig
- *       Pause" und „mach aus", sondern nur {@link #stand}: den vollständigen
+ *   <li><b>Eine Nachricht.</b> Es gibt nicht „zeig Workout" und „zeig Pause"
+ *       und „mach aus", sondern nur {@link #stand}: den vollständigen
  *       Zustand. Wer den ganzen Zustand schickt, kann ihn nicht halb
  *       überholen.</li>
  *   <li><b>Reihenfolge erzwungen.</b> Jede Nachricht trägt eine laufende
  *       Nummer. Eine kleinere als die zuletzt angewandte wird verworfen –
  *       damit ist die Brücke egal.</li>
- *   <li><b>Die Pause hat eine Kennung.</b> Nur eine neue Kennung plant neu.
- *       Dieselbe Kennung schreibt bloß die Anzeige – der Zielzeitpunkt steht
- *       fest und verrutscht nicht mehr, egal wie oft die App etwas meldet.</li>
- *   <li><b>Das Signal wird verbraucht.</b> Auslösen heißt: Kennung wegnehmen.
- *       Handler, Alarm und die Meldung aus der App zielen alle auf dieselbe
- *       Kennung – wer zuerst kommt, gewinnt, alle anderen laufen ins Leere.
- *       Ein Signal einer alten Pause ist damit strukturell unmöglich.</li>
- *   <li><b>Zwei Wege, ein Ziel.</b> Ein Handler im Prozess ist genau, steht
- *       aber im Tiefschlaf still. Ein Alarm weckt das Gerät, ist dafür ohne
- *       Sondererlaubnis ungenau. Beide zeigen auf dieselbe Kennung – deshalb
- *       darf man sie bedenkenlos gemeinsam laufen lassen.</li>
+ *   <li><b>Die Pause hat eine Kennung.</b> Nur eine neue Kennung setzt den
+ *       Zielzeitpunkt. Dieselbe Kennung schreibt bloß die Anzeige – der
+ *       Countdown verrutscht nicht mehr, egal wie oft die App etwas
+ *       meldet.</li>
  * </ol>
- *
- * Wer den Ton macht, entscheidet ebenfalls diese Klasse, weil sie als einzige
- * weiß, ob die App die ganze Pause über offen war: durchgehend offen → die App
- * klingelt selbst (Ereignis an JavaScript), sonst → die laute Meldung. Nie
- * beides, nie keins.
  */
 @CapacitorPlugin(name = "PausenTimer")
 public class PausenTimerPlugin extends Plugin {
 
     /** Laufende Anzeige: stumm, bleibt stehen */
     public static final String KANAL_LAUFEND = "workout-laufend";
-    /** Pausenende: laut, mit Ton und Vibration */
-    public static final String KANAL_ENDE = "pause-ende";
-    /** Pausenende ohne Ton – für die Einstellung „Nur Vibration" */
-    public static final String KANAL_ENDE_STUMM = "pause-ende-still";
+
+    /** Aufgegebene Kanäle des früheren Pausensignals. Sie werden beim Start
+     *  entfernt, sonst stünden sie noch jahrelang in den Systemeinstellungen
+     *  der App – Schalter für etwas, das es nicht mehr gibt. */
+    private static final String[] KANAELE_ALT = { "pause-ende", "pause-ende-still" };
 
     private static final int ID = 4712;         // laufende Anzeige
-    private static final int SIGNAL_ID = 4711;  // „Pause vorbei"
+    private static final int ID_ALT = 4711;     // früheres „Pause vorbei"
 
     private static final String PREFS = "lumora-pause";
     private static final String K_PAUSE = "pause-id";       // "" = keine Pause
     private static final String K_ZIEL = "pause-ziel";      // Zeitpunkt in ms seit 1970
-    private static final String K_MELDEN = "pause-melden";
-    private static final String K_LEISE = "pause-leise";
-    private static final String K_WEG = "pause-weggewesen"; // App war zwischendurch nicht da
     private static final String K_WO_TITEL = "wo-titel";
     private static final String K_WO_TEXT = "wo-text";
     private static final String K_WO_START = "wo-start";    // 0 = kein Workout
-
-    /** Der Alarm kommt bewusst etwas später als der Handler: Im Normalfall
-     *  gewinnt damit der genaue Weg, und der Alarm bleibt, was er sein soll –
-     *  ein Netz für den Fall, dass der Prozess weggeräumt wird. */
-    private static final long ALARM_VERZUG = 1500;
 
     /** Wie weit vor dem Ziel ein Auslöser noch abgewiesen wird. Ohne das
      *  könnte ein eingefrorener Zähler aus JavaScript eine frische Pause
@@ -142,10 +118,10 @@ public class PausenTimerPlugin extends Plugin {
      * Nach einem Neustart der App aufräumen – aber nicht mit dem Holzhammer.
      *
      * Android baut die Activity auch mitten im Betrieb neu auf. Alles pauschal
-     * abzusagen hieße: Wer währenddessen in der Satzpause steht, bekommt kein
-     * Signal mehr. Deshalb wird eine Pause, deren Ziel noch in der Zukunft
-     * liegt, wieder scharf gestellt; nur was abgelaufen oder verwaist ist,
-     * fliegt raus.
+     * abzusagen hieße: Wer währenddessen in der Satzpause steht, dem bliebe
+     * der Countdown in der Leiste stehen. Deshalb wird eine Pause, deren Ziel
+     * noch in der Zukunft liegt, wieder aufgenommen; nur was abgelaufen oder
+     * verwaist ist, fliegt raus.
      */
     private void aufraeumenUndUebernehmen() {
         SharedPreferences p = prefs(getContext());
@@ -155,7 +131,7 @@ public class PausenTimerPlugin extends Plugin {
             armieren(pause, ziel);
             return;
         }
-        signalAbsagen();
+        pauseVergessen();
         if (p.getLong(K_WO_START, 0) <= 0) {
             NotificationManagerCompat.from(getContext()).cancel(ID);
         }
@@ -174,26 +150,9 @@ public class PausenTimerPlugin extends Plugin {
         laufend.enableVibration(false);
         nm.createNotificationChannel(laufend);
 
-        NotificationChannel ende = new NotificationChannel(
-                KANAL_ENDE, "Pause vorbei", NotificationManager.IMPORTANCE_HIGH);
-        ende.setDescription("Meldet das Ende der Satzpause");
-        ende.enableVibration(true);
-        ende.setVibrationPattern(new long[]{0, 260, 120, 260, 120, 420});
-        ende.setSound(
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-                new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build());
-        nm.createNotificationChannel(ende);
-
-        NotificationChannel still = new NotificationChannel(
-                KANAL_ENDE_STUMM, "Pause vorbei (nur Vibration)", NotificationManager.IMPORTANCE_HIGH);
-        still.setDescription("Meldet das Ende der Satzpause ohne Ton");
-        still.enableVibration(true);
-        still.setVibrationPattern(new long[]{0, 260, 120, 260, 120, 420});
-        still.setSound(null, null);
-        nm.createNotificationChannel(still);
+        // Reste des früheren Pausensignals wegräumen
+        for (String alt : KANAELE_ALT) nm.deleteNotificationChannel(alt);
+        NotificationManagerCompat.from(ctx).cancel(ID_ALT);
     }
 
     @Override
@@ -204,10 +163,6 @@ public class PausenTimerPlugin extends Plugin {
     @Override
     public void handleOnPause() {
         imVordergrund = false;
-        // Ab jetzt gehört das Signal der Meldung – auch wenn man vor dem Ende
-        // zurückwechselt. Sonst klingelt es zweimal.
-        SharedPreferences p = prefs(getContext());
-        if (!p.getString(K_PAUSE, "").isEmpty()) p.edit().putBoolean(K_WEG, true).apply();
     }
 
     /* ═══════════════ Die eine Nachricht ═══════════════ */
@@ -227,8 +182,6 @@ public class PausenTimerPlugin extends Plugin {
      *                   ausgewertet, danach gilt der einmal gesetzte Zeitpunkt
      * @param pauseTitel Überschrift während der Pause
      * @param pauseText  Zeile darunter
-     * @param melden     darf am Ende eine Meldung erscheinen?
-     * @param leise      Meldung ohne Ton (Einstellung „Nur Vibration")
      */
     @PluginMethod
     public void stand(PluginCall call) {
@@ -250,7 +203,7 @@ public class PausenTimerPlugin extends Plugin {
         SharedPreferences p = prefs(ctx);
 
         if (!Boolean.TRUE.equals(call.getBoolean("aktiv", false))) {
-            signalAbsagen();
+            pauseVergessen();
             p.edit().remove(K_WO_START).remove(K_WO_TITEL).remove(K_WO_TEXT).apply();
             NotificationManagerCompat.from(ctx).cancel(ID);
             call.resolve();
@@ -272,7 +225,7 @@ public class PausenTimerPlugin extends Plugin {
         if (pauseId == null) pauseId = "";
 
         if (pauseId.isEmpty()) {
-            signalAbsagen();
+            pauseVergessen();
             anzeigen(ctx, 0, titel, text);
             call.resolve();
             return;
@@ -280,8 +233,8 @@ public class PausenTimerPlugin extends Plugin {
 
         if (!pauseId.equals(p.getString(K_PAUSE, ""))) {
             Integer ms = call.getInt("pauseMs", 0);
-            if (ms == null || ms <= 0) {   // nichts mehr zu planen
-                signalAbsagen();
+            if (ms == null || ms <= 0) {   // nichts mehr zu zählen
+                pauseVergessen();
                 anzeigen(ctx, 0, titel, text);
                 call.resolve();
                 return;
@@ -289,9 +242,6 @@ public class PausenTimerPlugin extends Plugin {
             p.edit()
                     .putString(K_PAUSE, pauseId)
                     .putLong(K_ZIEL, System.currentTimeMillis() + ms)
-                    .putBoolean(K_MELDEN, !Boolean.FALSE.equals(call.getBoolean("melden", true)))
-                    .putBoolean(K_LEISE, Boolean.TRUE.equals(call.getBoolean("leise", false)))
-                    .putBoolean(K_WEG, !imVordergrund)
                     .apply();
             armieren(pauseId, p.getLong(K_ZIEL, 0));
         }
@@ -310,108 +260,81 @@ public class PausenTimerPlugin extends Plugin {
 
     /**
      * Der Zähler in der App ist bei null angekommen. Sie ist damit sichtbar
-     * offen – also sofort auslösen, statt auf Handler oder Alarm zu warten.
-     * Die Kennung entscheidet, ob die Meldung überhaupt zur laufenden Pause
-     * gehört; ein eingefrorener Zähler von vorhin läuft ins Leere.
+     * offen – also die Anzeige sofort zurückstellen, statt auf den wartenden
+     * Aufruf zu warten. Die Kennung entscheidet, ob die Meldung überhaupt zur
+     * laufenden Pause gehört; ein eingefrorener Zähler von vorhin läuft ins
+     * Leere.
      */
     @PluginMethod
     public void pauseVorbei(PluginCall call) {
         String id = call.getString("pauseId", "");
-        if (id != null && !id.isEmpty()) signalGeben(getContext(), id);
+        if (id != null && !id.isEmpty()) pauseBeenden(getContext(), id);
         call.resolve();
     }
 
-    /* ═══════════════ Signal planen, auslösen, absagen ═══════════════ */
+    /* ═══════════════ Pause aufnehmen und beenden ═══════════════ */
 
-    /* Immer über den Anwendungskontext: Der Empfänger, die Activity und ein
-       verzögerter Aufruf sollen dieselbe Datei sehen – und nichts davon soll
-       eine Activity am Leben halten. */
+    /* Immer über den Anwendungskontext: Die Activity und ein verzögerter
+       Aufruf sollen dieselbe Datei sehen – und nichts davon soll eine
+       Activity am Leben halten. */
     static SharedPreferences prefs(Context ctx) {
         return ctx.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    /** Handler und Alarm auf eine bereits eingetragene Pause ansetzen. */
+    /**
+     * Den wartenden Aufruf auf eine bereits eingetragene Pause ansetzen.
+     *
+     * Er tut am Ende nur eines: die Anzeige von „Satzpause" zurück auf
+     * „Workout läuft" stellen. Verschläft Android den Prozess, bleibt der
+     * Countdown eben auf 0:00 stehen, bis die App das nächste Mal etwas
+     * meldet – unschön, aber harmlos. Genau dafür einen Alarm zu stellen und
+     * eine Sondererlaubnis zu verlangen, wäre nicht verhältnismäßig.
+     */
     private void armieren(String pauseId, long ziel) {
-        // Anwendungskontext: Der wartende Aufruf und der Alarm überdauern die
-        // Pause; an einer Activity festzuhalten hieße, sie so lange am Leben
-        // zu halten, auch wenn Android sie längst abbauen will.
+        // Anwendungskontext: Der wartende Aufruf überdauert die Pause; an
+        // einer Activity festzuhalten hieße, sie so lange am Leben zu halten,
+        // auch wenn Android sie längst abbauen will.
         Context ctx = getContext().getApplicationContext();
         long inMs = Math.max(0, ziel - System.currentTimeMillis());
 
         if (geplant != null) handler.removeCallbacks(geplant);
-        geplant = () -> signalGeben(ctx, pauseId);
+        geplant = () -> pauseBeenden(ctx, pauseId);
         handler.postDelayed(geplant, inMs);
-
-        AlarmManager am = ctx.getSystemService(AlarmManager.class);
-        if (am == null) return;
-        PendingIntent pi = alarmZiel(ctx, pauseId);
-        long alarmZeit = ziel + ALARM_VERZUG;
-        boolean genau = true;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) genau = am.canScheduleExactAlarms();
-        try {
-            if (genau) {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmZeit, pi);
-            } else {
-                // Ohne die Erlaubnis „Alarme und Erinnerungen" darf es nicht
-                // auf die Sekunde sein. Dann kommt das Netz eventuell später –
-                // aber niemals zur falschen Pause, dafür sorgt die Kennung.
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmZeit, pi);
-            }
-        } catch (SecurityException e) {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmZeit, pi);
-        }
     }
 
-    private void signalAbsagen() {
-        Context ctx = getContext().getApplicationContext();
-        prefs(ctx).edit().remove(K_PAUSE).remove(K_ZIEL).remove(K_WEG).apply();
+    private void pauseVergessen() {
+        prefs(getContext()).edit().remove(K_PAUSE).remove(K_ZIEL).apply();
         if (geplant != null) {
             handler.removeCallbacks(geplant);
             geplant = null;
         }
-        alarmWeg(ctx);
-    }
-
-    private static void alarmWeg(Context ctx) {
-        AlarmManager am = ctx.getSystemService(AlarmManager.class);
-        if (am != null) am.cancel(alarmZiel(ctx, ""));
     }
 
     /**
      * Das Ende einer Pause – der einzige Ort, an dem das passiert.
      *
-     * Aufgerufen aus drei Richtungen (Handler, Alarm, Meldung aus der App).
-     * Die erste, die es schafft, nimmt die Kennung weg; die anderen finden
-     * ein leeres Feld vor und tun nichts.
+     * Aufgerufen aus zwei Richtungen (wartender Aufruf und Meldung aus der
+     * App). Die erste, die es schafft, nimmt die Kennung weg; die andere
+     * findet ein leeres Feld vor und tut nichts.
      */
-    static synchronized void signalGeben(Context ctx, String pauseId) {
+    static synchronized void pauseBeenden(Context ctx, String pauseId) {
         SharedPreferences p = prefs(ctx);
         if (!pauseId.equals(p.getString(K_PAUSE, ""))) return;   // fremd oder schon verbraucht
         long ziel = p.getLong(K_ZIEL, 0);
         if (System.currentTimeMillis() < ziel - TOLERANZ) return; // zu früh
-
-        boolean melden = p.getBoolean(K_MELDEN, true);
-        boolean leise = p.getBoolean(K_LEISE, false);
-        boolean weggewesen = p.getBoolean(K_WEG, false);
-        p.edit().remove(K_PAUSE).remove(K_ZIEL).remove(K_WEG).apply();
-        alarmWeg(ctx);
+        p.edit().remove(K_PAUSE).remove(K_ZIEL).apply();
 
         PausenTimerPlugin plugin = instanz;
-        boolean vorn = plugin != null && plugin.imVordergrund;
-        // Durchgehend offen geblieben? Dann macht die App den Ton selbst.
-        boolean tonInApp = vorn && !weggewesen;
-
-        if (vorn) {
-            JSObject o = new JSObject();
-            o.put("ton", tonInApp);
-            plugin.notifyListeners("pauseVorbei", o);
+        if (plugin != null && plugin.imVordergrund) {
+            // Damit der Balken auf dem Bildschirm verschwindet, auch wenn die
+            // Pause ablief, während die App im Hintergrund eingefroren war.
+            plugin.notifyListeners("pauseVorbei", new JSObject());
         }
-        if (!tonInApp && melden) signalMelden(ctx, leise);
 
         workoutAnzeigeWiederherstellen(ctx);
     }
 
-    /* ═══════════════ Meldungen ═══════════════ */
+    /* ═══════════════ Anzeige ═══════════════ */
 
     /** Die laufende Anzeige. restMs > 0 zählt rückwärts, sonst läuft die Dauer. */
     static void anzeigen(Context ctx, long restMs, String titel, String text) {
@@ -454,28 +377,8 @@ public class PausenTimerPlugin extends Plugin {
         }
     }
 
-    /** Die laute Meldung „Pause vorbei". */
-    static void signalMelden(Context ctx, boolean leise) {
-        NotificationCompat.Builder b = new NotificationCompat.Builder(ctx,
-                leise ? KANAL_ENDE_STUMM : KANAL_ENDE)
-                .setSmallIcon(R.drawable.ic_stat_pause)
-                .setContentTitle("Pause vorbei")
-                .setContentText("Weiter mit dem nächsten Satz.")
-                .setContentIntent(appOeffnen(ctx))
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
-        if (!leise) b.setDefaults(NotificationCompat.DEFAULT_ALL);
-        try {
-            NotificationManagerCompat.from(ctx).notify(SIGNAL_ID, b.build());
-        } catch (SecurityException e) {
-            // ohne Berechtigung eben nicht
-        }
-    }
-
     /**
-     * Nach dem Signal soll in der Leiste wieder das laufende Workout stehen –
+     * Nach der Pause soll in der Leiste wieder das laufende Workout stehen –
      * sonst zählt dort eine Satzpause weiter, die längst vorbei ist.
      */
     static void workoutAnzeigeWiederherstellen(Context ctx) {
@@ -484,54 +387,11 @@ public class PausenTimerPlugin extends Plugin {
         anzeigen(ctx, 0, p.getString(K_WO_TITEL, "Workout"), p.getString(K_WO_TEXT, ""));
     }
 
-    private static PendingIntent alarmZiel(Context ctx, String pauseId) {
-        Intent i = new Intent(ctx, PausenAlarm.class).putExtra("pauseId", pauseId);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
-        return PendingIntent.getBroadcast(ctx, SIGNAL_ID, i, flags);
-    }
-
     private static PendingIntent appOeffnen(Context ctx) {
         Intent oeffnen = new Intent(ctx, MainActivity.class);
         oeffnen.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
         return PendingIntent.getActivity(ctx, 0, oeffnen, flags);
-    }
-
-    /* ═══════════════ Erlaubnis für genaue Alarme ═══════════════ */
-
-    /**
-     * Darf die App Alarme auf die Sekunde genau legen?
-     *
-     * Daran hängt nur das Netz: Ist die Erlaubnis nicht erteilt und wird die
-     * App währenddessen aus dem Speicher geräumt, kommt das Signal später.
-     * Zur falschen Pause kommt es nicht.
-     */
-    @PluginMethod
-    public void alarmStatus(PluginCall call) {
-        boolean exakt = true;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            AlarmManager am = getContext().getSystemService(AlarmManager.class);
-            exakt = am != null && am.canScheduleExactAlarms();
-        }
-        JSObject o = new JSObject();
-        o.put("exakt", exakt);
-        // Unter Android 12 gibt es die Einstellung nicht – dann ist auch
-        // nichts zu erlauben.
-        o.put("einstellbar", Build.VERSION.SDK_INT >= Build.VERSION_CODES.S);
-        call.resolve(o);
-    }
-
-    /** Öffnet die Systemeinstellung „Alarme und Erinnerungen". */
-    @PluginMethod
-    public void alarmEinstellungen(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                    Uri.parse("package:" + getContext().getPackageName()));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(i);
-        }
-        call.resolve();
     }
 }

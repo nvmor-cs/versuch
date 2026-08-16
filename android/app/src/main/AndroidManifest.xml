@@ -26,12 +26,6 @@
 
         </activity>
 
-        <!-- Rückfallebene für das Pausenende, falls die App währenddessen
-             aus dem Speicher geräumt wird -->
-        <receiver
-            android:name=".PausenAlarm"
-            android:exported="false" />
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -46,10 +40,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Vibration und Meldung am Ende der Satzpause -->
+    <!-- Kurzes Klopfen beim Antippen -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Stille Anzeige der Satzpause in der Benachrichtigungsleiste -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Barcode-Scanner im Ernährungsteil. Gelesen wird im Gerät, es wird
          kein Bild irgendwohin geschickt – nur die erkannte Ziffernfolge geht
          als Suchanfrage an die Lebensmitteldatenbank. -->

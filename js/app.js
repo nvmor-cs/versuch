@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.2.2";
+const APP_VERSION = "3.3.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -138,7 +138,7 @@ function defaultDB() {
     // migrateScheme() setzt ihn, auch für eine frische Datenbank.
     settings: {
       restSecs: 90, autoRest: true, lastBackupAt: null,
-      accent: ACCENT_DEFAULT, restSignal: "beides",
+      accent: ACCENT_DEFAULT,
       // Übungen, deren Entwicklung im Verlauf-Tab dauerhaft mitläuft
       beobachtet: [],
       // Rückmeldung nach dem Workout (siehe coachTipps)
@@ -279,7 +279,6 @@ function bereinigeDB(roh) {
   st.autoRest = st.autoRest !== false;
   st.coach = st.coach !== false;
   st.geraeteGetrennt = st.geraeteGetrennt !== false;
-  st.restSignal = ausAuswahl(st.restSignal, ["beides", "ton", "vibration", "aus"], "beides");
   st.accent = ausAuswahl(st.accent, ACCENTS.map((a) => a.id), ACCENT_DEFAULT);
   st.lastBackupAt = st.lastBackupAt ? alsZahl(st.lastBackupAt, null) : null;
   st.beobachtet = alsListe(st.beobachtet).filter(istId).slice(0, 5);
@@ -2419,7 +2418,6 @@ setInterval(() => {
      eine neue Kennung – dann und nur dann verschiebt sich das Ziel. */
 
 let rest = null;      // { id, endsAt, total, interval, info }
-let audioCtx = null;
 let standFolge = 0;
 let standKette = Promise.resolve();
 // Die Weboberfläche kann neu laden, ohne dass die App darunter stirbt. Dann
@@ -2439,9 +2437,6 @@ function standDaten() {
     d.pauseMs = Math.max(0, Math.round(rest.endsAt - Date.now()));
     d.pauseTitel = (rest.info && rest.info.titel) || d.titel;
     d.pauseText = (rest.info && rest.info.text) || "";
-    // „aus" heißt: kein Ton, keine Meldung – nur der stille Ablauf
-    d.melden = (DB.settings.restSignal || "beides") !== "aus";
-    d.leise = DB.settings.restSignal === "vibration";
   }
   return d;
 }
@@ -2511,35 +2506,34 @@ function tickRest() {
 }
 
 /* Der Zähler auf dem Bildschirm ist bei null. Die App ist damit sichtbar
-   offen – also der nativen Seite Bescheid geben, damit sie sofort auslöst
-   statt auf ihren Handler zu warten. Ob das Signal überhaupt noch zu einer
-   laufenden Pause gehört, entscheidet dort die Kennung: Lag die App
-   zwischendurch im Hintergrund, war der Zähler eingefroren und meldet sich
-   verspätet – dann ist die Pause längst abgehakt und die Meldung verpufft. */
+   offen – also der nativen Seite Bescheid geben, damit sie die Anzeige in der
+   Leiste sofort zurückstellt, statt auf ihren wartenden Aufruf zu warten. Ob
+   die Meldung überhaupt noch zur laufenden Pause gehört, entscheidet dort die
+   Kennung: Lag die App zwischendurch im Hintergrund, war der Zähler
+   eingefroren und meldet sich verspätet – dann ist die Pause längst abgehakt
+   und die Meldung verpufft.
+
+   Ton und Vibration gibt es hier bewusst nicht mehr. Drei Anläufe lang war
+   das Signal nicht verlässlich – mal kam es zu früh, mal gar nicht –, weil zu
+   viele Stellen mitspielen mussten, die Android jederzeit einzeln stillegen
+   darf. Geblieben ist der stille Countdown in der Leiste, der immer stimmt. */
 function restDone() {
   const id = rest ? rest.id : null;
   const { PausenTimer } = capPlugins();
   // still: Die Anzeige in der Leiste stellt die native Seite selbst zurück.
-  // Schickten wir hier „keine Pause mehr", sagten wir ihr das Signal ab, das
-  // sie im selben Moment geben will.
   stopRest({ still: !!(PausenTimer && PausenTimer.pauseVorbei && id) });
   if (PausenTimer && PausenTimer.pauseVorbei && id) {
     standKette = standKette.then(() => PausenTimer.pauseVorbei({ pauseId: id })).catch(() => {});
-    return;
   }
-  // Ohne Plugin (im Browser) macht die App es selbst
   toast("Pause vorbei – nächster Satz!");
-  signalGeben();
 }
 
-// Das Signal kommt von der nativen Seite. ton sagt, ob die App klingeln soll –
-// war sie zwischendurch weg, hat die Meldung den Ton schon gemacht.
-function pauseSignalEmpfangen(e) {
-  // Die Pause kann auch geendet haben, während die App weg war: dann steht
-  // der Balken noch, obwohl längst nichts mehr läuft.
+// Die native Seite meldet das Ende. Das kann auch passiert sein, während die
+// App weg war: dann steht der Balken noch, obwohl längst nichts mehr läuft.
+function pauseSignalEmpfangen() {
+  if (!rest) return;
   stopRest({ still: true });
   toast("Pause vorbei – nächster Satz!");
-  if (e && e.ton) signalGeben();
 }
 
 let signalVerbunden = false;
@@ -2562,83 +2556,10 @@ ACTIONS["rest-plus"] = () => {
 };
 ACTIONS["rest-skip"] = () => stopRest();
 
-/* ── Signal am Ende der Pause ───────────────────────────── */
-
-// Der Ton-Kontext darf erst nach einer Nutzergeste entstehen. Wichtiger noch:
-// Ein *laufender* Kontext hält den Audio-Fokus, und Android pausiert dann die
-// Musik anderer Apps – samt deren Benachrichtigung. Deshalb schläft er und
-// wacht nur für die Sekunde des Signals auf.
-function tonVorbereiten() {
-  if (audioCtx) return;
-  // Wer keinen Ton will, braucht auch keinen Kontext – und damit gar keine
-  // Berührung mit dem Audio-Fokus des Systems.
-  const modus = DB.settings.restSignal || "beides";
-  if (modus === "aus" || modus === "vibration") return;
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioCtx.suspend();
-  } catch (e) {}
-}
-document.addEventListener("pointerdown", tonVorbereiten, { once: true });
-
-function signalGeben() {
-  const modus = DB.settings.restSignal || "beides";
-  if (modus === "aus") return;
-  if (modus !== "vibration") tonSpielen();
-  if (modus !== "ton") vibrieren();
-}
-
-// Eine Glocke: Sinus mit kurzem Anschlag und langem Ausklang, dazu ein
-// leiser Oberton. Klingt nach Anschlagen und nicht nach Wecker – das alte
-// Rechteck-Piepen war im Ohr unangenehm.
-function glocke(hz, t0, staerke) {
-  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-  o.type = "sine";
-  o.frequency.value = hz;
-  o.connect(g); g.connect(audioCtx.destination);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(0.3 * staerke, t0 + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.1);
-  o.start(t0); o.stop(t0 + 1.15);
-}
-
-function tonSpielen() {
-  if (!audioCtx) return;
-  const spielen = () => {
-    try {
-      const t = audioCtx.currentTime + 0.03;
-      // Zwei Töne, eine Quinte auseinander – aufwärts klingt nach „weiter"
-      [[0, 784], [0.17, 1175]].forEach(([versatz, hz]) => {
-        glocke(hz, t + versatz, 1);
-        glocke(hz * 2, t + versatz, 0.22);
-      });
-      // Fokus wieder abgeben, sobald der Ausklang durch ist
-      setTimeout(() => { try { audioCtx.suspend(); } catch (e) {} }, 1600);
-    } catch (e) {}
-  };
-  try {
-    const r = audioCtx.resume();
-    if (r && r.then) r.then(spielen).catch(() => {}); else spielen();
-  } catch (e) {}
-}
-
-function vibrieren() {
-  const muster = [0, 260, 120, 260, 120, 420];
-  const { Haptics } = capPlugins();
-  if (Haptics) {
-    // Capacitor vibriert zuverlässiger als die Browser-Schnittstelle
-    Haptics.vibrate({ duration: 260 }).catch(() => {});
-    setTimeout(() => Haptics.vibrate({ duration: 260 }).catch(() => {}), 380);
-    setTimeout(() => Haptics.vibrate({ duration: 420 }).catch(() => {}), 760);
-    return;
-  }
-  try { navigator.vibrate && navigator.vibrate(muster); } catch (e) {}
-}
-
 /* ── Laufendes Workout in der Benachrichtigungsleiste ───── */
 
-// Die Anzeige in der Leiste und das Signal am Ende gehören der nativen
-// Seite. Von hier geht nur der Zustand hinaus – siehe standSenden().
+// Die Anzeige in der Leiste gehört der nativen Seite. Von hier geht nur der
+// Zustand hinaus – siehe standSenden().
 
 // Zeile unter dem Übungsnamen, im Stil der Satzkarte
 function pausenInfo(ex, si) {
@@ -3039,13 +2960,6 @@ ACTIONS["open-settings"] = () => {
       </div>
     </div>
     <div class="settings-row">
-      <div class="lbl">Signal am Pausenende<small>Klingelt auch, wenn das Handy in der Tasche steckt</small></div>
-      <select data-input="rest-signal">
-        ${[["beides","Ton + Vibration"],["ton","Nur Ton"],["vibration","Nur Vibration"],["aus","Aus"]]
-          .map(([v,t]) => `<option value="${esc(v)}" ${v === (s.restSignal || "beides") ? "selected" : ""}>${t}</option>`).join("")}
-      </select>
-    </div>
-    <div class="settings-row">
       <div class="lbl">Coach<small>Kurze Rückmeldung nach jedem Workout</small></div>
       <button class="switch ${s.coach !== false ? "on" : ""}" data-action="toggle-coach" role="switch" aria-checked="${s.coach !== false}" aria-label="Coach"></button>
     </div>
@@ -3053,7 +2967,6 @@ ACTIONS["open-settings"] = () => {
       <div class="lbl">Geräte je Training<small>Kabelzug und Maschinen nur mit demselben Training vergleichen – freie Gewichte immer</small></div>
       <button class="switch ${s.geraeteGetrennt !== false ? "on" : ""}" data-action="toggle-geraete" role="switch" aria-checked="${s.geraeteGetrennt !== false}" aria-label="Geräte je Training"></button>
     </div>
-    <div id="alarm-hinweis"></div>
     <div class="settings-row">
       <div class="lbl">Pausendauer</div>
       <select data-input="rest-secs">
@@ -3077,8 +2990,6 @@ ACTIONS["open-settings"] = () => {
     <button class="btn btn-danger-soft" data-action="wipe-data">${icon("trash")} Alle Daten löschen</button>
     <p class="hint" style="margin-top:16px;text-align:center" id="ver-zeile">${APP_NAME} ${APP_VERSION} · Deine Daten bleiben auf diesem Gerät.</p>
   `);
-  // Erst jetzt: Das Zielelement entsteht mit dem Sheet
-  alarmHinweisPruefen();
 };
 
 function lastBackupLabel() {
@@ -3122,36 +3033,6 @@ ACTIONS["toggle-geraete"] = (el) => {
   saveDB();
   el.classList.toggle("on", DB.settings.geraeteGetrennt);
   el.setAttribute("aria-checked", DB.settings.geraeteGetrennt);
-};
-
-/* Das Signal gibt die App selbst, solange sie im Speicher liegt – das ist der
-   Normalfall und dafür braucht es keine Erlaubnis. Nur die Rückfallebene für
-   den Fall, dass Android die App währenddessen wegräumt, hängt an „Alarme und
-   Erinnerungen". Ohne sie kommt das Signal dann später. Hinweisen ja,
-   dramatisieren nein. */
-async function alarmHinweisPruefen() {
-  const { PausenTimer } = capPlugins();
-  const ziel = $("#alarm-hinweis");
-  if (!PausenTimer || !ziel || !PausenTimer.alarmStatus) return;
-  try {
-    const st = await PausenTimer.alarmStatus();
-    if (st.exakt || !st.einstellbar) return;
-    ziel.innerHTML = `
-      <div class="card" style="display:flex;gap:12px;align-items:center;margin:4px 0 14px;
-           border-color:var(--warn-line);background:var(--warn-soft)">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:800;font-size:14px">Signal ohne Netz und doppelten Boden</div>
-          <div class="hint">Räumt Android die App während der Pause aus dem Speicher,
-            kommt das Signal ohne „Alarme und Erinnerungen" verspätet.</div>
-        </div>
-        <button class="btn btn-compact" data-action="alarm-einstellen">Erlauben</button>
-      </div>`;
-  } catch (e) {}
-}
-
-ACTIONS["alarm-einstellen"] = () => {
-  const { PausenTimer } = capPlugins();
-  if (PausenTimer && PausenTimer.alarmEinstellungen) PausenTimer.alarmEinstellungen().catch(() => {});
 };
 
 ACTIONS["toggle-autorest"] = (el) => {
@@ -3465,14 +3346,6 @@ document.addEventListener("blur", (e) => {
 document.addEventListener("change", (e) => {
   const sek = e.target.closest('[data-input="rest-secs"]');
   if (sek) { DB.settings.restSecs = parseInt(sek.value, 10); saveDB(); }
-  const sig = e.target.closest('[data-input="rest-signal"]');
-  if (sig) {
-    DB.settings.restSignal = sig.value;
-    saveDB();
-    tonVorbereiten();
-    // Kurz vorführen, damit man die Wahl gleich hört bzw. spürt
-    setTimeout(signalGeben, 120);
-  }
 });
 
 /* ═══════════════ Android-Zurücktaste ═══════════════
