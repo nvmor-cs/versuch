@@ -32,9 +32,18 @@ Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalit�
 - **Bildschirm bleibt an**, solange die App im Vordergrund liegt – mitten im Satz muss niemand erst entsperren. Geht die App in den Hintergrund, gilt wieder der normale Sperr-Timeout des Handys
 - **Android-Zurücktaste** navigiert innerhalb der App: erst Dialoge, dann Vollbild-Ansichten, dann aus der Ernährung zurück ins Training, dann zum Start-Tab – die App schließt sich erst beim zweiten Zurück
 - **Updates ohne Datenverlust**: Die App wird mit einem festen Schlüssel signiert, neue Versionen installieren sich einfach über die alte
-- **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. **Wischen über der Pille wechselt zwischen Training und Ernährung**, die zwei Punkte darüber zeigen die Welt an und sind auch antippbar. Beim Wechsel gibt es einen kurzen haptischen Stups, beim abgeschlossenen Satz einen kräftigeren – bewusst nur an diesen beiden Stellen, damit sie etwas bedeuten. Gestartet wird immer im Training: Dort liegt die Leiste für ein laufendes Workout, und dorthin führt auch die Zurücktaste
+- **Schwebende Tab-Leiste** am unteren Rand: eine abgesetzte Pille, der aktive Reiter sitzt in seiner eigenen Fassung. **Wischen über der Pille wechselt zwischen Training, Ernährung und Gesundheit**, die drei Punkte darüber zeigen die Welt an und sind auch antippbar. Beim Wechsel gibt es einen kurzen haptischen Stups, beim abgeschlossenen Satz einen kräftigeren – bewusst nur an diesen beiden Stellen, damit sie etwas bedeuten. Gestartet wird immer im Training: Dort liegt die Leiste für ein laufendes Workout, und dorthin führt auch die Zurücktaste
 - **Deutsch und Englisch**: umschaltbar in den Einstellungen, ohne Neustart – die ganze Oberfläche wechselt sofort, samt Übungsnamen, Muskelgruppen, Geräten, Lebensmitteln des Grundvorrats, Datums- und Zahlenformat. Übersetzt wird über die Kennung, nicht über den Text: Was du selbst benannt hast – deine Pläne, Trainings, eigenen Übungen und Lebensmittel – bleibt so stehen, wie du es geschrieben hast. Voreingestellt ist Deutsch
 - **Dunkles Design**: tiefes Nachtblau als Grund (`#111827`), Karten eine Stufe heller (`#1F2937`), dazu **eine** Akzentfarbe, die du in den Einstellungen wählst: Blau, Grün, Bernstein, Rot, Magenta oder Weiß. Erledigte Sätze sind grün, Rekorde bernsteinfarben, Löschen rot – Farbe hat immer eine Bedeutung
+
+## Gesundheit 🫀
+
+Die dritte Welt beantwortet die Frage, die weder Training noch Ernährung beantworten kann: *Wirkt das eigentlich?*
+
+- **Körper**: Gewicht mit **gleitendem Wochenschnitt** – ein einzelner Morgen sagt fast nichts, Salz und der Vorabend bewegen die Zahl um mehr als eine Woche Defizit. Die Punkte sind die Messungen, die Linie ist die Aussage. Dazu optional Körperfett und fünf Umfänge (Taille, Brust, Oberarm, Oberschenkel, Hüfte), ein Zielgewicht als Linie im Diagramm und der Trend der letzten sieben Tage. Umfänge sind bei gleichbleibendem Gewicht das ehrlichere Maß – Muskel wiegt wie Fett, sieht aber anders aus
+- **Kalender**: ein Monat auf einen Blick. Trainingstage sind ausgefüllt, kleine Marken zeigen, an welchen Tagen Ernährung erfasst und gewogen wurde. Darüber das **Wochenziel** (Voreinstellung: 3 Einheiten) und die **Serie** – wie viele Wochen am Stück es aufgegangen ist. Die laufende Woche zählt erst mit, wenn sie voll ist, sonst risse die Serie jeden Montag. Ein Tipp auf einen Tag zeigt, was an ihm passiert ist, und trägt eine vergessene Messung nach
+- **Balance**: Sätze je Muskelgruppe – diese Woche oder im Wochenschnitt der letzten 4 bzw. 12 Wochen. Die Daten lagen immer schon in der Historie, nur nie ausgewertet: Man sieht auf einen Blick, dass die Beine seit vier Wochen zu kurz kommen. Das hinterlegte Band markiert 10 bis 20 Sätze als groben Richtwert – eine Orientierung, kein Urteil
+- Messungen liegen unter einem **eigenen Schlüssel** (`lumora.gesundheit.v1`) und gehen mit ins Backup. Kalender und Balance speichern nichts – sie sind reine Lesesichten auf Workouts und Tagebuch
 
 ## Ernährung 🥗
 
@@ -91,7 +100,7 @@ python3 -m http.server 8000
 ## Technik
 
 - Vanilla HTML/CSS/JS, keine Abhängigkeiten, kein Build-Schritt
-- Datenhaltung in `localStorage`, inkl. laufendem Workout (übersteht Reloads). Training und Ernährung nutzen **getrennte Schlüssel** (`eisenzeit.db.v1` und `lumora.essen.v1`) – das Backup sichert und stellt beide wieder her
+- Datenhaltung in `localStorage`, inkl. laufendem Workout (übersteht Reloads). Die drei Welten nutzen **getrennte Schlüssel** (`eisenzeit.db.v1`, `lumora.essen.v1`, `lumora.gesundheit.v1`) – das Backup sichert und stellt alle drei wieder her
 - Service Worker cached die App-Shell für den Offline-Betrieb
 - Farbsystem über CSS-Custom-Properties; die Akzentfarbe hängt an einem `data-accent`-Attribut am Wurzelelement
 - Sprachen über `tr("deutscher Text")`: Die Quellsprache steht im Code, das Wörterbuch in `js/i18n.js` liefert die englische Fassung. Der Code bleibt damit lesbar, und fehlt eine Übersetzung, steht dort deutscher Text statt einer Lücke. Namen von Übungen, Lebensmitteln und Portionen hängen an ihrer Kennung, nicht am Text
@@ -109,6 +118,7 @@ python3 -m http.server 8000
 | `scripts/make-muscle-paths.py` | Füllt die Muskeln aus `img/koerper-*.png` aus |
 | `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke, Tab-Leiste |
 | `js/essen.js` | Ernährung: Tagebuch, Lebensmittel, Open Food Facts, eigener Speicher |
+| `js/gesundheit.js` | Gesundheit: Körpermaße, Trainingskalender, Balance der Muskelgruppen |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
 | `android/…/PausenTimerPlugin.java` | Stille Meldung mit mitlaufender Restzeit (eigenes Capacitor-Plugin) |
 | `sw.js` | Offline-Cache |

@@ -28,6 +28,10 @@
       <section class="screen" id="screen-food-day" data-label="Ernährung heute"></section>
       <section class="screen" id="screen-food-lib" data-label="Lebensmittel"></section>
       <section class="screen" id="screen-food-hist" data-label="Ernährung im Verlauf"></section>
+      <!-- Gesundheit: Körper, Kalender, Balance (js/gesundheit.js) -->
+      <section class="screen" id="screen-health-body" data-label="Körper"></section>
+      <section class="screen" id="screen-health-cal" data-label="Trainingskalender"></section>
+      <section class="screen" id="screen-health-muscle" data-label="Balance der Muskelgruppen"></section>
     </main>
     <nav class="tabbar" id="tabbar" data-label="Hauptnavigation">
       <div class="bereich-punkte" id="bereich-punkte" data-label="Bereich wechseln"></div>
@@ -40,6 +44,7 @@
   <script src="js/muscle-icons.js"></script>
   <script src="js/app.js"></script>
   <script src="js/essen.js"></script>
+  <script src="js/gesundheit.js"></script>
   <script>
     // Service Worker nur registrieren, wenn er verfügbar ist (nicht in der Artifact-Version)
     if ("serviceWorker" in navigator && location.protocol === "https:") {

@@ -561,6 +561,193 @@ body.punkte .bereich-punkte {
 }
 .scan-btn svg { width: 22px; height: 22px; color: var(--accent); }
 
+/* ── Gesundheit: Körper ──────────────────────────────────── */
+
+.gew-karte { padding: 16px 14px 14px; }
+.gew-zahlen {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gew-gross {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+.gew-gross em { font-size: 18px; font-style: normal; color: var(--ink-3); font-weight: 800; }
+.gew-trend { text-align: right; }
+.gew-trend b {
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* Auf oder ab ist kein Urteil – ob Zunehmen gut ist, weiß nur der Nutzer.
+   Deshalb bekommt die Richtung eine Farbe, aber keine Wertung: der Akzent für
+   Bewegung nach unten, ein ruhiges Blau nach oben. */
+.gew-trend.runter b { color: var(--accent); }
+.gew-trend.hoch b { color: var(--ink); }
+.gew-trend span { font-size: 12px; color: var(--ink-3); font-weight: 700; }
+.gew-ziel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--ink-2);
+  font-weight: 700;
+}
+/* Die einzelnen Messungen sind der Beleg, nicht die Aussage – deshalb
+   kleiner und blasser als die geglättete Linie darüber. */
+.gew-punkt { fill: var(--ink-3); opacity: 0.55; }
+
+/* ── Gesundheit: Kalender ────────────────────────────────── */
+
+.kal-kopf, .kal-gitter {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.kal-kopf {
+  margin: 4px 0 6px;
+  text-align: center;
+}
+.kal-kopf span {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.kal-leer { display: block; }
+.kal-tag {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.kal-nr { font-size: 13px; font-weight: 800; color: var(--ink-2); }
+.kal-tag.trainiert {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.kal-tag.trainiert .kal-nr { color: var(--accent-ink); }
+.kal-tag.heute { border-color: var(--ink); border-width: 2px; }
+.kal-tag.zukunft { opacity: 0.3; }
+/* Zwei Marken je Tag: Ernährung und Gewicht. Sie sitzen unter der Zahl und
+   sind bewusst winzig – der Kalender soll auf einen Blick zeigen, wann
+   trainiert wurde, alles andere ist Beiwerk. */
+.kal-punkte { display: flex; gap: 3px; height: 4px; }
+.kal-punkte i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  display: block;
+}
+.p-essen { background: var(--success); }
+.p-koerper { background: var(--ink-3); }
+.kal-tag.trainiert .p-essen, .kal-tag.trainiert .p-koerper { background: var(--accent-ink); opacity: 0.7; }
+.kal-zahl {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--accent-ink);
+  opacity: 0.8;
+}
+.kal-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 12px;
+}
+.kal-legende span { display: inline-flex; align-items: center; gap: 5px; }
+.kal-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.kal-mark.trainiert { background: var(--accent); }
+.kal-mark.p-essen, .kal-mark.p-koerper { border-radius: 50%; width: 6px; height: 6px; }
+
+/* ── Gesundheit: Balance ─────────────────────────────────── */
+
+.balance-zeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 2px;
+}
+.balance-ic {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.balance-ic svg { width: 100%; height: 100%; }
+.balance-haupt { flex: 1; min-width: 0; }
+.balance-kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+.balance-kopf span { color: var(--ink-2); font-weight: 700; }
+.balance-kopf b { font-weight: 900; font-variant-numeric: tabular-nums; }
+.balance-bar {
+  position: relative;
+  display: block;
+  height: 9px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+/* Das Band zeigt den Richtwert von 10 bis 20 Sätzen: ein blasser Schimmer in
+   der Akzentfarbe, in den der Balken hineinreichen soll. Bewusst derselbe
+   Farbton wie der Balken – ein zweites Grau wäre vom Balken nicht zu
+   unterscheiden, und genau das war es vorher auch nicht. */
+.balance-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  opacity: 0.16;
+}
+.balance-fuell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 5px;
+  background: var(--accent);
+}
+/* Unter dem Richtwert bleibt es dieselbe Farbe, nur zurückgenommen: Es ist
+   kein anderer Zustand, es ist schlicht weniger. */
+.balance-zeile.wenig .balance-fuell { opacity: 0.55; }
+.balance-zeile.viel .balance-fuell { background: var(--warn); }
+.balance-zeile.leer { opacity: 0.5; }
+.balance-zeile.leer .balance-fuell { background: transparent; }
+
 /* ── Barcode-Scanner ─────────────────────────────────────── */
 
 .scan-ov .overlay-inner { padding: 0; max-width: none; }

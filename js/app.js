@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.4.0";
+const APP_VERSION = "3.5.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -115,6 +115,9 @@ const I = {
   grip: '<path d="M5 9h14M5 15h14"/>',
   barcode: '<path d="M4 6v12M7 6v12M10.5 6v12M14 6v9M17 6v12M20 6v12"/>',
   apple: '<path d="M9 8.5c-2 0-3.5 1.9-3.5 4.6C5.5 17 7.6 21 9.6 21c.9 0 1.5-.5 2.4-.5s1.5.5 2.4.5c2 0 4.1-4 4.1-7.9 0-2.7-1.5-4.6-3.5-4.6-1 0-1.9.5-3 .5s-2-.5-3-.5z"/><path d="M12 8.5V6"/><path d="M12 6c2.1 0 3.8-1.6 3.8-3.5C13.7 2.5 12 4.1 12 6z"/>',
+  scale: '<rect x="3" y="5" width="18" height="15" rx="3"/><path d="M8.5 13a3.5 3.5 0 0 1 7 0"/><path d="M12 13 10 10.8"/>',
+  calendar: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  bars: '<path d="M4 7h14M4 12h9M4 17h5"/>',
   link: '<path d="M10 14 14 10"/><path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/>',
   unlink: '<path d="M7.5 11.5 6 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/><path d="M16.5 12.5 18 11a3.5 3.5 0 0 0-5-5l-1.5 1.5"/><path d="M4 4l16 16"/>',
 };
@@ -859,6 +862,13 @@ const BEREICHE = [
       { id: "food-hist", label: "Verlauf", ic: "history" },
     ],
   },
+  {
+    id: "gesundheit", label: "Gesundheit", tabs: [
+      { id: "health-body", label: "Körper", ic: "scale" },
+      { id: "health-cal", label: "Kalender", ic: "calendar" },
+      { id: "health-muscle", label: "Balance", ic: "bars" },
+    ],
+  },
 ];
 
 /* Gestartet wird immer im Training: Das ist die Heimat der App, dort liegt
@@ -867,7 +877,7 @@ const BEREICHE = [
    Sitzung merkt sich jede Welt ihren Reiter – wer hin und her wechselt,
    steht wieder da, wo er war. */
 let currentBereich = "training";
-const letzterTab = { training: "home", essen: "food-day" };
+const letzterTab = { training: "home", essen: "food-day", gesundheit: "health-body" };
 
 const bereich = () => BEREICHE.find((b) => b.id === currentBereich) || BEREICHE[0];
 const bereichIndex = () => BEREICHE.findIndex((b) => b.id === currentBereich);
@@ -3099,8 +3109,10 @@ function markBackupDone() {
 
 // Das Backup nimmt beide Welten mit. Sie liegen getrennt im Speicher, aber
 // wer sichert, will alles sichern – nicht die Hälfte.
-const backupDaten = () =>
-  Object.assign({}, DB, { essen: typeof ESSEN === "object" ? ESSEN : undefined });
+const backupDaten = () => Object.assign({}, DB, {
+  essen: typeof ESSEN === "object" ? ESSEN : undefined,
+  gesundheit: typeof GESUND === "object" ? GESUND : undefined,
+});
 
 ACTIONS["export-data"] = async () => {
   const json = JSON.stringify(backupDaten(), null, 2);
@@ -3277,6 +3289,7 @@ async function restoreBackup(text) {
   migrateScheme(DB.settings);
 
   essenWiederherstellen(data.essen, mode);
+  if (typeof gesundWiederherstellen === "function") gesundWiederherstellen(data.gesundheit, mode);
 
   saveDB();
   applyAccent();
@@ -3580,6 +3593,11 @@ function bildschirmZeichner() {
     z["food-day"] = renderEssenTag;
     z["food-lib"] = renderEssenLib;
     z["food-hist"] = renderEssenVerlauf;
+  }
+  if (typeof renderKoerper === "function") {
+    z["health-body"] = renderKoerper;
+    z["health-cal"] = renderKalender;
+    z["health-muscle"] = renderBalance;
   }
   return z;
 }

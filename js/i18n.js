@@ -559,6 +559,77 @@ const EN = {
   "{datum}: {kcal} kcal": "{datum}: {kcal} kcal",
   "Balkendiagramm: Kalorien je Tag": "Bar chart: calories per day",
 
+  /* ── Gesundheit ── */
+  "Gesundheit": "Health",
+  "Körper": "Body",
+  "Kalender": "Calendar",
+  "Balance": "Balance",
+  "Trainingskalender": "Training calendar",
+  "Balance der Muskelgruppen": "Muscle group balance",
+
+  /* Körper */
+  "Gewicht": "Weight",
+  "Körperfett": "Body fat",
+  "Taille": "Waist",
+  "Oberarm": "Upper arm",
+  "Oberschenkel": "Thigh",
+  "Hüfte": "Hips",
+  "Maße": "Measurements",
+  "Freiwillig": "Optional",
+  "Gewicht eintragen": "Log weight",
+  "Heute: {gewicht} kg": "Today: {gewicht} kg",
+  "in 7 Tagen": "over 7 days",
+  "Zielgewicht": "Target weight",
+  "Noch {rest} kg bis {ziel} kg": "{rest} kg to go to {ziel} kg",
+  "{rest} kg unter dem Ziel von {ziel} kg": "{rest} kg below the target of {ziel} kg",
+  "Zielgewicht {ziel} kg erreicht": "Target weight of {ziel} kg reached",
+  "Punkte sind einzelne Messungen, die Linie der Schnitt über sieben Tage":
+    "Dots are single readings, the line is the seven-day average",
+  "Noch nichts gemessen": "Nothing measured yet",
+  "Trag dein Gewicht ein – am besten morgens, nüchtern und immer zur selben Zeit. Erst über Wochen wird daraus eine Aussage.":
+    "Log your weight – ideally in the morning, before eating, always at the same time. Only over weeks does it mean anything.",
+  "Ab der zweiten Messung in diesem Zeitraum entsteht hier eine Kurve.":
+    "From the second reading in this period, a curve appears here.",
+  "Liniendiagramm: Gewichtsverlauf": "Line chart: weight over time",
+  "seit {datum}: {diff} {einheit}": "since {datum}: {diff} {einheit}",
+  "erste Messung": "first reading",
+  "Messung vom {datum}": "Reading from {datum}",
+  "Messung löschen": "Delete reading",
+  "Messung gelöscht": "Reading deleted",
+  "Messung bearbeiten": "Edit reading",
+  "Messung nachtragen": "Add reading",
+  "Trag mindestens einen Wert ein": "Enter at least one value",
+  "z. B. 78": "e.g. 78",
+  "Leer lassen, wenn du ohne Ziel trackst. Gesetzt erscheint es als Linie im Diagramm.":
+    "Leave empty to track without a target. If set, it shows as a line in the chart.",
+  "1 Jahr": "1 year",
+
+  /* Kalender */
+  "Vorheriger Monat": "Previous month",
+  "Nächster Monat": "Next month",
+  "Wochenziel": "Weekly goal",
+  "Einheiten je Woche": "Sessions per week",
+  "Woran sich die Serie im Kalender misst": "What the streak in the calendar is measured against",
+  "Einheiten diese Woche": "sessions this week",
+  "Woche in Folge": "week in a row",
+  "Wochen in Folge": "weeks in a row",
+  "trainiert": "trained",
+  "gegessen erfasst": "food logged",
+  "gewogen": "weighed",
+  "An diesem Tag wurde nicht trainiert.": "No workout on this day.",
+  "{n} Einträge": "{n} entries",
+
+  /* Balance – „Diese Woche" steht schon beim Verlauf */
+  "4 Wochen": "4 weeks",
+  "12 Wochen": "12 weeks",
+  "Abgehakte Sätze diese Woche, nach Muskelgruppe. Das hinterlegte Band markiert 10 bis 20 Sätze – ein grober Richtwert, kein Urteil.":
+    "Completed sets this week, by muscle group. The shaded band marks 10 to 20 sets – a rough guide, not a verdict.",
+  "Sätze je Woche im Schnitt der letzten {n} Wochen. Das hinterlegte Band markiert 10 bis 20 Sätze – ein grober Richtwert, kein Urteil.":
+    "Sets per week, averaged over the last {n} weeks. The shaded band marks 10 to 20 sets – a rough guide, not a verdict.",
+  "Noch keine Sätze im Zeitraum": "No sets in this period yet",
+  "Sobald du trainierst, siehst du hier, welche Muskelgruppe wie viel abbekommt – und welche zu kurz kommt.":
+    "Once you train, you will see here which muscle group gets how much – and which one is falling behind.",
+
   /* ── Muskelgruppen ── */
   "Brust": "Chest",
   "Rücken": "Back",
