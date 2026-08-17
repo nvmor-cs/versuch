@@ -6,6 +6,16 @@ Die App hat **zwei Welten**: Training und Ernährung. Sie haben nichts miteinand
 
 Die Marke ist eine dreiblättrige Blüte – abstrakt für Wachstum und Vitalität, bewusst ohne Hantel-Motiv. Alle Grafiken (App-Icons, Launcher, Splash, Store-Assets) entstehen aus derselben Formdefinition per `python3 scripts/make-icons.py`.
 
+## Einstieg 🚀
+
+- **Einführung beim ersten Start**: sechs Seiten, die erklären, was die App kann und wie man sie bedient – die drei Welten und das Wischen über die Pille, Training, Ernährung, Gesundheit, Datensicherung. Überspringen geht jederzeit, wischen und Punkte antippen auch, und über die Einstellungen kommt sie zurück
+- **Trainingsplan vom Coach**: Am Ende der Einführung – oder jederzeit aus den Einstellungen – stellt der Coach sechs Fragen (Ziel, Erfahrung, Tage pro Woche, Ort, Zeit je Einheit, Rücksichten) und baut daraus einen Basisplan. Wer neu ist, steht sonst vor einer leeren App und soll sich aus 150 Übungen selbst etwas zusammenstellen; das ist die Stelle, an der die meisten aufgeben
+  - Der **Split** hängt an den Tagen und der Erfahrung: 2 Tage → Ganzkörper A/B, 3 Tage → Ganzkörper A/B/C für Anfänger, sonst Push/Pull/Beine, 4 Tage → Oberkörper/Beine je zweimal, 5 Tage → Push/Pull/Beine plus Oberkörper/Beine. **Ohne Geräte** wird immer Ganzkörper oder Oberkörper/Beine gewählt – ein Push-Tag käme mit dem eigenen Körper auf drei Übungen
+  - Die **Übungszahl** folgt der Zeit (30/45/60/75+ Min. → 4/5/6/7), die **Sätze** dem Ziel und der Erfahrung, die **Pausendauer** ebenfalls dem Ziel (Kraft 3:00, Muskelaufbau 1:30, Abnehmen 1:00). Je Muskelgruppe gibt es eine Reihenfolge von grundlegend nach ergänzend – so stehen die großen Übungen vorn
+  - **Ort und Rücksichten filtern**: Zu Hause fallen Maschinen und Kabelzüge weg, bei „nur Körpergewicht" alles außer dem eigenen Körper. Rücken, Knie oder Schulter angegeben, lässt der Plan die Übungen weg, die dort erfahrungsgemäß als Erste Ärger machen. Beim Ziel „Abnehmen" hängt am Ende jeder Einheit ein Cardio-Stück
+  - Der Plan ist ein **normaler Plan**: er wird der aktive, das Wochenziel im Kalender folgt den gewählten Tagen, und danach lässt sich alles umbauen wie bei jedem anderen Plan
+- **Zum Ausprobieren ohne Installation**: `npm run demo` baut die ganze App in eine einzige HTML-Datei (`demo/lumora-demo.html`). Der Speicher liegt dort im Arbeitsspeicher, jeder Neuladen fängt bei null an – ideal, um Einführung und Coach mehrmals durchzuspielen
+
 ## Training 🏋️
 
 - **Übungsbibliothek** mit 150 vordefinierten Übungen (nach Muskelgruppe und Gerät filterbar, Suche versteht auch englische Begriffe wie „bench press")
@@ -120,6 +130,8 @@ python3 -m http.server 8000
 | `js/app.js` | App-Logik: Tracking, Pläne, Timer, Charts, Backup, Wortmarke, Tab-Leiste |
 | `js/essen.js` | Ernährung: Tagebuch, Lebensmittel, Open Food Facts, eigener Speicher |
 | `js/gesundheit.js` | Gesundheit: Körpermaße, Tagestracker, Trainingskalender, Balance der Muskelgruppen |
+| `js/einstieg.js` | Einführung beim ersten Start und der Coach, der den Basisplan baut |
+| `scripts/build-demo.mjs` | Baut die App in eine einzelne HTML-Datei (`npm run demo`) |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
 | `android/…/PausenTimerPlugin.java` | Stille Meldung mit mitlaufender Restzeit (eigenes Capacitor-Plugin) |
 | `sw.js` | Offline-Cache |

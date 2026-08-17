@@ -111,6 +111,7 @@ const EXERCISE_LIBRARY = [
   x("frontkniebeugen", "Frontkniebeugen (Langhantel)", "Quadrizeps", "Langhantel", null, "front squat"),
   x("kniebeugen-smith", "Kniebeugen (Smith-Maschine)", "Quadrizeps", "Smith-Maschine", null, "smith squat"),
   x("goblet-squats", "Goblet Squats", "Quadrizeps", "Kettlebell", null, ""),
+  x("kniebeugen-kg", "Kniebeugen (Körpergewicht)", "Quadrizeps", "Körpergewicht", "reps", "air squat bodyweight squat luftkniebeuge"),
   x("beinpresse", "Beinpresse", "Quadrizeps", "Maschine", null, "leg press"),
   x("hackenschmidt", "Hackenschmidt-Kniebeuge (Maschine)", "Quadrizeps", "Maschine", null, "hack squat"),
   x("ausfallschritte", "Ausfallschritte (Kurzhanteln)", "Quadrizeps", "Kurzhantel", null, "lunges"),

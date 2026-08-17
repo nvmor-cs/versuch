@@ -561,6 +561,107 @@ body.punkte .bereich-punkte {
 }
 .scan-btn svg { width: 22px; height: 22px; color: var(--accent); }
 
+/* ── Einstieg: Einführung ────────────────────────────────── */
+
+/* Die Einführung ist kein Dialog, sondern eine Seite: ganzflächig, ohne
+   Ablenkung, mit dem Inhalt in der Mitte und der Bedienung unten am Daumen. */
+.einstieg-ov .overlay-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-bottom: calc(var(--safe-bottom) + 20px);
+}
+.einstieg-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: calc(var(--safe-top) + 14px) 0 0;
+}
+.btn-link {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink-3);
+  padding: 8px 4px;
+}
+.btn-link:active { color: var(--accent); }
+.einstieg-seite {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px 0;
+}
+.einstieg-bild {
+  width: 86px;
+  height: 86px;
+  border-radius: 24px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 26px;
+}
+.einstieg-bild svg { width: 42px; height: 42px; color: var(--accent); }
+.einstieg-seite h2 {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.einstieg-seite p {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin-bottom: 12px;
+}
+.einstieg-fuss { padding-top: 8px; }
+.einstieg-punkte {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.einstieg-punkt {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: width 0.16s ease, background 0.16s ease;
+}
+.einstieg-punkt.active { width: 20px; border-radius: 4px; background: var(--accent); }
+
+/* ── Einstieg: Coach ─────────────────────────────────────── */
+
+.coach-zaehler {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.coach-balken {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.coach-balken i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+.coach-frage {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.25;
+  margin-bottom: 16px;
+}
+
 /* ── Gesundheit: Körper ──────────────────────────────────── */
 
 .gew-karte { padding: 16px 14px 14px; }

@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.6.0";
+const APP_VERSION = "3.7.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -286,6 +286,7 @@ function bereinigeDB(roh) {
   st.coach = st.coach !== false;
   st.geraeteGetrennt = st.geraeteGetrennt !== false;
   st.sprache = ausAuswahl(st.sprache, SPRACHEN.map((x) => x.id), "de");
+  st.eingefuehrt = st.eingefuehrt === true;
   st.accent = ausAuswahl(st.accent, ACCENTS.map((a) => a.id), ACCENT_DEFAULT);
   st.lastBackupAt = st.lastBackupAt ? alsZahl(st.lastBackupAt, null) : null;
   st.beobachtet = alsListe(st.beobachtet).filter(istId).slice(0, 5);
@@ -3002,6 +3003,14 @@ ACTIONS["open-settings"] = () => {
       </select>
     </div>
     <div class="settings-row">
+      <div class="lbl">${tr("Einführung")}<small>${tr("Die Erklärung vom ersten Start nochmal ansehen")}</small></div>
+      <button class="btn btn-compact btn-ghost" data-action="einstieg-nochmal">${tr("Ansehen")}</button>
+    </div>
+    <div class="settings-row">
+      <div class="lbl">${tr("Trainingsplan vom Coach")}<small>${tr("Ein paar Fragen, dann ein Plan – der alte bleibt erhalten")}</small></div>
+      <button class="btn btn-compact" data-action="coach-plan">${icon("trophy")} ${tr("Starten")}</button>
+    </div>
+    <div class="settings-row">
       <div class="lbl">${tr("Pausen-Timer")}<small>${tr("Startet automatisch nach jedem abgehakten Satz")}</small></div>
       <button class="switch ${s.autoRest ? "on" : ""}" data-action="toggle-autorest" role="switch" aria-checked="${s.autoRest}" aria-label="${tr("Pausen-Timer")}"></button>
     </div>
@@ -3446,6 +3455,7 @@ function zurueckNavigieren() {
     const oben = ovs[ovs.length - 1];
     // Der Scanner hält die Kamera – die muss beim Zurück wieder los
     if (oben.classList.contains("scan-ov")) ACTIONS["essen-scan-zu"]();
+    else if (typeof oben.zurueck === "function") oben.zurueck();
     else if (oben.classList.contains("workout-ov")) ACTIONS["minimize-workout"]();
     else if (oben.classList.contains("picker-ov")) ACTIONS["picker-cancel"]();
     else if (oben.classList.contains("plan-wo-ov")) ACTIONS["plan-wo-done"]();

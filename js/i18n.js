@@ -673,6 +673,130 @@ const EN = {
   "Sobald du trainierst, siehst du hier, welche Muskelgruppe wie viel abbekommt – und welche zu kurz kommt.":
     "Once you train, you will see here which muscle group gets how much – and which one is falling behind.",
 
+  /* ── Einführung ── */
+  "Einführung": "Introduction",
+  "Die Erklärung vom ersten Start nochmal ansehen": "See the first-run explanation again",
+  "Ansehen": "View",
+  "Überspringen": "Skip",
+  "Seite": "Page",
+  "Seite {n}": "Page {n}",
+  "Erstmal selbst umschauen": "Have a look around first",
+  "Plan vom Coach erstellen": "Let the coach build a plan",
+  "Willkommen bei Lumora": "Welcome to Lumora",
+  "Deine App für Training, Ernährung und Gesundheit – in einem.":
+    "Your app for training, nutrition and health – all in one.",
+  "Alles bleibt auf diesem Gerät. Kein Konto, keine Anmeldung, kein Server.":
+    "Everything stays on this device. No account, no sign-in, no server.",
+  "Drei Welten, eine Leiste": "Three worlds, one bar",
+  "Unten sitzt eine Pille mit den Reitern. Wisch darüber, und du wechselst zwischen Training, Ernährung und Gesundheit.":
+    "At the bottom sits a pill with the tabs. Swipe across it to move between Training, Nutrition and Health.",
+  "Die drei Punkte darüber zeigen, wo du bist – antippen geht auch. Es läuft im Kreis, du kannst nicht falsch wischen.":
+    "The three dots above show where you are – you can tap them too. It loops around, so you cannot swipe the wrong way.",
+  "Ein Plan bündelt mehrere Trainings – etwa Push, Pull und Beine. Vom Start-Tab aus startest du eines davon.":
+    "A plan groups several workouts – push, pull and legs, for example. You start one of them from the Home tab.",
+  "Dann hakst du Satz für Satz ab. Gewicht und Wiederholungen sind mit den Werten vom letzten Mal vorbelegt, die Pause läuft von allein.":
+    "Then you tick off set after set. Weight and reps are pre-filled with last time's values, and the rest timer runs by itself.",
+  "Rekorde erkennt die App selbst, und der Coach sagt hinterher kurz, was ihm aufgefallen ist.":
+    "The app spots records on its own, and afterwards the coach briefly says what it noticed.",
+  "Ein Tagebuch mit vier Mahlzeiten. Such ein Lebensmittel, scanne den Barcode oder leg es selbst an.":
+    "A diary with four meals. Search for a food, scan its barcode or create it yourself.",
+  "Deine Ziele setzt du als Kalorien plus Anteile – 30 % Eiweiß bleiben 30 %, egal wie du die Kalorien änderst.":
+    "You set your goals as calories plus shares – 30 % protein stays 30 %, however you change the calories.",
+  "Gewicht mit gleitendem Wochenschnitt: Ein einzelner Morgen sagt nichts, die Linie schon.":
+    "Weight with a rolling weekly average: a single morning says nothing, the line does.",
+  "Der Kalender zeigt, wie regelmäßig du dabei bist, die Balance, welche Muskelgruppe zu kurz kommt.":
+    "The calendar shows how consistent you are, the balance which muscle group is falling behind.",
+  "Dazu Tagestracker, die du selbst zusammenstellst – Kreatin, Wasser, Schlaf, Stimmung. Nur was du auswählst, taucht auf.":
+    "Plus daily trackers you put together yourself – creatine, water, sleep, mood. Only what you pick shows up.",
+  "Deine Daten gehören dir": "Your data is yours",
+  "Weil nichts in einer Cloud liegt, hängt alles an diesem Gerät. Mach gelegentlich ein Backup über die Einstellungen.":
+    "Because nothing lives in a cloud, everything hangs on this device. Make a backup now and then via the settings.",
+  "Damit holst du alles zurück – auch auf einem neuen Handy.":
+    "With it you get everything back – on a new phone as well.",
+
+  /* ── Coach: Plan ── */
+  "Trainingsplan vom Coach": "Training plan from the coach",
+  "Ein paar Fragen, dann ein Plan – der alte bleibt erhalten":
+    "A few questions, then a plan – your old one is kept",
+  "Starten": "Start",
+  "{n} von {gesamt}": "{n} of {gesamt}",
+  "Nichts davon": "None of these",
+  "Dein Plan": "Your plan",
+  "Antworten ändern": "Change answers",
+  "Plan übernehmen": "Use this plan",
+  "{n}×": "{n}×",
+  "Plan übernommen – viel Erfolg!": "Plan applied – good luck!",
+  "{tage} Einheiten pro Woche · {saetze} Sätze insgesamt · Pause {pause}":
+    "{tage} sessions per week · {saetze} sets in total · rest {pause}",
+  "Ein Startpunkt, kein Gesetz: Du kannst jedes Training später umbauen, Übungen tauschen und Sätze ändern. Bei Schmerzen frag jemanden, der dich ansehen kann – der Coach kann das nicht.":
+    "A starting point, not a law: you can rebuild every workout later, swap exercises and change sets. If something hurts, ask someone who can actually look at you – the coach cannot.",
+
+  "Was willst du erreichen?": "What do you want to achieve?",
+  "Muskeln aufbauen": "Build muscle",
+  "Mehr Volumen auf den großen Übungen": "More volume on the big lifts",
+  "Stärker werden": "Get stronger",
+  "Wenige schwere Sätze, lange Pausen": "Few heavy sets, long rests",
+  "Abnehmen, Kraft halten": "Lose fat, keep strength",
+  "Kompakte Einheiten mit Cardio am Ende": "Compact sessions with cardio at the end",
+  "Fit und gesund bleiben": "Stay fit and healthy",
+  "Ganzkörper, moderat, ohne Druck": "Full body, moderate, no pressure",
+  "Wie lange trainierst du schon?": "How long have you been training?",
+  "Ich fange gerade an": "I am just starting",
+  "Weniger als ein halbes Jahr": "Less than six months",
+  "Ein bis zwei Jahre": "One to two years",
+  "Länger als zwei Jahre": "More than two years",
+  "Wie viele Tage pro Woche?": "How many days per week?",
+  "Lieber ehrlich zu wenig als ambitioniert zu viel – der Plan ist nur so gut, wie du ihn durchhältst.":
+    "Better honestly too few than ambitiously too many – a plan is only as good as your ability to stick to it.",
+  "2 Tage": "2 days",
+  "3 Tage": "3 days",
+  "4 Tage": "4 days",
+  "5 Tage": "5 days",
+  "Zwei Ganzkörper-Einheiten": "Two full-body sessions",
+  "Der Klassiker": "The classic",
+  "Oberkörper und Beine je zweimal": "Upper body and legs twice each",
+  "Für Erfahrene mit Zeit": "For experienced lifters with time",
+  "Wo trainierst du?": "Where do you train?",
+  "Im Studio": "At the gym",
+  "Maschinen, Kabelzüge, alles da": "Machines, cables, everything available",
+  "Zu Hause mit Gewichten": "At home with weights",
+  "Hanteln, Stange, Bank": "Dumbbells, barbell, bench",
+  "Nur mit dem eigenen Körper": "Bodyweight only",
+  "Ohne Geräte": "No equipment",
+  "Wie viel Zeit hast du je Einheit?": "How much time per session?",
+  "Etwa 30 Minuten": "About 30 minutes",
+  "Etwa 45 Minuten": "About 45 minutes",
+  "Etwa eine Stunde": "About an hour",
+  "Mehr als eine Stunde": "More than an hour",
+  "Vier Übungen": "Four exercises",
+  "Fünf Übungen": "Five exercises",
+  "Sechs Übungen": "Six exercises",
+  "Sieben Übungen": "Seven exercises",
+  "Worauf sollen wir Rücksicht nehmen?": "What should we work around?",
+  "Mehrfachauswahl. Übungen, die dort typischerweise Ärger machen, lässt der Plan weg.":
+    "Multiple choice. The plan leaves out exercises that typically cause trouble there.",
+  "Ohne Kreuzheben und vorgebeugtes Rudern": "No deadlifts or bent-over rows",
+  "Ohne tiefe Kniebeugen und Ausfallschritte": "No deep squats or lunges",
+  "Ohne Überkopfdrücken und Dips": "No overhead pressing or dips",
+
+  /* ── Coach: Splits und Einheiten ── */
+  "Ganzkörper 2×": "Full body 2×",
+  "Ganzkörper 3×": "Full body 3×",
+  "Ganzkörper A": "Full body A",
+  "Ganzkörper B": "Full body B",
+  "Ganzkörper C": "Full body C",
+  "Oberkörper / Beine": "Upper / Lower",
+  "Oberkörper": "Upper body",
+  "Oberkörper A": "Upper body A",
+  "Oberkörper B": "Upper body B",
+  "Beine": "Legs",
+  "Beine A": "Legs A",
+  "Beine B": "Legs B",
+  "Beine extra": "Legs extra",
+  "Push": "Push",
+  "Pull": "Pull",
+  "Push / Pull / Beine + Oberkörper / Beine": "Push / Pull / Legs + Upper / Lower",
+
   /* ── Muskelgruppen ── */
   "Brust": "Chest",
   "Rücken": "Back",
@@ -793,6 +917,7 @@ const EN_UEBUNG = {
   "frontkniebeugen": "Front Squats (Barbell)",
   "kniebeugen-smith": "Squats (Smith Machine)",
   "goblet-squats": "Goblet Squats",
+  "kniebeugen-kg": "Squats (Bodyweight)",
   "beinpresse": "Leg Press",
   "hackenschmidt": "Hack Squat (Machine)",
   "ausfallschritte": "Lunges (Dumbbells)",
