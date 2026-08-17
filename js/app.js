@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.5.0";
+const APP_VERSION = "3.6.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -891,9 +891,15 @@ ACTIONS["tab"] = (el) => {
   render();
 };
 
+/* Die Welten liegen im Kreis: Hinter der letzten kommt wieder die erste.
+   Bei zwei Welten war ein Anschlag noch plausibel, bei dreien nicht mehr –
+   wer in der Gesundheit steht und zurück ins Training will, soll nicht erst
+   zweimal in die andere Richtung wischen müssen. Ein Wisch, egal wohin,
+   führt immer irgendwohin. */
 function bereichWechseln(richtung) {
-  const i = bereichIndex() + richtung;
-  if (i < 0 || i >= BEREICHE.length) return false;
+  const n = BEREICHE.length;
+  const i = ((bereichIndex() + richtung) % n + n) % n;
+  if (i === bereichIndex()) return false;
   currentBereich = BEREICHE[i].id;
   currentTab = letzterTab[currentBereich] || BEREICHE[i].tabs[0].id;
   tippen();
@@ -980,9 +986,9 @@ function bereichWischenVerbinden() {
     }
     e.preventDefault();
     const inner = $("#tabbar-inner");
-    const rand = bereichIndex() + (dx < 0 ? 1 : -1);
-    // An den Enden zäh werden – so merkt man, dass es nicht weitergeht
-    zug.dx = rand < 0 || rand >= BEREICHE.length ? dx * 0.25 : dx;
+    // Kein zähes Ende mehr: Es geht in jede Richtung weiter, also folgt die
+    // Leiste dem Finger überall gleich willig.
+    zug.dx = dx;
     if (inner) {
       inner.style.transition = "none";
       inner.style.transform = `translateX(${zug.dx * 0.5}px)`;

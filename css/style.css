@@ -605,6 +605,95 @@ body.punkte .bereich-punkte {
    kleiner und blasser als die geglättete Linie darüber. */
 .gew-punkt { fill: var(--ink-3); opacity: 0.55; }
 
+/* ── Gesundheit: Tagestracker ────────────────────────────── */
+
+.tracker-zeile {
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+}
+/* Erledigt bekommt einen Rahmen in der Akzentfarbe – kein Häkchenmeer, aber
+   auf einen Blick zu sehen, was heute schon steht. */
+.tracker-zeile.an { border-color: var(--accent-line); }
+.tracker-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+}
+.tracker-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-2);
+  min-width: 0;
+}
+.tracker-name em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.tracker-haken {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.tracker-haken svg { width: 18px; height: 18px; }
+.tracker-haken.an {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.tracker-zahl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.tracker-zahl .stepper-btn { width: 32px; height: 32px; font-size: 18px; }
+.tracker-zahl b {
+  min-width: 64px;
+  text-align: center;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+}
+.tracker-skala { display: flex; gap: 6px; flex-shrink: 0; }
+.skala-punkt {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.skala-punkt.an { background: var(--accent); border-color: var(--accent); }
+/* Sieben Tage am Stück sind die eigentliche Aussage – ein Haken für heute
+   sagt für sich genommen nichts. */
+.tracker-streifen {
+  display: flex;
+  gap: 3px;
+  margin-top: 8px;
+}
+.tracker-streifen i {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+.tracker-streifen i.an { background: var(--accent); opacity: 0.75; }
+.tracker-streifen i.heute.an { opacity: 1; }
+.tracker-streifen i.heute { outline: 1px solid var(--border-strong); }
+
 /* ── Gesundheit: Kalender ────────────────────────────────── */
 
 .kal-kopf, .kal-gitter {

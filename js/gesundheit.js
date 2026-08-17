@@ -33,6 +33,60 @@ const MASSE = [
 
 const MASS_GRENZEN = { gewicht: 500, fett: 100, taille: 300, brust: 300, arm: 150, bein: 200, huefte: 300 };
 
+/* ═══════════════ Tagestracker ═══════════════
+
+   Was man täglich mitschreiben will, ist bei jedem anders: Der eine nimmt
+   Kreatin und will den Haken, die andere achtet auf Wasser und Schlaf, der
+   Nächste auf Muskelkater. Alles gleichzeitig anzuzeigen wäre eine Wand aus
+   Zeilen, die niemand füllt.
+
+   Deshalb ein Katalog, aus dem man auswählt: Nichts ist voreingestellt, und
+   nur was eingeschaltet ist, taucht auf dem Bildschirm auf. Wer nichts
+   auswählt, sieht auch nichts – die Seite bleibt, was sie war.
+
+   Drei Arten, mehr braucht es nicht:
+   * haken – genommen oder nicht (Nahrungsergänzung, Gewohnheiten)
+   * zahl  – eine Menge mit Einheit und sinnvoller Schrittweite
+   * skala – 1 bis 5, für alles, was sich nicht messen, nur einschätzen lässt */
+const TRACKER = [
+  // Nahrungsergänzung – ein Haken je Tag reicht; die Dosis steht auf der Dose
+  { id: "kreatin", label: "Kreatin", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "protein", label: "Proteinshake", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "multivit", label: "Multivitamin", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "vitd", label: "Vitamin D", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "omega3", label: "Omega 3", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "magnesium", label: "Magnesium", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "zink", label: "Zink", art: "haken", gruppe: "Nahrungsergänzung" },
+  { id: "eisen", label: "Eisen", art: "haken", gruppe: "Nahrungsergänzung" },
+
+  // Alltag
+  { id: "wasser", label: "Wasser", art: "zahl", einheit: "l", schritt: 0.25, max: 15, gruppe: "Alltag" },
+  { id: "schlaf", label: "Schlaf", art: "zahl", einheit: "h", schritt: 0.5, max: 24, gruppe: "Alltag" },
+  { id: "schritte", label: "Schritte", art: "zahl", einheit: "", schritt: 500, max: 100000, gruppe: "Alltag" },
+  { id: "ruhepuls", label: "Ruhepuls", art: "zahl", einheit: "bpm", schritt: 1, max: 250, gruppe: "Alltag" },
+  { id: "koffein", label: "Koffein", art: "zahl", einheit: "mg", schritt: 50, max: 2000, gruppe: "Alltag" },
+  { id: "alkohol", label: "Alkohol", art: "zahl", einheit: "Gläser", schritt: 1, max: 30, gruppe: "Alltag" },
+  { id: "dehnen", label: "Dehnen", art: "haken", gruppe: "Alltag" },
+  { id: "spaziergang", label: "Spaziergang", art: "haken", gruppe: "Alltag" },
+  { id: "tageslicht", label: "Tageslicht", art: "haken", gruppe: "Alltag" },
+  { id: "meditation", label: "Meditation", art: "haken", gruppe: "Alltag" },
+
+  // Befinden – 1 ist wenig, 5 ist viel. Ob viel gut ist, entscheidet die Zeile:
+  // viel Energie ist schön, viel Muskelkater eher nicht. Die App urteilt nicht.
+  { id: "energie", label: "Energie", art: "skala", gruppe: "Befinden" },
+  { id: "stimmung", label: "Stimmung", art: "skala", gruppe: "Befinden" },
+  { id: "schlafgut", label: "Schlafqualität", art: "skala", gruppe: "Befinden" },
+  { id: "muskelkater", label: "Muskelkater", art: "skala", gruppe: "Befinden" },
+  { id: "stress", label: "Stress", art: "skala", gruppe: "Befinden" },
+];
+
+const TRACKER_GRUPPEN = ["Nahrungsergänzung", "Alltag", "Befinden"];
+const trackerById = (id) => TRACKER.find((t) => t.id === id) || null;
+
+/** Die eingeschalteten Tracker, in der Reihenfolge des Katalogs. */
+const trackerAktiv = () =>
+  TRACKER.filter((t) => (GESUND.tracker || []).includes(t.id));
+
 /* ═══════════════ Datenhaltung ═══════════════ */
 
 function defaultGesund() {
@@ -45,6 +99,9 @@ function defaultGesund() {
     // Trainingseinheiten je Woche. Drei ist die Zahl, die für die meisten
     // aufgeht – änderbar.
     wochenziel: 3,
+    // Eingeschaltete Tagestracker (Kennungen aus TRACKER). Leer heißt: keine –
+    // die Seite bleibt so schlank, wie sie ohne sie wäre.
+    tracker: [],
   };
 }
 
@@ -61,10 +118,23 @@ function bereinigeGesund(roh) {
       const v = alsZahl(werte[k], 0);
       if (v > 0) eintrag[k] = Math.min(MASS_GRENZEN[k], Math.round(v * 10) / 10);
     }
+    // Tracker liegen im selben Tageseintrag – ein Tag ist ein Datensatz.
+    // Geprüft wird je nach Art, damit aus einer 7 keine Skalenstufe wird.
+    for (const t of TRACKER) {
+      const v = alsZahl(werte[t.id], 0);
+      if (!(v > 0)) continue;
+      eintrag[t.id] = t.art === "haken" ? 1
+        : t.art === "skala" ? Math.min(5, Math.max(1, Math.round(v)))
+        : Math.min(t.max, Math.round(v * 100) / 100);
+    }
     // Ein Tag ganz ohne Zahl ist kein Eintrag
     if (Object.keys(eintrag).length) tage[tag] = eintrag;
   }
   g.koerper = tage;
+  const bekannt = new Set(TRACKER.map((t) => t.id));
+  g.tracker = alsListe(g.tracker)
+    .filter((id) => bekannt.has(id))
+    .filter((id, i, a) => a.indexOf(id) === i);
   const ziel = alsZahl(g.zielGewicht, 0);
   g.zielGewicht = ziel > 0 ? Math.min(MASS_GRENZEN.gewicht, Math.round(ziel * 10) / 10) : null;
   g.wochenziel = Math.min(14, Math.max(1, Math.round(alsZahl(g.wochenziel, 3))));
@@ -87,6 +157,22 @@ let GESUND = ladeGesund();
 
 function speichereGesund() {
   try { localStorage.setItem(LS_GESUND, JSON.stringify(GESUND)); } catch (_) {}
+}
+
+/* ═══════════════ Tageswerte ═══════════════ */
+
+const tagWert = (tag, id) => (GESUND.koerper[tag] || {})[id];
+
+/* Ein Wert von 0 (oder nichts) wird nicht gespeichert, sondern entfernt: Ein
+   Tag ohne Eintrag und ein Tag mit einer Null sind dasselbe, und ein leerer
+   Tag hat im Speicher nichts verloren. */
+function tagSetzen(tag, id, wert) {
+  const eintrag = GESUND.koerper[tag] || {};
+  if (Number.isFinite(wert) && wert > 0) eintrag[id] = wert;
+  else delete eintrag[id];
+  if (Object.keys(eintrag).length) GESUND.koerper[tag] = eintrag;
+  else delete GESUND.koerper[tag];
+  speichereGesund();
 }
 
 /* ═══════════════ Rechnen: Körper ═══════════════ */
@@ -246,6 +332,8 @@ function renderKoerper() {
         ${icon(heuteWert ? "edit" : "plus")} ${heuteWert
           ? esc(tr("Heute: {gewicht} kg", { gewicht: fmtKg(heuteWert) }))
           : tr("Gewicht eintragen")}</button>
+      ${letzte ? "" : `<p class="hint" style="margin:10px 2px 0">${tr("Trag dein Gewicht ein – am besten morgens, nüchtern und immer zur selben Zeit. Erst über Wochen wird daraus eine Aussage.")}</p>`}
+      ${trackerBlock()}
       ${letzte ? `
       <div class="seg" role="tablist" aria-label="${tr("Zeitraum")}">
         ${KOERPER_RANGES.map((r) => `<button role="tab" aria-selected="${r.id === koerperRange}" class="${r.id === koerperRange ? "active" : ""}" data-action="koerper-range" data-r="${esc(r.id)}">${esc(tr(r.label))}</button>`).join("")}
@@ -255,11 +343,7 @@ function renderKoerper() {
         <div class="chart-sub">${tr("Punkte sind einzelne Messungen, die Linie der Schnitt über sieben Tage")}</div>
         <div class="chart-wrap">${gewichtChart()}</div>
       </div>
-      ${masseBlock()}`
-      : `<div class="empty">${icon("scale")}
-          <h3>${tr("Noch nichts gemessen")}</h3>
-          <p>${tr("Trag dein Gewicht ein – am besten morgens, nüchtern und immer zur selben Zeit. Erst über Wochen wird daraus eine Aussage.")}</p>
-        </div>`}
+      ${masseBlock()}` : ""}
     </div>`;
 }
 
@@ -358,6 +442,173 @@ function gewichtChart() {
   out += `<text class="chart-axis-text" x="${padL}" y="${H - 5}">${esc(fmtDateShort(t0))}</text>`;
   out += `<text class="chart-axis-text" x="${W - padR}" y="${H - 5}" text-anchor="end">${esc(fmtDateShort(t1))}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Liniendiagramm: Gewichtsverlauf")}">${out}</svg>`;
+}
+
+/* ── Tagestracker: Zeilen, Streifen, Bedienung ───────────
+   Eine Zeile je Tracker: links, worum es geht, rechts die Bedienung, darunter
+   ein Streifen der letzten sieben Tage. Der Streifen ist der eigentliche
+   Gewinn – ein Haken für heute sagt nichts, sieben Tage am Stück schon. */
+
+function trackerZeilen(tag) {
+  return trackerAktiv().map((t) => trackerZeile(t, tag)).join("");
+}
+
+function trackerZeile(t, tag) {
+  const wert = tagWert(tag, t.id);
+  const steuer = t.art === "haken" ? hakenSteuer(t, tag, wert)
+    : t.art === "skala" ? skalaSteuer(t, tag, wert)
+    : zahlSteuer(t, tag, wert);
+  return `
+    <div class="tracker-zeile${wert ? " an" : ""}">
+      <div class="tracker-kopf">
+        <span class="tracker-name">${esc(tr(t.label))}${t.einheit ? ` <em>${esc(tr(t.einheit))}</em>` : ""}</span>
+        ${steuer}
+      </div>
+      ${trackerStreifen(t, tag)}
+    </div>`;
+}
+
+const hakenSteuer = (t, tag, wert) => `
+  <button class="tracker-haken${wert ? " an" : ""}" data-action="tracker-haken"
+          data-t="${esc(t.id)}" data-tag="${esc(tag)}" aria-pressed="${!!wert}"
+          aria-label="${esc(tr(t.label))}">${icon("check")}</button>`;
+
+const zahlSteuer = (t, tag, wert) => `
+  <span class="tracker-zahl">
+    <button class="stepper-btn" data-action="tracker-step" data-t="${esc(t.id)}" data-tag="${esc(tag)}"
+            data-d="-1" aria-label="${esc(tr("{label} verringern", { label: tr(t.label) }))}">−</button>
+    <b>${wert ? esc(fmtKg(wert)) : "–"}</b>
+    <button class="stepper-btn" data-action="tracker-step" data-t="${esc(t.id)}" data-tag="${esc(tag)}"
+            data-d="1" aria-label="${esc(tr("{label} erhöhen", { label: tr(t.label) }))}">+</button>
+  </span>`;
+
+const skalaSteuer = (t, tag, wert) => `
+  <span class="tracker-skala">
+    ${[1, 2, 3, 4, 5].map((n) => `
+      <button class="skala-punkt${wert >= n ? " an" : ""}" data-action="tracker-skala"
+              data-t="${esc(t.id)}" data-tag="${esc(tag)}" data-v="${n}"
+              aria-label="${esc(tr(t.label))} ${n}"></button>`).join("")}
+  </span>`;
+
+function trackerStreifen(t, tag) {
+  const ende = new Date(tag + "T12:00:00").getTime();
+  let out = "";
+  for (let i = 6; i >= 0; i--) {
+    const wert = tagWert(tagKey(ende - i * 86400000), t.id);
+    out += `<i class="${wert ? "an" : ""}${i === 0 ? " heute" : ""}"></i>`;
+  }
+  return `<span class="tracker-streifen" aria-hidden="true">${out}</span>`;
+}
+
+/* Der Block auf dem Körper-Bildschirm gilt für heute. Dieselben Zeilen zeigt
+   das Blatt aus dem Kalender – dann für den angetippten Tag. */
+function trackerBlock() {
+  const aktiv = trackerAktiv();
+  const heute = tagKey(Date.now());
+  return `
+    <div class="section-label" style="margin-top:20px">${tr("Tagestracker")}</div>
+    <div id="tracker-inline">${aktiv.length ? trackerZeilen(heute) : ""}</div>
+    ${aktiv.length ? "" : `<p class="hint" style="margin:0 2px 10px">${tr("Noch nichts ausgewählt. Trag ein, was du täglich mitschreiben willst – Kreatin, Wasser, Schlaf, Stimmung. Nur was du auswählst, steht hier.")}</p>`}
+    <button class="btn btn-ghost btn-compact" data-action="tracker-waehlen">
+      ${icon(aktiv.length ? "gear" : "plus")} ${aktiv.length ? tr("Tracker anpassen") : tr("Tracker auswählen")}</button>`;
+}
+
+// Nach jeder Änderung nur die Zeilen neu schreiben – sonst spränge der
+// Bildschirm bei jedem Haken an den Anfang zurück
+function trackerZeichnen() {
+  const inline = $("#tracker-inline");
+  if (inline) inline.innerHTML = trackerZeilen(tagKey(Date.now()));
+  const blatt = $("#tracker-liste");
+  if (blatt) blatt.innerHTML = trackerZeilen(blatt.dataset.tag);
+}
+
+ACTIONS["tracker-haken"] = (el) => {
+  const tag = el.dataset.tag;
+  tagSetzen(tag, el.dataset.t, tagWert(tag, el.dataset.t) ? 0 : 1);
+  tippen();
+  trackerZeichnen();
+};
+
+ACTIONS["tracker-step"] = (el) => {
+  const t = trackerById(el.dataset.t);
+  if (!t) return;
+  const tag = el.dataset.tag;
+  const jetzt = tagWert(tag, t.id) || 0;
+  // Auf das nächste Vielfache in Richtung des Knopfes – wie im Mengenblatt
+  const roh = +el.dataset.d > 0
+    ? (Math.floor(jetzt / t.schritt) + 1) * t.schritt
+    : (Math.ceil(jetzt / t.schritt) - 1) * t.schritt;
+  tagSetzen(tag, t.id, Math.min(t.max, Math.max(0, Math.round(roh * 100) / 100)));
+  trackerZeichnen();
+};
+
+ACTIONS["tracker-skala"] = (el) => {
+  const tag = el.dataset.tag, id = el.dataset.t, v = +el.dataset.v;
+  // Dieselbe Stufe noch einmal antippen löscht sie – sonst käme man von einer
+  // versehentlichen Eins nie wieder herunter
+  tagSetzen(tag, id, tagWert(tag, id) === v ? 0 : v);
+  tippen();
+  trackerZeichnen();
+};
+
+/* Auswahl: der ganze Katalog, nach Gruppen. Ein Schalter je Zeile, mehr
+   nicht – wer viel auswählt, bekommt viele Zeilen, und das ist seine
+   Entscheidung. */
+ACTIONS["tracker-waehlen"] = () => {
+  const bd = openSheet(`
+    <div class="sheet-title">${tr("Tagestracker")}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
+    </div>
+    <p class="hint" style="margin:-6px 2px 14px">${tr("Nur was hier an ist, erscheint auf der Körper-Seite.")}</p>
+    <div id="tracker-katalog">${trackerKatalog()}</div>
+  `, { fest: true });
+  bd.zurueck = () => { bd.remove(); renderKoerper(); };
+  bd.addEventListener("click", (e) => {
+    const zeile = e.target.closest("[data-an]");
+    if (!zeile) {
+      if (e.target.closest('[data-action="close-sheet"]')) renderKoerper();
+      return;
+    }
+    const id = zeile.dataset.an;
+    const liste = GESUND.tracker || (GESUND.tracker = []);
+    const i = liste.indexOf(id);
+    if (i < 0) liste.push(id); else liste.splice(i, 1);
+    speichereGesund();
+    tippen();
+    const ziel = bd.querySelector("#tracker-katalog");
+    if (ziel) ziel.innerHTML = trackerKatalog();
+  });
+};
+
+function trackerKatalog() {
+  return TRACKER_GRUPPEN.map((gruppe) => `
+    <div class="section-label">${esc(tr(gruppe))}</div>
+    ${TRACKER.filter((t) => t.gruppe === gruppe).map((t) => {
+      const an = (GESUND.tracker || []).includes(t.id);
+      return `
+      <div class="settings-row">
+        <div class="lbl">${esc(tr(t.label))}<small>${esc(trackerArtLabel(t))}</small></div>
+        <button class="switch ${an ? "on" : ""}" data-an="${esc(t.id)}" role="switch"
+                aria-checked="${an}" aria-label="${esc(tr(t.label))}"></button>
+      </div>`;
+    }).join("")}`).join("");
+}
+
+const trackerArtLabel = (t) =>
+  t.art === "haken" ? tr("Haken je Tag")
+  : t.art === "skala" ? tr("Skala 1 bis 5")
+  : t.einheit ? tr("Zahl in {einheit}", { einheit: tr(t.einheit) })
+  : tr("Zahl");
+
+/* Aus dem Kalender heraus: dieselben Zeilen für einen vergangenen Tag.
+   Vergessen hat man den Haken meistens erst am nächsten Morgen. */
+function trackerBlatt(tag) {
+  openSheet(`
+    <div class="sheet-title">${esc(tr("Tracker vom {datum}", { datum: fmtDate(new Date(tag + "T12:00:00").getTime()) }))}
+      <button class="icon-btn plain" data-action="close-sheet" aria-label="${tr("Schließen")}">${icon("x")}</button>
+    </div>
+    <div id="tracker-liste" data-tag="${esc(tag)}">${trackerZeilen(tag)}</div>
+  `);
 }
 
 /* ── Messung eintragen ───────────────────────────────────
@@ -500,7 +751,7 @@ function renderKalender() {
       <p class="hint kal-legende">
         <span><i class="kal-mark trainiert"></i>${tr("trainiert")}</span>
         <span><i class="kal-mark p-essen"></i>${tr("gegessen erfasst")}</span>
-        <span><i class="kal-mark p-koerper"></i>${tr("gewogen")}</span>
+        <span><i class="kal-mark p-koerper"></i>${tr("Körper notiert")}</span>
       </p>
     </div>`;
 }
@@ -546,13 +797,14 @@ function monatsGitter(jahr, monat) {
     const key = tagKey(new Date(jahr, monat, t, 12));
     const wos = workoutsAmTag(key).length;
     const gegessen = Array.isArray(ESSEN.tage[key]) && ESSEN.tage[key].length > 0;
-    const gewogen = !!(GESUND.koerper[key] && GESUND.koerper[key].gewicht);
+    // Ein Punkt für alles aus dem Körper-Tab: gewogen, gemessen oder abgehakt
+    const notiert = !!GESUND.koerper[key];
     const zukunft = key > heute;
     zellen += `
       <button class="kal-tag${wos ? " trainiert" : ""}${key === heute ? " heute" : ""}${zukunft ? " zukunft" : ""}"
               data-action="kal-tag" data-k="${esc(key)}" ${zukunft ? "disabled" : ""}>
         <span class="kal-nr">${t}</span>
-        <span class="kal-punkte">${gegessen ? `<i class="p-essen"></i>` : ""}${gewogen ? `<i class="p-koerper"></i>` : ""}</span>
+        <span class="kal-punkte">${gegessen ? `<i class="p-essen"></i>` : ""}${notiert ? `<i class="p-koerper"></i>` : ""}</span>
         ${wos > 1 ? `<span class="kal-zahl">${wos}</span>` : ""}
       </button>`;
   }
@@ -593,12 +845,15 @@ ACTIONS["kal-tag"] = (el) => {
     </div>` : ""}
     <button class="btn btn-soft" data-mess="1" style="margin-top:12px">
       ${icon(messung ? "edit" : "plus")} ${messung ? tr("Messung bearbeiten") : tr("Messung nachtragen")}</button>
+    ${trackerAktiv().length ? `<button class="btn btn-ghost" data-trk="1" style="margin-top:8px">
+      ${icon("check")} ${tr("Tracker nachtragen")}</button>` : ""}
   `);
 
   bd.addEventListener("click", (e) => {
     const wo = e.target.closest("[data-wo]");
     if (wo) { bd.remove(); openWorkoutDetail(wo.dataset.wo); return; }
-    if (e.target.closest("[data-mess]")) { bd.remove(); koerperFormular(key); }
+    if (e.target.closest("[data-mess]")) { bd.remove(); koerperFormular(key); return; }
+    if (e.target.closest("[data-trk]")) { bd.remove(); trackerBlatt(key); }
   });
 };
 
