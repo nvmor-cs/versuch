@@ -30,6 +30,7 @@ public class MainActivity extends BridgeActivity {
         // Eigene Plugins müssen vor super.onCreate() angemeldet sein, sonst
         // findet die Brücke sie beim Aufbau der WebView nicht.
         registerPlugin(PausenTimerPlugin.class);
+        registerPlugin(SchrittZaehlerPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Bildschirm bleibt an, solange die App im Vordergrund liegt – mitten

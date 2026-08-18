@@ -62,7 +62,7 @@ const TRACKER = [
   // Alltag
   { id: "wasser", label: "Wasser", art: "zahl", einheit: "l", schritt: 0.25, max: 15, gruppe: "Alltag" },
   { id: "schlaf", label: "Schlaf", art: "zahl", einheit: "h", schritt: 0.5, max: 24, gruppe: "Alltag" },
-  { id: "schritte", label: "Schritte", art: "zahl", einheit: "", schritt: 500, max: 100000, gruppe: "Alltag" },
+  { id: "schritte", label: "Schritte", art: "zahl", einheit: "", schritt: 500, max: 100000, gruppe: "Alltag", auto: true },
   { id: "ruhepuls", label: "Ruhepuls", art: "zahl", einheit: "bpm", schritt: 1, max: 250, gruppe: "Alltag" },
   { id: "koffein", label: "Koffein", art: "zahl", einheit: "mg", schritt: 50, max: 2000, gruppe: "Alltag" },
   { id: "alkohol", label: "Alkohol", art: "zahl", einheit: "Gläser", schritt: 1, max: 30, gruppe: "Alltag" },
@@ -102,6 +102,9 @@ function defaultGesund() {
     // Eingeschaltete Tagestracker (Kennungen aus TRACKER). Leer heißt: keine –
     // die Seite bleibt so schlank, wie sie ohne sie wäre.
     tracker: [],
+    // Schritte vom Bewegungssensor zählen lassen, statt sie einzutippen.
+    // Greift nur, wenn das Gerät den Sensor hat und ihn freigegeben bekommt.
+    schritteAuto: true,
   };
 }
 
@@ -138,6 +141,7 @@ function bereinigeGesund(roh) {
   const ziel = alsZahl(g.zielGewicht, 0);
   g.zielGewicht = ziel > 0 ? Math.min(MASS_GRENZEN.gewicht, Math.round(ziel * 10) / 10) : null;
   g.wochenziel = Math.min(14, Math.max(1, Math.round(alsZahl(g.wochenziel, 3))));
+  g.schritteAuto = g.schritteAuto !== false;
   g.version = 1;
   return g;
 }
@@ -158,6 +162,98 @@ let GESUND = ladeGesund();
 function speichereGesund() {
   try { localStorage.setItem(LS_GESUND, JSON.stringify(GESUND)); } catch (_) {}
 }
+
+/* ═══════════════ Schritte: automatisch ═══════════════
+
+   Die Schritte sind der einzige Tracker, den niemand eintippen sollte – ein
+   Telefon zählt sie ohnehin. Fast jedes Android-Gerät hat dafür einen eigenen
+   sparsamen Sensor, der auch dann weiterzählt, wenn die App geschlossen ist
+   (siehe SchrittZaehlerPlugin). Hier steht nur die eine Hälfte, die es dafür
+   in der Oberfläche braucht: nachfragen, übernehmen, anzeigen.
+
+   Wo es den Sensor nicht gibt – im Browser, in der Demo, auf einem Gerät ohne
+   Bewegungssensor –, bleibt alles wie zuvor: eine Zahl zum Eintippen. */
+
+const SCHRITTE = { moeglich: false, erlaubt: false, gefragt: false };
+
+const schritteAutoAn = () =>
+  SCHRITTE.moeglich && SCHRITTE.erlaubt && GESUND.schritteAuto !== false;
+
+const schrittPlugin = () => {
+  const { SchrittZaehler } = capPlugins();
+  return SchrittZaehler && SchrittZaehler.stand ? SchrittZaehler : null;
+};
+
+/* Die gezählten Tage in die Tageswerte übernehmen. Der Sensor gewinnt: Was er
+   liefert, ist gemessen, was hier stand, war bestenfalls geschätzt. */
+function schritteUebernehmen(tage) {
+  if (!tage || typeof tage !== "object" || GESUND.schritteAuto === false) return false;
+  let geaendert = false;
+  for (const [tag, roh] of Object.entries(tage)) {
+    if (!TAG_MUSTER.test(tag)) continue;
+    const wert = Math.max(0, Math.round(alsZahl(roh, 0)));
+    if (!wert || tagWert(tag, "schritte") === wert) continue;
+    const eintrag = GESUND.koerper[tag] || (GESUND.koerper[tag] = {});
+    eintrag.schritte = Math.min(100000, wert);
+    geaendert = true;
+  }
+  if (geaendert) speichereGesund();
+  return geaendert;
+}
+
+async function schritteHolen() {
+  const p = schrittPlugin();
+  if (!p) return;
+  try {
+    const stand = await p.stand();
+    SCHRITTE.moeglich = !!stand.moeglich;
+    SCHRITTE.erlaubt = !!stand.erlaubt;
+    SCHRITTE.gefragt = true;
+    if (schritteUebernehmen(stand.tage)) {
+      renderKoerper();
+      renderKalender();
+    }
+  } catch (_) {
+    // Kein Sensor, keine Schritte – die Zeile bleibt dann zum Eintippen
+  }
+}
+
+/* Die Freigabe wird erst gefragt, wenn jemand die Schritte einschaltet. Beim
+   ersten Start danach zu fragen wäre zudringlich: Wer sie nicht will, soll
+   nicht danach gefragt werden. */
+async function schritteErlauben() {
+  const p = schrittPlugin();
+  if (!p || !p.erlauben) return;
+  try {
+    const stand = await p.erlauben();
+    SCHRITTE.moeglich = !!stand.moeglich;
+    SCHRITTE.erlaubt = !!stand.erlaubt;
+    schritteUebernehmen(stand.tage);
+  } catch (_) {}
+  renderKoerper();
+  const katalog = $("#tracker-katalog");
+  if (katalog) katalog.innerHTML = trackerKatalog();
+}
+
+ACTIONS["schritte-erlauben"] = () => schritteErlauben();
+
+ACTIONS["schritte-auto"] = (el) => {
+  GESUND.schritteAuto = GESUND.schritteAuto === false;
+  speichereGesund();
+  el.classList.toggle("on", GESUND.schritteAuto);
+  el.setAttribute("aria-checked", GESUND.schritteAuto);
+  if (GESUND.schritteAuto && !SCHRITTE.erlaubt) { schritteErlauben(); return; }
+  renderKoerper();
+};
+
+/* Nachgesehen wird beim Start, bei jeder Rückkehr in den Vordergrund und
+   währenddessen jede Minute. Öfter bringt nichts: Der Sensor zählt weiter,
+   ob wir hinsehen oder nicht. */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") schritteHolen();
+});
+setInterval(() => { if (document.visibilityState === "visible") schritteHolen(); }, 60000);
+setTimeout(schritteHolen, 400);
 
 /* ═══════════════ Tageswerte ═══════════════ */
 
@@ -455,7 +551,8 @@ function trackerZeilen(tag) {
 
 function trackerZeile(t, tag) {
   const wert = tagWert(tag, t.id);
-  const steuer = t.art === "haken" ? hakenSteuer(t, tag, wert)
+  const steuer = t.auto && SCHRITTE.moeglich ? schrittSteuer(t, tag, wert)
+    : t.art === "haken" ? hakenSteuer(t, tag, wert)
     : t.art === "skala" ? skalaSteuer(t, tag, wert)
     : zahlSteuer(t, tag, wert);
   return `
@@ -481,6 +578,22 @@ const zahlSteuer = (t, tag, wert) => `
     <button class="stepper-btn" data-action="tracker-step" data-t="${esc(t.id)}" data-tag="${esc(tag)}"
             data-d="1" aria-label="${esc(tr("{label} erhöhen", { label: tr(t.label) }))}">+</button>
   </span>`;
+
+/* Zählt das Gerät selbst, gibt es nichts zu bedienen: Dann steht dort die
+   Zahl und ein Wort dazu, woher sie kommt. Fehlt nur die Freigabe, steht dort
+   der Knopf, mit dem man sie gibt – und nicht etwa ein Stepper, der eine
+   Handarbeit nahelegt, die niemand machen will. */
+const schrittSteuer = (t, tag, wert) => {
+  if (!SCHRITTE.erlaubt) {
+    return `<button class="btn btn-compact" data-action="schritte-erlauben">${tr("Erlauben")}</button>`;
+  }
+  if (GESUND.schritteAuto === false) return zahlSteuer(t, tag, wert);
+  return `
+    <span class="tracker-auto">
+      <b>${esc(fmtKg(wert || 0))}</b>
+      <span>${tr("automatisch")}</span>
+    </span>`;
+};
 
 const skalaSteuer = (t, tag, wert) => `
   <span class="tracker-skala">
@@ -577,6 +690,10 @@ ACTIONS["tracker-waehlen"] = () => {
     tippen();
     const ziel = bd.querySelector("#tracker-katalog");
     if (ziel) ziel.innerHTML = trackerKatalog();
+    // Erst hier nach der Freigabe fragen – wer die Schritte gar nicht will,
+    // soll auch nicht danach gefragt werden
+    const t = trackerById(id);
+    if (t && t.auto && i < 0 && GESUND.schritteAuto !== false) schritteErlauben();
   });
 };
 
@@ -585,17 +702,27 @@ function trackerKatalog() {
     <div class="section-label">${esc(tr(gruppe))}</div>
     ${TRACKER.filter((t) => t.gruppe === gruppe).map((t) => {
       const an = (GESUND.tracker || []).includes(t.id);
+      const auto = GESUND.schritteAuto !== false;
       return `
       <div class="settings-row">
         <div class="lbl">${esc(tr(t.label))}<small>${esc(trackerArtLabel(t))}</small></div>
         <button class="switch ${an ? "on" : ""}" data-an="${esc(t.id)}" role="switch"
                 aria-checked="${an}" aria-label="${esc(tr(t.label))}"></button>
-      </div>`;
+      </div>
+      ${t.auto && an && SCHRITTE.moeglich ? `
+      <div class="settings-row unterzeile">
+        <div class="lbl">${tr("Automatisch zählen")}<small>${esc(SCHRITTE.erlaubt
+          ? tr("Der Bewegungssensor zählt mit, auch wenn die App zu ist")
+          : tr("Braucht die Freigabe für Körperaktivität"))}</small></div>
+        <button class="switch ${auto ? "on" : ""}" data-action="schritte-auto" role="switch"
+                aria-checked="${auto}" aria-label="${tr("Automatisch zählen")}"></button>
+      </div>` : ""}`;
     }).join("")}`).join("");
 }
 
 const trackerArtLabel = (t) =>
-  t.art === "haken" ? tr("Haken je Tag")
+  t.auto && SCHRITTE.moeglich ? tr("Zählt das Gerät selbst")
+  : t.art === "haken" ? tr("Haken je Tag")
   : t.art === "skala" ? tr("Skala 1 bis 5")
   : t.einheit ? tr("Zahl in {einheit}", { einheit: tr(t.einheit) })
   : tr("Zahl");

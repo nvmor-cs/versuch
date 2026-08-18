@@ -26,6 +26,12 @@
 
         </activity>
 
+        <!-- Sieht einmal am Tag kurz vor Mitternacht nach dem Schrittzähler,
+             damit jeder Tag seine eigene Summe bekommt -->
+        <receiver
+            android:name=".SchrittAlarm"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -49,4 +55,9 @@
          als Suchanfrage an die Lebensmitteldatenbank. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Schrittzähler im Gesundheitsteil. Gezählt wird vom Bewegungssensor des
+         Geräts, die Zahlen bleiben auf dem Gerät. Ohne den Sensor läuft die App
+         wie bisher, die Schritte trägt man dann von Hand ein. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-feature android:name="android.hardware.sensor.stepcounter" android:required="false" />
 </manifest>

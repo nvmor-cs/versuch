@@ -769,6 +769,32 @@ body.punkte .bereich-punkte {
   font-variant-numeric: tabular-nums;
   font-size: 15px;
 }
+/* Zählt das Gerät selbst: die Zahl mit einem leisen Wort darunter, woher sie
+   kommt. Keine Knöpfe – es gibt nichts zu tun. */
+.tracker-auto { text-align: right; flex-shrink: 0; }
+.tracker-auto b {
+  display: block;
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.tracker-auto span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Eine Einstellung, die zur Zeile darüber gehört – eingerückt und ohne
+   eigene Linie, damit sie nicht wie ein neuer Punkt aussieht. */
+.settings-row.unterzeile {
+  padding-left: 16px;
+  margin-top: -6px;
+  border-top: none;
+}
+.settings-row.unterzeile .lbl { font-size: 13px; color: var(--ink-2); }
+
 .tracker-skala { display: flex; gap: 6px; flex-shrink: 0; }
 .skala-punkt {
   width: 26px;

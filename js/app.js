@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.7.0";
+const APP_VERSION = "3.8.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.

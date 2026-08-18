@@ -633,6 +633,13 @@ const EN = {
   "Zahl in {einheit}": "number in {einheit}",
   "Zahl": "number",
   "Körper notiert": "body logged",
+  "Zählt das Gerät selbst": "counted by the device",
+  "automatisch": "automatic",
+  "Erlauben": "Allow",
+  "Automatisch zählen": "Count automatically",
+  "Der Bewegungssensor zählt mit, auch wenn die App zu ist":
+    "The motion sensor keeps counting, even with the app closed",
+  "Braucht die Freigabe für Körperaktivität": "Needs the physical activity permission",
 
   "Nahrungsergänzung": "Supplements",
   "Alltag": "Everyday",
