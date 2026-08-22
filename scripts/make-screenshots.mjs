@@ -28,7 +28,11 @@ import { chromium } from "playwright";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ZIEL = path.join(ROOT, "store", "screenshots");
 
-const BROWSER = process.env.CHROMIUM_PFAD || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+/* Playwright bringt normalerweise seinen eigenen Chromium mit. Wo einer
+   danebensteht (etwa in einer vorbereiteten Umgebung), nimmt der Vorrang –
+   sonst sucht Playwright selbst. CHROMIUM_PFAD sticht beides. */
+const BROWSER = [process.env.CHROMIUM_PFAD, "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
+  .find((p) => p && fs.existsSync(p));
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -259,7 +263,7 @@ async function aufnehmen(browser, url, sprache, ziel) {
 async function main() {
   const srv = await serverStarten();
   const url = `http://127.0.0.1:${srv.address().port}/index.html`;
-  const browser = await chromium.launch({ executablePath: BROWSER });
+  const browser = await chromium.launch(BROWSER ? { executablePath: BROWSER } : {});
   await aufnehmen(browser, url, "de", ZIEL);
   await aufnehmen(browser, url, "en", ZIEL + "-en");
   await browser.close();
