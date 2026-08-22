@@ -6,19 +6,19 @@ tatsächlich ist.
 
 ---
 
-## App-Name (max. 30)
+## App-Name (max. 30, hier 30)
 
 ```
 Lumora – Training & Gesundheit
 ```
 
-## Kurzbeschreibung (max. 80)
+## Kurzbeschreibung (max. 80, hier 72)
 
 ```
 Training, Ernährung und Gesundheit in einer App. Offline und ohne Konto.
 ```
 
-## Vollständige Beschreibung (max. 4000)
+## Vollständige Beschreibung (max. 4000, hier 3112)
 
 ```
 Lumora ist dein Trainingslogbuch, dein Ernährungstagebuch und dein Gesundheitsheft – in einer App, dunkel, ruhig und ohne Ballast. Kein Konto, keine Werbung, keine Cloud: Alles bleibt auf deinem Gerät.
@@ -67,7 +67,7 @@ DEINE DATEN GEHÖREN DIR
 Lumora ist eine Fitness- und Wellness-App, kein Medizinprodukt. Sie stellt keine Diagnosen und ersetzt keine ärztliche Beratung.
 ```
 
-## Neu in dieser Version (max. 500)
+## Neu in dieser Version (max. 500, hier 488)
 
 ```
 Gesundheit ist ein eigener Bereich geworden: Gewicht mit Wochenschnitt, Trainingskalender mit Wochenziel und Serie, Balance der Muskelgruppen und 23 Tagestracker, die du dir selbst zusammenstellst. Schritte zählt jetzt das Gerät.

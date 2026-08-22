@@ -7,19 +7,19 @@ englische Text.
 
 ---
 
-## App-Name (max. 30)
+## App-Name (max. 30, hier 26)
 
 ```
 Lumora – Training & Health
 ```
 
-## Kurzbeschreibung (max. 80)
+## Kurzbeschreibung (max. 80, hier 71)
 
 ```
 Training, nutrition and health in one app. Offline, no account, no ads.
 ```
 
-## Vollständige Beschreibung (max. 4000)
+## Vollständige Beschreibung (max. 4000, hier 2908)
 
 ```
 Lumora is your training log, your food diary and your health notebook – in one app: dark, calm and free of clutter. No account, no ads, no cloud. Everything stays on your device.
@@ -68,7 +68,7 @@ YOUR DATA IS YOURS
 Lumora is a fitness and wellness app, not a medical device. It makes no diagnoses and is no substitute for medical advice.
 ```
 
-## Neu in dieser Version (max. 500)
+## Neu in dieser Version (max. 500, hier 468)
 
 ```
 Health is now a world of its own: weight with a rolling weekly average, a training calendar with a weekly goal and a streak, muscle group balance, and 23 daily trackers you put together yourself. Steps are now counted by the device.
