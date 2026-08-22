@@ -77,7 +77,7 @@ Die App ist als natives Android-Projekt (Capacitor) vorbereitet:
 
 - **`android/`** – das komplette Android-Studio-Projekt (App-ID `io.github.nvmorcs.eisenzeit` – bleibt bewusst unverändert, denn an ihr hängt die installierte App samt Daten)
 - **GitHub Actions → „Android Build"** – baut per Klick eine installierbare `app-debug.apk` und (mit Signier-Secrets) die signierte `app-release.aab` für den Play Store
-- **`store/`** – Schritt-für-Schritt-Anleitung ([PLAY_STORE.md](store/PLAY_STORE.md)), App-Icon 512×512, Funktionsgrafik 1024×500 und fertige Screenshots (1080×1920)
+- **`store/`** – alles für den Eintrag: Schritt-für-Schritt-Anleitung ([PLAY_STORE.md](store/PLAY_STORE.md)), fertige Texte auf Deutsch ([eintrag-de.md](store/eintrag-de.md)) und Englisch ([eintrag-en.md](store/eintrag-en.md)), die Antworten für Googles Datensicherheits-Formular ([datensicherheit.md](store/datensicherheit.md)), App-Icon 512×512, Funktionsgrafik 1024×500 in beiden Sprachen und je acht Screenshots (1080×1920)
 - **`privacy.html`** / **`privacy-en.html`** – Datenschutzerklärung auf Deutsch und Englisch (über GitHub Pages als Pflicht-URL für den Store nutzbar)
 
 Lokal bauen (Node + Android SDK nötig): `npm ci && npm run android:debug`
@@ -134,6 +134,7 @@ python3 -m http.server 8000
 | `js/einstieg.js` | Einführung beim ersten Start und der Coach, der den Basisplan baut |
 | `scripts/build-demo.mjs` | Baut die App in eine einzelne HTML-Datei (`npm run demo`) |
 | `scripts/make-icons.py` | Erzeugt Icons, Launcher-Grafiken, Splash und Store-Assets |
+| `scripts/make-screenshots.mjs` | Fotografiert die laufende App für den Store ab (`npm run screenshots`) |
 | `android/…/PausenTimerPlugin.java` | Stille Meldung mit mitlaufender Restzeit (eigenes Capacitor-Plugin) |
 | `android/…/SchrittZaehlerPlugin.java` | Schritte aus dem Bewegungssensor, ohne Dienst im Hintergrund |
 | `android/…/SchrittAlarm.java` | Sieht einmal am Tag nach, damit jeder Tag seine eigene Summe bekommt |

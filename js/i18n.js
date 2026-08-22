@@ -34,11 +34,21 @@ function spracheSetzen(id) {
 /**
  * Übersetzt einen deutschen Text.
  *
+ * Dasselbe deutsche Wort kann an zwei Stellen zwei Bedeutungen haben:
+ * „Start" ist einmal der Reiter (englisch „Home") und einmal die Taste, die
+ * ein Training beginnt (englisch „Start"). Damit beide ihre eigene Übersetzung
+ * bekommen, darf ein Schlüssel nach einem senkrechten Strich einen Zusatz
+ * tragen – tr("Start|Reiter"). Auf dem Bildschirm steht davon nichts: Im
+ * Deutschen fällt der Zusatz weg, im Wörterbuch steht er als Teil des
+ * Schlüssels.
+ *
  * @param s   der deutsche Text, so wie er im Code steht
  * @param v   optionale Werte für Platzhalter der Form {name}
  */
 function tr(s, v) {
-  let out = SPRACHE === "en" && Object.prototype.hasOwnProperty.call(EN, s) ? EN[s] : s;
+  const strich = s.indexOf("|");
+  const deutsch = strich < 0 ? s : s.slice(0, strich);
+  let out = SPRACHE === "en" && Object.prototype.hasOwnProperty.call(EN, s) ? EN[s] : deutsch;
   if (v) out = out.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
   return out;
 }
@@ -74,7 +84,9 @@ const EN = {
   /* ── Reiter und Bereiche ── */
   "Training": "Training",
   "Ernährung": "Nutrition",
-  "Start": "Home",
+  // Der Reiter heißt „Home"; die gleichnamige Taste auf einer Plankarte
+  // beginnt ein Training und heißt auch im Englischen „Start" (Fallback).
+  "Start|Reiter": "Home",
   "Pläne": "Plans",
   "Übungen": "Exercises",
   "Verlauf": "History",

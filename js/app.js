@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.8.0";
+const APP_VERSION = "3.8.1";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -850,7 +850,7 @@ let currentTab = "home";
 const BEREICHE = [
   {
     id: "training", label: "Training", tabs: [
-      { id: "home", label: "Start", ic: "home" },
+      { id: "home", label: "Start|Reiter", ic: "home" },
       { id: "plans", label: "Pläne", ic: "plans" },
       { id: "exercises", label: "Übungen", ic: "dumbbell" },
       { id: "history", label: "Verlauf", ic: "history" },

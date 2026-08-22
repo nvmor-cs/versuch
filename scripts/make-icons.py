@@ -145,7 +145,8 @@ def main():
 
     # ── Play Store ───────────────────────────────────────────
     save(icon(512, rounded=False), "store", "play-icon-512.png")
-    save(feature_graphic(), "store", "play-feature-1024x500.png")
+    save(feature_graphic("de"), "store", "play-feature-1024x500.png")
+    save(feature_graphic("en"), "store", "play-feature-1024x500-en.png")
 
     # ── Android: Launcher-Icons je Dichte ────────────────────
     res = "android/app/src/main/res"
@@ -182,7 +183,17 @@ def splash(w, h):
     return img
 
 
-def feature_graphic():
+# Untertitel der Funktionsgrafik. Der Play-Store-Eintrag ist zweisprachig,
+# und die Grafik lässt sich je Sprache hinterlegen – also gibt es sie zweimal.
+FEATURE_TEXT = {
+    "de": ("Training. Ernährung. Gesundheit.",
+           "Offline · ohne Konto · deine Daten bleiben bei dir"),
+    "en": ("Training. Nutrition. Health.",
+           "Offline · no account · your data stays with you"),
+}
+
+
+def feature_graphic(sprache="de"):
     """1024×500 für den Play-Store-Eintrag."""
     W, H = 1024, 500
     img = Image.new("RGB", (W, H), BG)
@@ -202,10 +213,11 @@ def feature_graphic():
                 return ImageFont.truetype(p, px)
         return ImageFont.load_default()
 
+    # Die drei Welten der App, in ihrer Reihenfolge in der Pille
+    welten, versprechen = FEATURE_TEXT[sprache]
     d.text((400, 190), "lumora", font=font(86, True), fill=INK)
-    d.text((404, 292), "Training. Fortschritt. Gesundheit.", font=font(30), fill=G_MID)
-    d.text((404, 338), "Offline · ohne Konto · deine Daten bleiben bei dir",
-           font=font(24), fill=INK2)
+    d.text((404, 292), welten, font=font(30), fill=G_MID)
+    d.text((404, 338), versprechen, font=font(24), fill=INK2)
     return img
 
 
