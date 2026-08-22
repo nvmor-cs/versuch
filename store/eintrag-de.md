@@ -18,7 +18,7 @@ Lumora – Training & Gesundheit
 Training, Ernährung und Gesundheit in einer App. Offline und ohne Konto.
 ```
 
-## Vollständige Beschreibung (max. 4000, hier 3112)
+## Vollständige Beschreibung (max. 4000, hier 3185)
 
 ```
 Lumora ist dein Trainingslogbuch, dein Ernährungstagebuch und dein Gesundheitsheft – in einer App, dunkel, ruhig und ohne Ballast. Kein Konto, keine Werbung, keine Cloud: Alles bleibt auf deinem Gerät.
@@ -56,7 +56,7 @@ GESUNDHEIT
 • Schritte zählt das Gerät selbst, wenn du es erlaubst – nichts einzutippen
 
 DEUTSCH UND ENGLISCH
-Die ganze App lässt sich in den Einstellungen umschalten, bis hin zu den Namen der Übungen und Lebensmittel.
+Frisch installiert richtet sich die App nach der Sprache deines Geräts. Umschalten lässt sie sich jederzeit in den Einstellungen – bis hin zu den Namen der Übungen und Lebensmittel.
 
 DEINE DATEN GEHÖREN DIR
 • Kein Konto, keine Anmeldung, keine Werbung, kein Tracking
@@ -67,14 +67,14 @@ DEINE DATEN GEHÖREN DIR
 Lumora ist eine Fitness- und Wellness-App, kein Medizinprodukt. Sie stellt keine Diagnosen und ersetzt keine ärztliche Beratung.
 ```
 
-## Neu in dieser Version (max. 500, hier 488)
+## Neu in dieser Version (max. 500, hier 495)
 
 ```
-Gesundheit ist ein eigener Bereich geworden: Gewicht mit Wochenschnitt, Trainingskalender mit Wochenziel und Serie, Balance der Muskelgruppen und 23 Tagestracker, die du dir selbst zusammenstellst. Schritte zählt jetzt das Gerät.
+Gesundheit ist ein eigener Bereich: Gewicht mit Wochenschnitt, Trainingskalender mit Wochenziel und Serie, Balance der Muskelgruppen und 23 Tagestracker, die du dir selbst zusammenstellst. Schritte zählt jetzt das Gerät.
 
 Beim ersten Start führt eine Einführung durch die App, danach baut dir der Coach einen Trainingsplan aus deinen Angaben.
 
-Die Oberfläche gibt es komplett auf Englisch. Das unzuverlässige Pausensignal ist raus – die Pause läuft still in der Benachrichtigung.
+Die Oberfläche gibt es komplett auf Englisch und richtet sich frisch installiert nach der Sprache des Geräts. Das unzuverlässige Pausensignal ist raus.
 ```
 
 ## Weitere Felder

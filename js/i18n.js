@@ -12,13 +12,42 @@
 
 "use strict";
 
+/* „auto" ist keine Sprache, sondern der Verzicht auf die Wahl: Es gilt, was
+   auf dem Gerät eingestellt ist. Für alle, die neu anfangen, ist das die
+   richtige Voreinstellung – wer sich einmal ausdrücklich entschieden hat,
+   behält seine Entscheidung, auch wenn das Gerät später umgestellt wird. */
 const SPRACHEN = [
+  { id: "auto", label: "Systemsprache", auto: true },
   { id: "de", label: "Deutsch" },
   { id: "en", label: "English" },
 ];
 
-// Wird beim Laden aus den Einstellungen gesetzt (siehe spracheSetzen).
-let SPRACHE = "de";
+/* Welche der beiden Sprachen das Gerät meint.
+ *
+ * Gefragt wird die ganze Wunschliste des Systems und nicht nur ihr erster
+ * Eintrag: Wer Französisch ganz oben stehen hat, danach aber Deutsch, soll
+ * Deutsch bekommen statt einer Sprache, die die App gar nicht kennt.
+ * Passt nichts davon, gewinnt Englisch – das ist die Sprache, mit der jemand
+ * ohne Deutsch am ehesten zurechtkommt. */
+function systemSprache() {
+  const nav = typeof navigator === "object" && navigator ? navigator : null;
+  const wunsch = !nav ? []
+    : Array.isArray(nav.languages) && nav.languages.length ? nav.languages
+    : [nav.language];
+  for (const eintrag of wunsch) {
+    const k = String(eintrag || "").toLowerCase();
+    if (k === "de" || k.startsWith("de-")) return "de";
+    if (k === "en" || k.startsWith("en-")) return "en";
+  }
+  return "en";
+}
+
+// Was in den Einstellungen steht: "auto", "de" oder "en".
+let SPRACHWAHL = "auto";
+/* Was daraus folgt: "de" oder "en". Nur diese Größe entscheidet, was auf dem
+   Bildschirm steht – alles Weitere in dieser Datei fragt sie. Gesetzt wird
+   beides beim Laden aus den Einstellungen (siehe spracheSetzen). */
+let SPRACHE = systemSprache();
 
 /* Für Datums- und Zahlformate. Britisches Englisch, weil dort – wie im
    Deutschen – der Tag vor dem Monat steht; die Oberfläche bleibt damit in
@@ -27,8 +56,21 @@ const LOCALES = { de: "de-DE", en: "en-GB" };
 const locale = () => LOCALES[SPRACHE] || LOCALES.de;
 
 function spracheSetzen(id) {
-  SPRACHE = id === "en" ? "en" : "de";
+  SPRACHWAHL = id === "de" || id === "en" ? id : "auto";
+  SPRACHE = SPRACHWAHL === "auto" ? systemSprache() : SPRACHWAHL;
   if (document.documentElement) document.documentElement.lang = SPRACHE;
+}
+
+/* Beschriftung im Sprachwähler. Die beiden Sprachen stehen in sich selbst da
+   („Deutsch", „English"), wie überall üblich; die Systemsprache sagt dazu,
+   worauf sie hinausliefe – sonst tippt man ins Blaue. Gemeint ist dabei das
+   Gerät, nicht die gerade eingestellte Sprache: Wer auf Deutsch steht und ein
+   englisches Gerät hat, soll „Systemsprache (English)" lesen. */
+function sprachLabel(x) {
+  if (!x.auto) return x.label;
+  const sys = systemSprache();
+  const treffer = SPRACHEN.find((y) => y.id === sys);
+  return tr("Systemsprache ({sprache})", { sprache: treffer ? treffer.label : sys });
 }
 
 /**
@@ -344,6 +386,7 @@ const EN = {
   /* ── Einstellungen ── */
   "Sprache": "Language",
   "Sprache der App": "Language of the app",
+  "Systemsprache ({sprache})": "System language ({sprache})",
   "Pausen-Timer": "Rest timer",
   "Startet automatisch nach jedem abgehakten Satz": "Starts automatically after each completed set",
   "Akzentfarbe": "Accent colour",

@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.8.1";
+const APP_VERSION = "3.8.2";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -144,7 +144,12 @@ function defaultDB() {
     // migrateScheme() setzt ihn, auch für eine frische Datenbank.
     settings: {
       restSecs: 90, autoRest: true, lastBackupAt: null,
-      accent: ACCENT_DEFAULT, sprache: "de",
+      accent: ACCENT_DEFAULT,
+      // "auto": Es gilt, was auf dem Gerät eingestellt ist (siehe
+      // systemSprache in js/i18n.js). Ein Altbestand bringt hier "de" oder
+      // "en" mit und überschreibt den Standard – eine einmal getroffene Wahl
+      // bleibt bestehen, auch wenn das Gerät später umgestellt wird.
+      sprache: "auto",
       // Übungen, deren Entwicklung im Verlauf-Tab dauerhaft mitläuft
       beobachtet: [],
       // Rückmeldung nach dem Workout (siehe coachTipps)
@@ -285,7 +290,7 @@ function bereinigeDB(roh) {
   st.autoRest = st.autoRest !== false;
   st.coach = st.coach !== false;
   st.geraeteGetrennt = st.geraeteGetrennt !== false;
-  st.sprache = ausAuswahl(st.sprache, SPRACHEN.map((x) => x.id), "de");
+  st.sprache = ausAuswahl(st.sprache, SPRACHEN.map((x) => x.id), "auto");
   st.eingefuehrt = st.eingefuehrt === true;
   st.accent = ausAuswahl(st.accent, ACCENTS.map((a) => a.id), ACCENT_DEFAULT);
   st.lastBackupAt = st.lastBackupAt ? alsZahl(st.lastBackupAt, null) : null;
@@ -2999,7 +3004,7 @@ ACTIONS["open-settings"] = () => {
     <div class="settings-row">
       <div class="lbl">${tr("Sprache")}<small>${tr("Sprache der App")}</small></div>
       <select data-input="sprache" aria-label="${tr("Sprache")}">
-        ${SPRACHEN.map((x) => `<option value="${esc(x.id)}" ${x.id === SPRACHE ? "selected" : ""}>${esc(x.label)}</option>`).join("")}
+        ${SPRACHEN.map((x) => `<option value="${esc(x.id)}" ${x.id === SPRACHWAHL ? "selected" : ""}>${esc(sprachLabel(x))}</option>`).join("")}
       </select>
     </div>
     <div class="settings-row">

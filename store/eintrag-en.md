@@ -19,7 +19,7 @@ Lumora – Training & Health
 Training, nutrition and health in one app. Offline, no account, no ads.
 ```
 
-## Vollständige Beschreibung (max. 4000, hier 2908)
+## Vollständige Beschreibung (max. 4000, hier 2968)
 
 ```
 Lumora is your training log, your food diary and your health notebook – in one app: dark, calm and free of clutter. No account, no ads, no cloud. Everything stays on your device.
@@ -57,7 +57,7 @@ HEALTH
 • Steps are counted by the device itself if you allow it – nothing to type in
 
 ENGLISH AND GERMAN
-The whole app switches language in the settings, down to the names of exercises and foods.
+On a fresh install the app follows the language of your device. You can switch it any time in the settings – down to the names of exercises and foods.
 
 YOUR DATA IS YOURS
 • No account, no sign-in, no ads, no tracking
@@ -68,14 +68,14 @@ YOUR DATA IS YOURS
 Lumora is a fitness and wellness app, not a medical device. It makes no diagnoses and is no substitute for medical advice.
 ```
 
-## Neu in dieser Version (max. 500, hier 468)
+## Neu in dieser Version (max. 500, hier 480)
 
 ```
 Health is now a world of its own: weight with a rolling weekly average, a training calendar with a weekly goal and a streak, muscle group balance, and 23 daily trackers you put together yourself. Steps are now counted by the device.
 
 On first launch a walkthrough explains the app, then the coach builds a training plan from your answers.
 
-The whole interface is available in English. The unreliable rest alert is gone – the rest now runs silently in the notification.
+The whole interface is available in English and, on a fresh install, follows the language of your device. The unreliable rest alert is gone.
 ```
 
 ## Weitere Felder
