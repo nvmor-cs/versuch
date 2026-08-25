@@ -19,7 +19,7 @@ Lumora – Training & Health
 Training, nutrition and health in one app. Offline, no account, no ads.
 ```
 
-## Vollständige Beschreibung (max. 4000, hier 2968)
+## Vollständige Beschreibung (max. 4000, hier 3111)
 
 ```
 Lumora is your training log, your food diary and your health notebook – in one app: dark, calm and free of clutter. No account, no ads, no cloud. Everything stays on your device.
@@ -30,8 +30,10 @@ Training, nutrition and health sit side by side. A swipe across the bar at the b
 TRAINING
 • Log set by set: weight and reps with large plus/minus buttons, one tap completes the set
 • Last time's numbers are already there – usually you just confirm them
+• Sets still to come already show what to expect
 • Rest timer starts after every set, duration is up to you
 • 151 exercises, filtered by muscle group and equipment
+• Every exercise names the muscles that help out – dips are chest, plus triceps and shoulders
 • Create your own exercises: weight × reps, reps only or time
 • Training plans with several workouts – push / pull / legs, for instance
 • Supersets: link two exercises and alternate between them
@@ -68,14 +70,16 @@ YOUR DATA IS YOURS
 Lumora is a fitness and wellness app, not a medical device. It makes no diagnoses and is no substitute for medical advice.
 ```
 
-## Neu in dieser Version (max. 500, hier 480)
+## Neu in dieser Version (max. 500, hier 496)
 
 ```
-Health is now a world of its own: weight with a rolling weekly average, a training calendar with a weekly goal and a streak, muscle group balance, and 23 daily trackers you put together yourself. Steps are now counted by the device.
+Health is a world of its own now: weight with a rolling weekly average, a training calendar with a weekly goal and a streak, muscle group balance, and 23 daily trackers you pick yourself. Steps are counted by the device.
 
-On first launch a walkthrough explains the app, then the coach builds a training plan from your answers.
+On first launch a walkthrough explains the app, then the coach builds a training plan.
 
-The whole interface is available in English and, on a fresh install, follows the language of your device. The unreliable rest alert is gone.
+Every exercise now names the muscles that help out. Sets still to come already show what to expect.
+
+The interface is in English too, and follows your device language on a fresh install.
 ```
 
 ## Weitere Felder

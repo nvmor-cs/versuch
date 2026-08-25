@@ -24,8 +24,191 @@ const EXERCISE_TYPES = {
   time:        { label: "Zeit" },
 };
 
+/* ═══════════════ Mitarbeitende Muskeln ═══════════════
+ *
+ * Jede Übung hat eine Hauptmuskelgruppe – die, unter der sie im Filter steht.
+ * Gearbeitet wird aber fast nie nur dort: Beim Bankdrücken drückt der Trizeps
+ * mit, bei Klimmzügen zieht der Bizeps, bei Dips arbeiten Trizeps und Schulter.
+ *
+ * Hier steht, wer nennenswert mitarbeitet, in der Reihenfolge des Anteils.
+ * Bewusst kurz gehalten: aufgeführt ist, was man am nächsten Tag spürt – nicht
+ * jeder Muskel, der irgendetwas stabilisiert. Eine Liste, in der alles steht,
+ * sagt nichts mehr aus.
+ *
+ * Fehlt eine Kennung, arbeitet nichts Nennenswertes mit. Bei Isolationsübungen
+ * wie Beinstrecker oder Wadenheben ist das der Normalfall und keine Lücke.
+ *
+ * Benutzt werden ausschließlich Namen aus MUSCLES – nur so lassen sie sich
+ * übersetzen und mit dem Piktogramm zeigen. "Ganzkörper" und "Cardio" stehen
+ * nie hier: Das sind Einordnungen, keine Muskeln.
+ */
+const SEKUNDAER = {
+  // ── Brust ──
+  "bankdruecken-lh": ["Trizeps", "Schultern"],
+  "schraegbank-lh": ["Schultern", "Trizeps"],
+  "negativbank-lh": ["Trizeps", "Schultern"],
+  "bankdruecken-kh": ["Trizeps", "Schultern"],
+  "schraegbank-kh": ["Schultern", "Trizeps"],
+  "bankdruecken-smith": ["Trizeps", "Schultern"],
+  "fliegende-kh": ["Schultern"],
+  "fliegende-schraeg": ["Schultern"],
+  "butterfly": ["Schultern"],
+  "cable-fly": ["Schultern"],
+  "brustpresse": ["Trizeps", "Schultern"],
+  "liegestuetze": ["Trizeps", "Schultern", "Bauch"],
+  "liegestuetze-erhoeht": ["Schultern", "Trizeps", "Bauch"],
+  "dips": ["Trizeps", "Schultern"],
+  "dips-gewicht": ["Trizeps", "Schultern"],
+  "ueberzuege-kh": ["Rücken", "Trizeps"],
+
+  // ── Rücken ──
+  "klimmzuege": ["Bizeps", "Unterarme", "Schultern"],
+  "klimmzuege-untergriff": ["Bizeps", "Unterarme"],
+  "klimmzuege-gewicht": ["Bizeps", "Unterarme", "Schultern"],
+  "latzug-breit": ["Bizeps", "Schultern"],
+  "latzug-eng": ["Bizeps", "Unterarme"],
+  "rudern-lh": ["Bizeps", "Schultern", "Unterarme"],
+  "rudern-kh": ["Bizeps", "Schultern"],
+  "rudern-kabel": ["Bizeps", "Schultern"],
+  "rudern-tbar": ["Bizeps", "Schultern"],
+  "rudern-maschine": ["Bizeps", "Schultern"],
+  "kreuzheben": ["Beinbeuger", "Po", "Unterarme"],
+  "rack-pulls": ["Nacken", "Po", "Unterarme"],
+  "hyperextensions": ["Po", "Beinbeuger"],
+  "straight-arm-pulldown": ["Trizeps", "Bauch"],
+  "muscle-ups": ["Brust", "Trizeps", "Bizeps"],
+
+  // ── Nacken ──
+  "shrugs-lh": ["Unterarme", "Schultern"],
+  "shrugs-kh": ["Unterarme", "Schultern"],
+
+  // ── Schultern ──
+  "schulterdruecken-lh": ["Trizeps", "Nacken"],
+  "schulterdruecken-kh": ["Trizeps", "Nacken"],
+  "schulterdruecken-maschine": ["Trizeps"],
+  "arnold-press": ["Trizeps", "Nacken"],
+  "push-press": ["Trizeps", "Quadrizeps", "Po"],
+  "seitheben-kh": ["Nacken"],
+  "seitheben-kabel": ["Nacken"],
+  "seitheben-maschine": ["Nacken"],
+  "frontheben": ["Brust"],
+  "reverse-flys": ["Rücken", "Nacken"],
+  "reverse-butterfly": ["Rücken", "Nacken"],
+  "face-pulls": ["Rücken", "Nacken"],
+  "aufrechtes-rudern": ["Nacken", "Bizeps"],
+
+  // ── Bizeps: die Unterarme greifen immer mit ──
+  "curls-lh": ["Unterarme"],
+  "curls-sz": ["Unterarme"],
+  "curls-kh": ["Unterarme"],
+  "hammer-curls": ["Unterarme"],
+  "schraegbank-curls": ["Unterarme"],
+  "konzentrations-curls": ["Unterarme"],
+  "scott-curls": ["Unterarme"],
+  "curls-kabel": ["Unterarme"],
+  "curls-maschine": ["Unterarme"],
+
+  // ── Trizeps: die Drückvarianten holen Brust und Schulter dazu,
+  //    die Streckübungen bleiben allein ──
+  "enges-bankdruecken": ["Brust", "Schultern"],
+  "bench-dips": ["Brust", "Schultern"],
+  "trizeps-maschine": ["Brust", "Schultern"],
+
+  // ── Quadrizeps ──
+  "kniebeugen": ["Po", "Beinbeuger", "Bauch"],
+  "frontkniebeugen": ["Po", "Bauch", "Rücken"],
+  "kniebeugen-smith": ["Po", "Beinbeuger"],
+  "goblet-squats": ["Po", "Bauch"],
+  "kniebeugen-kg": ["Po", "Beinbeuger"],
+  "beinpresse": ["Po", "Beinbeuger"],
+  "hackenschmidt": ["Po", "Beinbeuger"],
+  "ausfallschritte": ["Po", "Beinbeuger"],
+  "walking-lunges": ["Po", "Beinbeuger", "Waden"],
+  "bulgarian-split-squats": ["Po", "Beinbeuger"],
+  "step-ups": ["Po", "Beinbeuger"],
+  "pistol-squats": ["Po", "Bauch", "Beinbeuger"],
+  "wandsitz": ["Po"],
+
+  // ── Beinbeuger ──
+  "beinbeuger-liegend": ["Waden"],
+  "beinbeuger-sitzend": ["Waden"],
+  "beinbeuger-stehend": ["Waden"],
+  "rdl": ["Po", "Rücken", "Unterarme"],
+  "rdl-kh": ["Po", "Rücken"],
+  "nordic-curls": ["Po", "Bauch"],
+  "good-mornings": ["Po", "Rücken"],
+  "glute-ham-raise": ["Po", "Rücken", "Waden"],
+
+  // ── Po ──
+  "sumo-kreuzheben": ["Quadrizeps", "Adduktoren", "Rücken"],
+  "hip-thrusts": ["Beinbeuger", "Bauch"],
+  "hip-thrust-maschine": ["Beinbeuger"],
+  "glute-bridge": ["Beinbeuger", "Bauch"],
+  "kickbacks-kabel": ["Beinbeuger"],
+  "hip-thrust-einbeinig": ["Beinbeuger", "Bauch"],
+  "rdl-einbeinig": ["Beinbeuger", "Rücken"],
+  "rueckwaerts-ausfallschritte": ["Quadrizeps", "Beinbeuger"],
+
+  // ── Adduktoren und Abduktoren ──
+  "sumo-kniebeuge": ["Quadrizeps", "Po"],
+  "cossack-squats": ["Quadrizeps", "Po"],
+  "seitliche-ausfallschritte": ["Quadrizeps", "Po"],
+  "beinheben-seitlich": ["Po"],
+  "clamshells": ["Po"],
+  "monster-walk": ["Po"],
+
+  // ── Waden ──
+  "wadenheben-kh": ["Unterarme"],
+
+  // ── Bauch ──
+  "situps": ["Quadrizeps"],
+  "beinheben-haengend": ["Unterarme", "Quadrizeps"],
+  "beinheben-liegend": ["Quadrizeps"],
+  "knieheben-dip": ["Schultern", "Quadrizeps"],
+  "plank": ["Schultern", "Po"],
+  "seitstuetz": ["Schultern", "Abduktoren"],
+  "ab-roller": ["Rücken", "Schultern"],
+  "mountain-climbers": ["Schultern", "Quadrizeps"],
+  "hollow-hold": ["Quadrizeps"],
+
+  // ── Unterarme ──
+  "reverse-curls": ["Bizeps"],
+  "farmers-walk": ["Nacken", "Bauch"],
+  "dead-hang": ["Rücken", "Schultern"],
+
+  // ── Ganzkörper: hier sagt die Liste erst, was überhaupt gemeint ist ──
+  "kb-swings": ["Po", "Beinbeuger", "Rücken"],
+  "thrusters": ["Quadrizeps", "Schultern", "Trizeps"],
+  "power-clean": ["Rücken", "Quadrizeps", "Nacken"],
+  "clean-press": ["Schultern", "Quadrizeps", "Rücken"],
+  "snatch": ["Schultern", "Rücken", "Quadrizeps"],
+  "burpees": ["Brust", "Quadrizeps", "Bauch"],
+  "wall-balls": ["Quadrizeps", "Schultern", "Po"],
+  "sled-push": ["Quadrizeps", "Po", "Waden"],
+  "turkish-getup": ["Schultern", "Bauch", "Po"],
+  "box-jumps": ["Quadrizeps", "Po", "Waden"],
+
+  // ── Cardio: was dabei am meisten arbeitet ──
+  "laufband": ["Quadrizeps", "Beinbeuger", "Waden"],
+  "laufen": ["Quadrizeps", "Beinbeuger", "Waden"],
+  "gehen": ["Waden", "Quadrizeps"],
+  "ergometer": ["Quadrizeps", "Waden"],
+  "radfahren": ["Quadrizeps", "Po", "Waden"],
+  "crosstrainer": ["Quadrizeps", "Po", "Waden"],
+  "rudergeraet": ["Rücken", "Quadrizeps", "Bizeps"],
+  "stairmaster": ["Quadrizeps", "Po", "Waden"],
+  "seilspringen": ["Waden", "Quadrizeps"],
+  "schwimmen": ["Rücken", "Schultern", "Brust"],
+  "assault-bike": ["Quadrizeps", "Schultern", "Rücken"],
+};
+
 function x(id, name, muscle, equipment, type, alias) {
-  return { id, name, muscle, equipment, type: type || "weight_reps", alias: alias || "" };
+  return {
+    id, name, muscle, equipment,
+    type: type || "weight_reps",
+    alias: alias || "",
+    sek: SEKUNDAER[id] || [],
+  };
 }
 
 const EXERCISE_LIBRARY = [

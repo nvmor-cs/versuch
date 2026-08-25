@@ -213,6 +213,7 @@ const EN = {
   "Lege die Übung über das Plus oben rechts selbst an.":
     "Create the exercise yourself with the plus at the top right.",
   "Eigene Übung": "Custom exercise",
+  "Arbeitet mit": "Also worked",
   "Eigene": "Custom",
   "Übung bearbeiten": "Edit exercise",
   "Name": "Name",

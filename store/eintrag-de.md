@@ -18,7 +18,7 @@ Lumora – Training & Gesundheit
 Training, Ernährung und Gesundheit in einer App. Offline und ohne Konto.
 ```
 
-## Vollständige Beschreibung (max. 4000, hier 3185)
+## Vollständige Beschreibung (max. 4000, hier 3349)
 
 ```
 Lumora ist dein Trainingslogbuch, dein Ernährungstagebuch und dein Gesundheitsheft – in einer App, dunkel, ruhig und ohne Ballast. Kein Konto, keine Werbung, keine Cloud: Alles bleibt auf deinem Gerät.
@@ -29,8 +29,10 @@ Training, Ernährung und Gesundheit liegen nebeneinander. Ein Wisch über die Le
 TRAINING
 • Satz für Satz mitschreiben: Gewicht und Wiederholungen mit großen Plus/Minus-Tasten, ein Tipp schließt den Satz ab
 • Die Werte vom letzten Mal stehen schon da – meist musst du sie nur bestätigen
+• Auch die noch geplanten Sätze zeigen schon, womit zu rechnen ist
 • Pausen-Timer startet nach jedem Satz, Dauer einstellbar
 • 151 Übungen, nach Muskelgruppe und Gerät filterbar
+• Jede Übung zeigt, welche Muskeln mitarbeiten – bei Dips also Brust, dazu Trizeps und Schultern
 • Eigene Übungen anlegen: Gewicht × Wiederholungen, nur Wiederholungen oder Zeit
 • Trainingspläne mit mehreren Trainings – zum Beispiel Push / Pull / Beine
 • Supersätze: zwei Übungen verbinden und im Wechsel trainieren
@@ -67,14 +69,16 @@ DEINE DATEN GEHÖREN DIR
 Lumora ist eine Fitness- und Wellness-App, kein Medizinprodukt. Sie stellt keine Diagnosen und ersetzt keine ärztliche Beratung.
 ```
 
-## Neu in dieser Version (max. 500, hier 495)
+## Neu in dieser Version (max. 500, hier 497)
 
 ```
-Gesundheit ist ein eigener Bereich: Gewicht mit Wochenschnitt, Trainingskalender mit Wochenziel und Serie, Balance der Muskelgruppen und 23 Tagestracker, die du dir selbst zusammenstellst. Schritte zählt jetzt das Gerät.
+Gesundheit ist ein eigener Bereich: Gewicht mit Wochenschnitt, Trainingskalender mit Wochenziel und Serie, Balance der Muskelgruppen und 23 Tagestracker zum Selberzusammenstellen. Schritte zählt jetzt das Gerät.
 
-Beim ersten Start führt eine Einführung durch die App, danach baut dir der Coach einen Trainingsplan aus deinen Angaben.
+Beim ersten Start erklärt eine Einführung die App, danach baut dir der Coach einen Trainingsplan.
 
-Die Oberfläche gibt es komplett auf Englisch und richtet sich frisch installiert nach der Sprache des Geräts. Das unzuverlässige Pausensignal ist raus.
+Jede Übung zeigt jetzt, welche Muskeln mitarbeiten. Geplante Sätze verraten, womit zu rechnen ist.
+
+Die Oberfläche gibt es auf Englisch und folgt neu installiert der Sprache des Geräts.
 ```
 
 ## Weitere Felder

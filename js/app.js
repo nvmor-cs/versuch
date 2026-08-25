@@ -4,7 +4,7 @@
 "use strict";
 
 const APP_NAME = "Lumora";
-const APP_VERSION = "3.8.2";
+const APP_VERSION = "3.9.0";
 
 // Wählbare Akzentfarben. Die Werte spiegeln die :root[data-accent="…"]-Blöcke
 // im Stylesheet; hier stehen sie nur für die Farbpunkte in den Einstellungen.
@@ -381,6 +381,11 @@ const allExercises = () => EXERCISE_LIBRARY.concat(DB.customExercises);
 const exById = (id) => allExercises().find((e) => e.id === id) || null;
 const exName = (id) => exById(id) ? tUebung(exById(id)) : tr("Gelöschte Übung");
 const exType = (id) => exById(id) ? exById(id).type : "weight_reps";
+
+/* Muskeln, die bei einer Übung mitarbeiten (siehe SEKUNDAER in exercises.js).
+   Eigene Übungen haben keine: Dort steht nur die eine Gruppe, die beim Anlegen
+   gewählt wurde – deshalb hier der Rückfall auf die leere Liste. */
+const sekMuskeln = (ex) => (ex && Array.isArray(ex.sek) ? ex.sek : []);
 
 // Sortierte Workouts (neueste zuerst)
 const workoutsDesc = () => DB.workouts.slice().sort((a, b) => b.startedAt - a.startedAt);
@@ -1605,6 +1610,11 @@ function openExerciseDetail(exId) {
       <span class="badge badge-muted">${tr(EXERCISE_TYPES[ex.type].label)}</span>
       ${ex.custom ? `<span class="badge badge-muted">${tr("Eigene Übung")}</span>` : ""}
     </div>
+    ${sekMuskeln(ex).length ? `
+      <div class="sek-zeile">
+        <span class="sek-lbl">${tr("Arbeitet mit")}</span>
+        ${sekMuskeln(ex).map((m) => `<span class="badge badge-sek">${esc(tMuskel(m))}</span>`).join("")}
+      </div>` : ""}
     ${rec ? `
       <div class="card" style="display:flex;gap:16px;align-items:center">
         <span class="badge badge-record" style="padding:8px">${icon("trophy")}</span>
@@ -1913,7 +1923,7 @@ function woSaetze(ex, xi, type) {
     ${ex.sets.map((s, si) =>
       s.done ? doneSetRow(type, s, si, xi)
       : si === curIdx ? currentSetCard(type, ex, xi, si, prev, andernorts)
-      : queuedSetRow(si, xi)).join("")}
+      : queuedSetRow(type, ex, si, xi, prev)).join("")}
     ${curIdx < 0 ? `<div class="all-done-note">${icon("check")} ${tr("Alle {n} Sätze abgeschlossen", { n: ex.sets.length })}</div>` : ""}
     <button class="add-set-btn" data-action="wo-add-set" data-xi="${esc(xi)}">${tr("+ Satz hinzufügen")}</button>`;
 }
@@ -1975,12 +1985,41 @@ function doneSetRow(type, s, si, xi) {
     </div>`;
 }
 
+/* Enthält ein Satz überhaupt eine Zahl? Nullen sind keine Angabe, sondern der
+   Zustand „noch nichts eingetragen" – die zeigt man nicht als Vorschau. */
+function satzHatWerte(type, s) {
+  if (!s) return false;
+  if (type === "time") return (s.t || 0) > 0;
+  if (type === "reps") return (s.r || 0) > 0;
+  return (s.w || 0) > 0 || (s.r || 0) > 0;
+}
+
+/* Womit ist bei einem noch nicht begonnenen Satz zu rechnen?
+ *
+ * Dieselbe Vorhersage, mit der die Karte den Satz später vorbelegt (siehe
+ * currentSetCard): erst der gleiche Satz vom letzten Mal, sonst der letzte
+ * Satz aus diesem Training, in dem Zahlen stehen. Der offene Satz zählt dabei
+ * mit – seine Werte stehen ja schon auf dem Bildschirm.
+ *
+ * Es ist eine Vorschau, keine Vorgabe: Wer beim übernächsten Satz zwei Kilo
+ * drauflegt, ändert das dann einfach in der Karte. */
+function geplanterWert(type, ex, si, prev) {
+  const p = prev && prev[si];
+  if (satzHatWerte(type, p)) return fmtSet(type, p);
+  for (let i = si - 1; i >= 0; i--) {
+    if (satzHatWerte(type, ex.sets[i])) return fmtSet(type, ex.sets[i]);
+  }
+  return "";
+}
+
 // Geplanter Satz: wartet, bis der aktuelle abgeschlossen ist
-function queuedSetRow(si, xi) {
+function queuedSetRow(type, ex, si, xi, prev) {
+  const vorschau = geplanterWert(type, ex, si, prev);
   return `
     <div class="queued-set">
       <span class="q-no">${tr("Satz {n}", { n: si + 1 })}</span>
       <span class="q-lbl">${tr("geplant")}</span>
+      ${vorschau ? `<b class="q-val">${esc(vorschau)}</b>` : ""}
       <button class="mini-btn danger" data-action="wo-del-set" data-xi="${esc(xi)}" data-si="${esc(si)}" aria-label="${tr("Geplanten Satz entfernen")}">${icon("x")}</button>
     </div>`;
 }
