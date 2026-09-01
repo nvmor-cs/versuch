@@ -197,8 +197,18 @@ Die Grafiken (Symbol, Funktionsgrafik, Launcher-Icons, Splash) kommen aus
 
 ## Sofort aufs eigene Handy (ohne Play Store)
 
-Du willst nicht auf Google warten? Workflow laufen lassen (geht auch **ohne**
-Signier-Secrets), `lumora-debug-apk` herunterladen, die Datei aufs Handy
-schicken und antippen. Android fragt einmal nach der Erlaubnis, Apps aus
-dieser Quelle zu installieren – bestätigen, fertig. Die App läuft dann als
-vollwertige, eigenständige Android-App.
+Du willst nicht auf Google warten? Nach jedem Lauf des Workflows – auch **ohne**
+Signier-Secrets – hängt die APK an einem Release. Immer unter derselben Adresse:
+
+**https://github.com/nvmor-cs/versuch/releases/latest/download/lumora.apk**
+
+Diesen Link kannst du direkt auf dem Handy öffnen: Er braucht kein Konto und
+kein Anmelden. Datei antippen, Android einmal die Erlaubnis geben, Apps aus
+dieser Quelle zu installieren – fertig. Die App läuft dann als vollwertige,
+eigenständige Android-App und installiert sich über eine vorhandene Fassung
+drüber, ohne dass Daten verloren gehen.
+
+> Die **Artefakte** eines Laufs (`lumora-debug-apk`) gibt es weiterhin, aber
+> nur für angemeldete Konten und praktisch nicht vom Handy aus – GitHub packt
+> sie in ein ZIP hinter dem Login. Für den schnellen Weg aufs Gerät ist der
+> Release-Link oben da.

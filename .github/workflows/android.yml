@@ -5,6 +5,13 @@ name: Android Build
 # - Wenn Signier-Secrets gesetzt sind: signierte app-release.aab (für den
 #   Play Store) und app-release.apk
 #
+# Die APK landet zusätzlich als Release im Repository. Artefakte eines Laufs
+# lassen sich nur mit angemeldetem Konto und praktisch nicht vom Handy
+# herunterladen; ein Release-Anhang dagegen ist eine öffentliche Datei mit
+# fester Adresse:
+#
+#     https://github.com/nvmor-cs/versuch/releases/latest/download/lumora.apk
+#
 # Auslösen: GitHub -> Actions -> "Android Build" -> "Run workflow"
 
 on:
@@ -15,6 +22,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Zum Anlegen des Releases; alles Übrige braucht nur Lesezugriff
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +54,67 @@ jobs:
         with:
           name: lumora-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # Der Weg aufs eigene Handy. Absichtlich die Debug-APK und nicht die
+      # signierte: Auf dem Gerät ist die Debug-Signatur installiert, und
+      # Android lässt kein Update mit einer anderen Signatur zu ("App nicht
+      # installiert"). Der Debug-Schlüssel liegt fest im Repository, damit
+      # jedes Update über das vorige passt und die Daten stehen bleiben.
+      #
+      # Die Datei heißt immer gleich, damit die Adresse gleich bleibt. Die
+      # Version steckt im Namen des Releases, nicht im Dateinamen.
+      #
+      # Der Schritt legt nebenbei das Tag v<versionName> an. Das löst diesen
+      # Arbeitsablauf nicht erneut aus: Ereignisse, die mit dem eigenen
+      # GITHUB_TOKEN erzeugt werden, starten keine Läufe – genau dafür gibt es
+      # diese Regel.
+      - name: APK als Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/.*versionName "\(.*\)".*/\1/p' android/app/build.gradle)
+          CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle)
+          TAG="v$VERSION"
+          cp android/app/build/outputs/apk/debug/app-debug.apk lumora.apk
+
+          NOTIZ=$(printf '%s\n' \
+            "Lumora $VERSION (versionCode $CODE)" \
+            "" \
+            "**[lumora.apk herunterladen](https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/lumora.apk)** – die Datei auf dem Handy antippen und Android einmal erlauben, Apps aus dieser Quelle zu installieren." \
+            "" \
+            "Die App installiert sich über eine vorhandene Fassung drüber, die Daten bleiben erhalten. Für den Play Store ist diese Datei nicht gedacht – dort geht die signierte AAB hin (siehe store/PLAY_STORE.md)." \
+            "" \
+            "Stand: Commit ${GITHUB_SHA}")
+
+          # Schlägt das fehl, liegt es fast immer an einer einzigen
+          # Einstellung – dann steht das auch in der Zusammenfassung.
+          hinweis() {
+            {
+              echo "### Release konnte nicht angelegt werden"
+              echo ""
+              echo "Meist fehlt dem Arbeitsablauf das Schreibrecht:"
+              echo "**Settings → Actions → General → Workflow permissions**"
+              echo "→ *Read and write permissions* auswählen und speichern."
+              echo ""
+              echo "Die APK liegt trotzdem als Artefakt unter diesem Lauf."
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+          trap hinweis ERR
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" lumora.apk --clobber
+            gh release edit "$TAG" --notes "$NOTIZ" --latest
+          else
+            gh release create "$TAG" lumora.apk --title "Lumora $VERSION" --notes "$NOTIZ" --latest
+          fi
+          trap - ERR
+
+          {
+            echo "### APK zum Installieren"
+            echo ""
+            echo "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/lumora.apk"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Signier-Secrets prüfen
         id: cfg

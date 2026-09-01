@@ -78,6 +78,7 @@ Die App ist als natives Android-Projekt (Capacitor) vorbereitet:
 
 - **`android/`** – das komplette Android-Studio-Projekt (App-ID `io.github.nvmorcs.eisenzeit` – bleibt bewusst unverändert, denn an ihr hängt die installierte App samt Daten)
 - **GitHub Actions → „Android Build"** – baut per Klick eine installierbare `app-debug.apk` und (mit Signier-Secrets) die signierte `app-release.aab` für den Play Store
+- **APK zum Installieren**: Jeder Lauf hängt die APK an ein Release, immer unter derselben Adresse – **[releases/latest/download/lumora.apk](https://github.com/nvmor-cs/versuch/releases/latest/download/lumora.apk)**. Der Link braucht kein Konto und lässt sich direkt auf dem Handy öffnen; die Artefakte eines Laufs liegen dagegen hinter dem Login. Angehängt wird bewusst die Debug-Fassung: Auf dem Gerät ist die Debug-Signatur installiert, und Android lässt kein Update mit einer anderen Signatur zu
 - **`store/`** – alles für den Eintrag: Schritt-für-Schritt-Anleitung ([PLAY_STORE.md](store/PLAY_STORE.md)), fertige Texte auf Deutsch ([eintrag-de.md](store/eintrag-de.md)) und Englisch ([eintrag-en.md](store/eintrag-en.md)), die Antworten für Googles Datensicherheits-Formular ([datensicherheit.md](store/datensicherheit.md)), App-Icon 512×512, Funktionsgrafik 1024×500 in beiden Sprachen und je acht Screenshots (1080×1920)
 - **`privacy.html`** / **`privacy-en.html`** – Datenschutzerklärung auf Deutsch und Englisch (über GitHub Pages als Pflicht-URL für den Store nutzbar)
 
